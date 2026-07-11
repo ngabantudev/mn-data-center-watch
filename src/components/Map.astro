@@ -1,0 +1,251 @@
+---
+// src/components/Map.astro
+import { clientProjects } from '~/data/projects';
+import MapLegend from './MapLegend.astro';
+---
+
+<section class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]">
+  <!-- 
+    NOTE: Changed h-screen to h-[100dvh] (Dynamic Viewport Height). 
+    This prevents mobile browsers (Safari/Chrome) from clipping the bottom of your map behind their expanding/collapsing URL address bars.
+  -->
+
+  <!-- Top Left Theme Controller - Adjusted to be compact on mobile -->
+  <div class="absolute top-3 left-3 md:top-4 md:left-4 z-10 bg-white/90 backdrop-blur-sm border border-neutral-200 shadow-lg rounded-xl p-1.5 md:p-2 flex flex-col gap-1 pointer-events-auto">
+    <label for="map-style-select" class="text-[9px] md:text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-1">Map Theme</label>
+    <select 
+      id="map-style-select" 
+      class="bg-neutral-50 text-[11px] md:text-xs font-semibold text-neutral-800 border border-neutral-200 rounded-lg px-2 py-1 md:py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer min-w-28 md:min-w-32.5"
+    >
+      <option value="https://tiles.openfreemap.org/styles/fiord">Fiord (Muted)</option>
+      <option value="https://tiles.openfreemap.org/styles/liberty">Liberty (Google Maps)</option>
+      <option value="https://tiles.openfreemap.org/styles/positron">Light Minimal</option>
+      <option value="https://tiles.openfreemap.org/styles/dark" selected>Dark Mode</option>
+    </select>
+  </div>
+
+  <!-- Bottom Left Interactive Legend -->
+  <MapLegend />
+
+  <div class="relative w-full h-full">
+    <div id="map" class="absolute inset-0 w-full h-full bg-[#f4f4f5]"></div>
+  </div>
+</section>
+
+<style is:global>
+  /* 1. Core glow dissolving smoothly */
+  @keyframes pin-bottom-glow {
+    0% {
+      transform: translate(-50%, -50%) scale(0.2);
+      opacity: 0.85;
+    }
+    40% {
+      opacity: 0.6; /* Gentle drop-off early on */
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(2.8);
+      opacity: 0; /* Complete, seamless dissipation */
+    }
+  }
+
+  /* 2. Concentric sharp ring fading completely outward */
+  @keyframes pin-bottom-ripple {
+    0% {
+      transform: translate(-50%, -50%) scale(0.1);
+      opacity: 0.95;
+    }
+    50% {
+      opacity: 0.45; /* Fade is already well underway halfway through */
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(3.8);
+      opacity: 0; /* Melts cleanly into the map geometry background */
+    }
+  }
+
+  .construction-pulse-marker {
+    position: relative;
+    overflow: visible !important;
+  }
+
+  /* Base glow signature */
+  .construction-pulse-marker::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    top: 100%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(249, 115, 22, 0.4);
+    border-radius: 50%;
+    z-index: -1;
+    animation: pin-bottom-glow 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
+    pointer-events: none;
+  }
+
+  /* Expanding concentric tracking ring */
+  .construction-pulse-marker::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    top: 100%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 1.5px solid rgba(249, 115, 22, 0.75);
+    border-radius: 50%;
+    z-index: -1;
+    animation: pin-bottom-ripple 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
+    animation-delay: 0.15s; /* Kept tight to echo the central wave naturally */
+    pointer-events: none;
+  }
+
+  /* Mobile MapLibre Popup Overrides */
+  .maplibregl-popup-content {
+    border-radius: 12px !important;
+    padding: 12px !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  }
+</style>
+
+<script>
+  import maplibregl from 'maplibre-gl';
+  import 'maplibre-gl/dist/maplibre-gl.css'; 
+  import { clientProjects } from '~/data/projects';
+
+  const MINNESOTA_CENTER: [number, number] = [-94.2000, 45.2000]; 
+  const DEFAULT_ZOOM = window.innerWidth < 768 ? 5.8 : 7; // Dynamically zoom out slightly wider on mobile screens
+
+  const STATUS_COLORS = {
+    active: '#10b981',       
+    construction: '#f97316', 
+    planned: '#3b82f6',      
+    paused: '#f59e0b',       
+    rejected: '#ef4444'      
+  };
+
+  const STATUS_LABELS = {
+    active: 'Operational Site',
+    construction: 'Under Active Construction',
+    planned: 'Proposed / Planned',
+    paused: 'Development Paused',
+    rejected: 'Rejected / Withdrawn'
+  };
+
+  function initMap(): void {
+    const mapElement = document.getElementById('map');
+    const styleSelector = document.getElementById('map-style-select') as HTMLSelectElement | null;
+    if (!mapElement) return;
+
+    const initialStyle = styleSelector?.value || 'https://tiles.openfreemap.org/styles/dark';
+
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: initialStyle, 
+      center: MINNESOTA_CENTER,
+      zoom: DEFAULT_ZOOM,
+      scrollZoom: true,
+      attributionControl: false,
+      // Prevents the map dragging from fighting with the user's page scrolling on small devices
+      cooperativeGestures: window.innerWidth < 768 
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    
+    map.on('load', () => {
+      setTimeout(() => map.resize(), 100);
+    });
+
+    if (styleSelector) {
+      styleSelector.addEventListener('change', (event) => {
+        const targetStyle = (event.target as HTMLSelectElement).value;
+        map.setStyle(targetStyle);
+      });
+    }
+
+    if (Array.isArray(clientProjects)) {
+      clientProjects.forEach((project, index) => {
+        if (!project.coordinates) return;
+        const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
+        const popupId = `dc-${index}`;
+        
+        let closeTimer: number | null = null;
+
+        const currentStatus = project.status || 'planned';
+        const markerColor = STATUS_COLORS[currentStatus];
+        const statusText = STATUS_LABELS[currentStatus];
+
+        const popup = new maplibregl.Popup({ 
+          offset: 15,
+          closeButton: window.innerWidth < 768, // Show a close button ONLY on mobile for easier dismissals
+          maxWidth: window.innerWidth < 768 ? '265px' : '320px' // Responsive popup sizing limits
+        }).setHTML(`
+          <div id="container-${popupId}" class="p-0.5 text-neutral-900 font-sans">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${markerColor}"></span>
+              <span class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">${statusText}</span>
+            </div>
+            <h3 class="font-bold text-sm md:text-base text-neutral-900 border-b border-neutral-200 pb-1 mb-2">${project.name}</h3>
+            <p class="text-[11px] md:text-xs text-neutral-600 leading-relaxed mb-3">${project.description}</p>
+            
+            <div class="bg-neutral-50 border border-neutral-200/60 p-2 rounded-lg mb-3">
+              <span class="block text-[9px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Impact Breakdown</span>
+              <p class="text-[11px] md:text-xs text-neutral-700 leading-normal font-medium">${project.businessImpact}</p>
+            </div>
+
+            <a href="${project.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-full text-center text-[11px] md:text-xs bg-neutral-900 text-white py-2 px-3 rounded-lg hover:bg-neutral-800 transition font-medium tracking-wide shadow-sm pointer-events-auto">
+              View Source Framework &rarr;
+            </a>
+          </div>
+        `);
+
+        const marker = new maplibregl.Marker({ color: markerColor })
+          .setLngLat(coords)
+          .addTo(map);
+
+        const markerEl = marker.getElement();
+
+        if (currentStatus === 'construction') {
+          markerEl.classList.add('construction-pulse-marker');
+        }
+
+        // On mobile, click handles opening popups cleanly. On desktop, maintain the hover state pipeline.
+        if (window.innerWidth >= 768) {
+          popup.on('open', () => {
+            const popupNode = popup.getElement();
+            if (popupNode) {
+              popupNode.addEventListener('mouseenter', () => {
+                if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+              });
+              popupNode.addEventListener('mouseleave', () => {
+                closeTimer = window.setTimeout(() => { popup.remove(); }, 300);
+              });
+            }
+          });
+
+          markerEl.addEventListener('mouseenter', () => {
+            if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+            if (!popup.isOpen()) popup.setLngLat(coords).addTo(map);
+          });
+
+          markerEl.addEventListener('mouseleave', () => {
+            closeTimer = window.setTimeout(() => { popup.remove(); }, 300);
+          });
+        } else {
+          // Pure tap integration for mobile devices
+          markerEl.addEventListener('click', () => {
+            popup.setLngLat(coords).addTo(map);
+          });
+        }
+      });
+    }
+  }
+
+  document.addEventListener('astro:page-load', initMap);
+  if (document.readyState !== 'loading') {
+    initMap();
+  } else {
+    document.addEventListener('DOMContentLoaded', initMap);
+  }
+</script>
