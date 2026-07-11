@@ -5,12 +5,7 @@ import MapLegend from './MapLegend.astro';
 ---
 
 <section class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]">
-  <!-- 
-    NOTE: Changed h-screen to h-[100dvh] (Dynamic Viewport Height). 
-    This prevents mobile browsers (Safari/Chrome) from clipping the bottom of your map behind their expanding/collapsing URL address bars.
-  -->
-
-  <!-- Top Left Theme Controller - Adjusted to be compact on mobile -->
+  <!-- Top Left Theme Controller -->
   <div class="absolute top-3 left-3 md:top-4 md:left-4 z-10 bg-white/90 backdrop-blur-sm border border-neutral-200 shadow-lg rounded-xl p-1.5 md:p-2 flex flex-col gap-1 pointer-events-auto">
     <label for="map-style-select" class="text-[9px] md:text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-1">Map Theme</label>
     <select 
@@ -35,103 +30,56 @@ import MapLegend from './MapLegend.astro';
 <style is:global>
   /* 1. Core glow dissolving smoothly */
   @keyframes pin-bottom-glow {
-    0% {
-      transform: translate(-50%, -50%) scale(0.2);
-      opacity: 0.85;
-    }
-    40% {
-      opacity: 0.6; /* Gentle drop-off early on */
-    }
-    100% {
-      transform: translate(-50%, -50%) scale(2.8);
-      opacity: 0; /* Complete, seamless dissipation */
-    }
+    0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
+    40% { opacity: 0.6; }
+    100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
   }
 
   /* 2. Concentric sharp ring fading completely outward */
   @keyframes pin-bottom-ripple {
-    0% {
-      transform: translate(-50%, -50%) scale(0.1);
-      opacity: 0.95;
-    }
-    50% {
-      opacity: 0.45; /* Fade is already well underway halfway through */
-    }
-    100% {
-      transform: translate(-50%, -50%) scale(3.8);
-      opacity: 0; /* Melts cleanly into the map geometry background */
-    }
+    0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0.95; }
+    50% { opacity: 0.45; }
+    100% { transform: translate(-50%, -50%) scale(3.8); opacity: 0; }
   }
 
-  .construction-pulse-marker {
-    position: relative;
+  .custom-map-pin {
     overflow: visible !important;
   }
 
-  /* Base glow signature */
+  .pin-icon-wrapper {
+    position: relative;
+    overflow: visible !important;
+    width: 24px;
+    height: 24px;
+  }
+
   .construction-pulse-marker::before {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    top: 100%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(249, 115, 22, 0.4);
-    border-radius: 50%;
-    z-index: -1;
-    animation: pin-bottom-glow 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
-    pointer-events: none;
+    content: ''; position: absolute; width: 20px; height: 20px; top: 90%; left: 50%;
+    transform: translate(-50%, -50%); background-color: rgba(249, 115, 22, 0.4); border-radius: 50%; z-index: -1;
+    animation: pin-bottom-glow 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite; pointer-events: none;
   }
 
-  /* Expanding concentric tracking ring */
   .construction-pulse-marker::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    top: 100%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border: 1.5px solid rgba(249, 115, 22, 0.75);
-    border-radius: 50%;
-    z-index: -1;
-    animation: pin-bottom-ripple 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
-    animation-delay: 0.15s; /* Kept tight to echo the central wave naturally */
-    pointer-events: none;
+    content: ''; position: absolute; width: 20px; height: 20px; top: 90%; left: 50%;
+    transform: translate(-50%, -50%); border: 1.5px solid rgba(249, 115, 22, 0.75); border-radius: 50%; z-index: -1;
+    animation: pin-bottom-ripple 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite; animation-delay: 0.15s; pointer-events: none;
   }
 
-  /* Mobile MapLibre Popup Overrides */
-  .maplibregl-popup-content {
-    border-radius: 12px !important;
-    padding: 12px !important;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
-  }
-</style>
-
-// ... Keep your template HTML exactly as it is ...
-
-<style is:global>
-  /* [Keep your existing @keyframes and marker styles here] */
-
-  /* CRITICAL BOUNDARY FIX: Forces MapLibre popup wrappers to stay structurally bound */
+  /* Structural protection for map popups */
   .maplibregl-popup {
     z-index: 50 !important;
-    pointer-events: none; /* Let pointer events pass to internal container */
+    pointer-events: none;
   }
 
   .maplibregl-popup-content {
     border-radius: 12px !important;
     padding: 12px !important;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
-    pointer-events: auto !important; /* Re-enable pointer events for the user interface */
-    
-    /* Guardrails against extreme screen-clipping layout overflow */
-    max-width: calc(100vw - 32px) !important; 
+    pointer-events: auto !important;
+    max-width: calc(100vw - 32px) !important;
     box-sizing: border-box !important;
   }
 
-  /* Handle tiny height viewports defensively */
   @media (max-height: 500px) {
     .maplibregl-popup-content {
       max-height: 220px !important;
@@ -140,60 +88,12 @@ import MapLegend from './MapLegend.astro';
   }
 </style>
 
-// ... Keep your template HTML exactly as it is ...
-
-<style is:global>
-  /* Core glow dissolving smoothly */
-  @keyframes pin-bottom-glow {
-    0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
-    40% { opacity: 0.6; }
-    100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
-  }
-
-  /* Concentric sharp ring fading completely outward */
-  @keyframes pin-bottom-ripple {
-    0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0.95; }
-    50% { opacity: 0.45; }
-    100% { transform: translate(-50%, -50%) scale(3.8); opacity: 0; }
-  }
-
-  .construction-pulse-marker {
-    position: relative;
-    overflow: visible !important;
-  }
-
-  .construction-pulse-marker::before {
-    content: ''; position: absolute; width: 20px; height: 20px; top: 100%; left: 50%;
-    transform: translate(-50%, -50%); background-color: rgba(249, 115, 22, 0.4); border-radius: 50%; z-index: -1;
-    animation: pin-bottom-glow 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite; pointer-events: none;
-  }
-
-  .construction-pulse-marker::after {
-    content: ''; position: absolute; width: 20px; height: 20px; top: 100%; left: 50%;
-    transform: translate(-50%, -50%); border: 1.5px solid rgba(249, 115, 22, 0.75); border-radius: 50%; z-index: -1;
-    animation: pin-bottom-ripple 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite; animation-delay: 0.15s; pointer-events: none;
-  }
-
-  /* Structural protection for map popups */
-  .maplibregl-popup {
-    z-index: 50 !important;
-  }
-
-  .maplibregl-popup-content {
-    border-radius: 12px !important;
-    padding: 12px !important;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
-    max-width: calc(100vw - 32px) !important;
-    box-sizing: border-box !important;
-  }
-</style>
-
 <script>
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css'; 
   import { clientProjects } from '~/data/projects';
 
-  const MINNESOTA_CENTER: [number, number] = [-94.2000, 45.2000]; 
+  const MINNESOTA_CENTER: [number, number] = [-93.2650, 44.9778];
   const DEFAULT_ZOOM = window.innerWidth < 768 ? 5.8 : 7; 
 
   const STATUS_COLORS = {
@@ -245,54 +145,38 @@ import MapLegend from './MapLegend.astro';
     let activePopup: maplibregl.Popup | null = null;
     let closeTimer: number | null = null;
 
-if (Array.isArray(clientProjects)) {
-  clientProjects.forEach((project, index) => {
-    if (!project.coordinates) return;
-    const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
-    
-    const currentStatus = project.status || 'planned';
-    const markerColor = STATUS_COLORS[currentStatus];
-    const statusText = STATUS_LABELS[currentStatus];
+    if (Array.isArray(clientProjects)) {
+      clientProjects.forEach((project, index) => {
+        if (!project.coordinates) return;
+        const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
+        const popupId = `dc-${index}`;
+        
+        const currentStatus = project.status || 'planned';
+        const markerColor = STATUS_COLORS[currentStatus];
+        const statusText = STATUS_LABELS[currentStatus];
 
-    // 1. CREATE A CUSTOM DOM ELEMENT FOR CLEAN OVERFLOW LAYOUTS
-    const el = document.createElement('div');
-    el.className = 'custom-map-pin';
-    
-    // 2. INJECT A CLEAN ELEMENT WITH AN SVG THAT MATCHES STYLING
-    el.innerHTML = `
-      <div class="pin-icon-wrapper ${currentStatus === 'construction' ? 'construction-pulse-marker' : ''}">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="${markerColor}"/>
-        </svg>
-      </div>
-    `;
+        const el = document.createElement('div');
+        el.className = 'custom-map-pin';
+        el.innerHTML = `
+          <div class="pin-icon-wrapper ${currentStatus === 'construction' ? 'construction-pulse-marker' : ''}">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="${markerColor}"/>
+            </svg>
+          </div>
+        `;
 
-    // 3. PASS THE OVERLAY ELEMENT DIRECTLY INTO THE MAPLIBRE ENGINE
-    const marker = new maplibregl.Marker({ element: el })
-      .setLngLat(coords)
-      .addTo(map);
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat(coords)
+          .addTo(map);
 
-    // [Keep the rest of your showPopup / mouse event logic exactly as it is...]
-
-        const markerEl = marker.getElement();
-
-        if (currentStatus === 'construction') {
-          markerEl.classList.add('construction-pulse-marker');
-        }
-
-        // Helper function to build a popup with real-time screen calculation
         function showPopup() {
           if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
           if (activePopup) { activePopup.remove(); }
 
-          // SCREEN ANALYSIS ENGINE
-          // Translate geographic coordinates down to container layout pixels
           const pixel = map.project(coords);
           const width = map.getContainer().clientWidth;
           const height = map.getContainer().clientHeight;
 
-          // If pin is on left half (< 50%), anchor to its left edge so it opens to the right.
-          // If pin is on upper half (< 50%), anchor to its top edge so it opens downward.
           const verticalAnchor = pixel.y < height / 2 ? 'top' : 'bottom';
           const horizontalAnchor = pixel.x < width / 2 ? 'left' : 'right';
           const calculatedAnchor = `${verticalAnchor}-${horizontalAnchor}` as any;
@@ -330,7 +214,7 @@ if (Array.isArray(clientProjects)) {
           activePopup = new maplibregl.Popup({ 
             offset: [horizontalAnchor === 'left' ? 12 : -12, verticalAnchor === 'top' ? 12 : -12],
             closeButton: window.innerWidth < 768, 
-            anchor: calculatedAnchor, // Forces specific smart layout direction
+            anchor: calculatedAnchor,
             maxWidth: window.innerWidth < 768 ? '240px' : '310px' 
           }).setHTML(`
             <div id="container-${popupId}" class="p-0.5 text-neutral-900 font-sans max-h-[45vh] sm:max-h-[55vh] overflow-y-auto overflow-x-hidden select-text">
@@ -357,7 +241,6 @@ if (Array.isArray(clientProjects)) {
             </div>
           `).setLngLat(coords).addTo(map);
 
-          // Allow users to hover inside the popup without it vanishing
           if (window.innerWidth >= 768) {
             const popupNode = activePopup.getElement();
             if (popupNode) {
@@ -371,15 +254,14 @@ if (Array.isArray(clientProjects)) {
           }
         }
 
-        // Event Attachment Pipelines
         if (window.innerWidth >= 768) {
-          markerEl.addEventListener('mouseenter', showPopup);
-          markerEl.addEventListener('mouseleave', () => {
+          el.addEventListener('mouseenter', showPopup);
+          el.addEventListener('mouseleave', () => {
             closeTimer = window.setTimeout(() => { if (activePopup) activePopup.remove(); }, 300);
           });
         } else {
-          markerEl.addEventListener('click', (e) => {
-            e.stopPropagation(); // Stops map background tap events from closing it immediately
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
             showPopup();
           });
         }
