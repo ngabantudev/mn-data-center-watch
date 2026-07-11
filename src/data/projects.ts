@@ -206,21 +206,6 @@ export const clientProjects: Project[] = [
       url: "https://www.blueearthcountymn.gov/"
     }
   },
-  {
-    name: "Inver Grove Heights Data Hub",
-    description: "Active transit-switching terminal helping distribute high-volume regional transport files.",
-    coordinates: [44.8481, -93.0425],
-    url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
-    businessImpact: "🟢 <strong>Operational</strong> | High-throughput low-latency network routing.",
-    status: "active",
-    estimatedCost: "$90 Million",
-    powerCapacityMW: "22 MW",
-    waterFootprint: "Minimal domestic utility only",
-    publicRecord: {
-      title: "IGH Council Interim Data Center Ordinance Study",
-      url: "https://www.ighmn.gov/"
-    }
-  },
 
   // ==========================================
   // PLANNED / ONGOING / PIPELINE (14 TOTAL)
@@ -345,6 +330,21 @@ export const clientProjects: Project[] = [
       url: "https://www.mncenter.org/data-centers"
     }
   },
+{
+  name: "Inver Grove Heights Data Hub (QLevr)",
+  description: "Proposed 54,000-square-foot data facility near Fleming Field Airport. Currently stalled due to community pushback and a citizen-led environmental review petition.",
+  coordinates: [44.8481, -93.0425],
+  url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
+  businessImpact: "🔴 <strong>Development Paused</strong> | One-year city council moratorium enacted to study grid and local impacts.",
+  status: "paused",
+  estimatedCost: "$90 Million",
+  powerCapacityMW: "5 MW",
+  waterFootprint: "Closed-loop design proposed; pending Environmental Assessment Worksheet (EAW) review",
+  publicRecord: {
+    title: "IGH Council Interim Data Center Ordinance Study",
+    url: "https://www.ighmn.gov/"
+  }
+},
   {
     name: "Chanhassen Proposed Cloud Core",
     description: "Pipeline enterprise application undergoing municipal zoning reviews for data-density approvals.",
