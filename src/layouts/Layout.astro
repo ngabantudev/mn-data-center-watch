@@ -1,0 +1,46 @@
+---
+// src/layouts/Layout.astro
+import '~/styles/global.css';
+
+interface Props {
+  metadata?: {
+    title?: string;
+    description?: string;
+    ogImage?: string;
+    ignoreTitleTemplate?: boolean;
+  };
+}
+
+const { metadata = {} } = Astro.props;
+
+const siteTitle = "Steve Yang — Twin Cities Web Developer & Portfolio";
+const siteDescription = "An interactive dark-themed map resume showcasing websites and web apps built across Minneapolis, St. Paul, and the Twin Cities metro.";
+
+const displayTitle = metadata.title || siteTitle;
+const displayDescription = metadata.description || siteDescription;
+---
+
+<!DOCTYPE html>
+<html lang="en" class="dark motion-safe:scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{displayTitle}</title>
+  <meta name="description" content={displayDescription} />
+
+  <link 
+    rel="stylesheet" 
+    href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" 
+  />
+</head>
+
+<body class="bg-[#131314] text-neutral-200 antialiased h-full flex flex-col">
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-neutral-800 focus:text-white focus:z-50 m-2 rounded-lg">
+    Skip to content
+  </a>
+
+  <main id="main-content" class="grow">
+    <slot />
+  </main>
+</body>
+</html>

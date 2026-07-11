@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* --- MapLibre Global Overrides --- */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+#map canvas {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.maplibregl-popup-content {
+  background: #ffffff !important;
+  border-radius: 0.85rem !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.maplibregl-popup-close-button { 
+  display: none !important; 
+}
+
+/* --- Universal Interactive Pin Scaling --- */
+.maplibregl-marker {
+  cursor: pointer;
+  
+  /* 1. Scale down all pins globally by default */
+  & > * {
+    transform: scale(0.75);
+    transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+    /* Crucial: keeps the pin tip anchored exactly over its coordinates when it scales */
+    transform-origin: bottom center; 
+  }
+
+  /* 2. Isolated scaling (120%) only on the active, hovered, or tapped pin element */
+  &:hover > *,
+  &:focus-within > *,
+  &:active > * {
+    transform: scale(1.2);
+  }
+}
