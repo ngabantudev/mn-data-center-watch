@@ -69,12 +69,29 @@ export function buildPopupHtml(project: Project, popupId: string): string {
       </div>
     ` : ''}
     ${project.waterFootprint ? `
-      <div class="flex flex-col text-[11px]">
+      <div class="flex flex-col text-[11px] border-b border-neutral-100 pb-1 mb-1">
         <span class="text-neutral-400 font-medium">Water System Footprint:</span>
         <span class="font-semibold text-neutral-700 mt-0.5 leading-tight">${project.waterFootprint}</span>
       </div>
     ` : ''}
   `;
+
+  const asymmetryHtml = project.economicAsymmetry ? `
+    <div class="mt-2 pt-2 border-t border-neutral-200 text-[11px] leading-tight text-neutral-600">
+      <span class="block text-[9px] text-neutral-400 font-bold uppercase tracking-wider mb-1">Economic Footprint</span>
+      <p class="font-medium text-neutral-700 mb-1.5">${project.economicAsymmetry.metricRatioText}</p>
+      <div class="grid grid-cols-2 gap-1 text-[10px] bg-neutral-100 p-1.5 rounded">
+        <div>
+          <span class="block text-neutral-400 font-medium">Est. Construction:</span>
+          <span class="font-bold text-neutral-800">${project.economicAsymmetry.constructionJobsEstimate ?? 'N/A'} jobs</span>
+        </div>
+        <div>
+          <span class="block text-neutral-400 font-medium">Est. Permanent:</span>
+          <span class="font-bold text-neutral-800">${project.economicAsymmetry.permanentOperationalJobsEstimate ?? 'N/A'} jobs</span>
+        </div>
+      </div>
+    </div>
+  ` : '';
 
   const publicRecordHtml = project.publicRecord ? `
     <div class="mt-2 pt-2 border-t border-dashed border-neutral-200">
@@ -98,6 +115,7 @@ export function buildPopupHtml(project: Project, popupId: string): string {
         <span class="block text-[9px] text-neutral-400 font-bold uppercase tracking-wider mb-1">Impact & Status</span>
         <p class="text-[11px] md:text-xs text-neutral-700 leading-normal font-medium mb-2 wrap-break-word">${project.businessImpact}</p>
         ${metricsHtml}
+        ${asymmetryHtml}
       </div>
 
       ${publicRecordHtml}

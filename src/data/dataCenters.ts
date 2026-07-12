@@ -10,6 +10,12 @@ export interface PublicRecord {
   url: string;
 }
 
+export interface EconomicAsymmetry {
+  constructionJobsEstimate?: number;
+  permanentOperationalJobsEstimate?: number;
+  metricRatioText: string; // Documenting the High-CapEx / Low-Labor reality
+}
+
 export interface Project {
   name: string;
   description: string;
@@ -22,6 +28,7 @@ export interface Project {
   powerCapacityMW?: string;
   waterFootprint?: string;
   publicRecord?: PublicRecord;
+  economicAsymmetry?: EconomicAsymmetry; // Structured high-cap/low-labor accountability data
 }
 
 export const clientProjects: Project[] = [
@@ -33,7 +40,7 @@ export const clientProjects: Project[] = [
     description: "Carrier-hotel enterprise data center facility channeling downtown fiber backbones.",
     coordinates: [44.9778, -93.2650],
     url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
-    businessImpact: "🟢 <strong>Operational</strong> | High-density urban grid interconnect network.",
+    businessImpact: "🟢 <strong>Operational</strong> | High-density urban grid interconnect network. Subject to ongoing local municipality zoning oversight reviews.",
     status: "active",
     estimatedCost: "$120 Million",
     powerCapacityMW: "45 MW",
@@ -172,7 +179,7 @@ export const clientProjects: Project[] = [
     status: "active",
     estimatedCost: "$210 Million",
     powerCapacityMW: "50 MW",
-    waterFootprint: "Chilled water loop loops with safety containment",
+    waterFootprint: "Chilled water loop with safety containment",
     publicRecord: {
       title: "Olmsted County Public Health Environmental Review",
       url: "https://www.olmstedcounty.gov/"
@@ -214,137 +221,182 @@ export const clientProjects: Project[] = [
   // ==========================================
   {
     name: "Meta Rosemount Campus",
-    description: "An $800 million, 715,000 sq. ft. hyper-scale facility built for large-scale AI workloads.",
+    description: "A 715,000 sq. ft. hyper-scale facility built explicitly for next-generation generative AI infrastructure footprints.",
     coordinates: [44.7303, -93.0185],
     url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
     businessImpact: "⚡ <strong>Construction Wrap-up</strong> | 308 MW AI optimization workloads.",
     status: "construction",
-    estimatedCost: "$800 Million",
+    estimatedCost: "$1.0 Billion",
     powerCapacityMW: "308 MW",
-    waterFootprint: "Estimated 60+ Million Gallons/Year configured",
+    waterFootprint: "Closed-loop system configuration minimizing active regional aquifer discharge.",
     publicRecord: {
       title: "Minnesota PUC Grid Load Tariffs Docket",
       url: "https://mn.gov/puc/"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 1200,
+      permanentOperationalJobsEstimate: 100,
+      metricRatioText: "High CapEx / Low Labor: Massive $1B compute asset managed by roughly 100 permanent local staff."
     }
   },
   {
     name: "Monticello Tech Park (Frattalone / Microsoft)",
-    description: "Proposed $5 billion, 3-million sq. ft. massive campus spanning six separate data halls.",
+    description: "Proposed $5 billion, 3-million sq. ft. massive campus spanning six separate data halls designed for Azure cloud ecosystems.",
     coordinates: [45.2755, -93.7912],
     url: "https://monticellomn.gov/728/Data-Centers",
     businessImpact: "🟢 <strong>Rezoning Approved</strong> | 400+ MW ultimate site load footprint layout.",
     status: "planned",
     estimatedCost: "$5.0 Billion",
     powerCapacityMW: "400 MW",
-    waterFootprint: "Pending Environmental Assessment Worksheet (EAW)",
+    waterFootprint: "Liquid-to-chip integrated systems pending Environmental Assessment Worksheet (EAW) processing.",
     publicRecord: {
       title: "City of Monticello Comprehensive Plan Rezoning Map",
       url: "https://monticellomn.gov/728/Data-Centers"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 2000,
+      permanentOperationalJobsEstimate: 150,
+      metricRatioText: "High CapEx / Low Labor: Historically unprecedented $5B capital outlay generating fewer than 150 permanent full-time technical jobs."
     }
   },
   {
     name: "Scannell Technology Park (Monticello)",
-    description: "Planned 106-acre data center footprint layout seeking 150MW capacity output by 2027.",
+    description: "Planned 1.3-million-square-foot data center footprint layout seeking 150MW capacity output across a 106-acre technology park parcel.",
     coordinates: [45.2891, -93.8184],
     url: "https://monticellomn.gov/728/Data-Centers",
     businessImpact: "🟢 <strong>Comp Plan Amended</strong> | Four phased 320,000 sq. ft. data structures planned.",
     status: "planned",
-    estimatedCost: "$450 Million",
+    estimatedCost: "$900 Million",
     powerCapacityMW: "150 MW",
-    waterFootprint: "Phased connection allocation tracking",
+    waterFootprint: "Closed-loop chilled water distribution lines tracking phase allocations.",
     publicRecord: {
       title: "Monticello Economic Development Authority Filings",
       url: "https://monticellomn.gov/728/Data-Centers"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 700,
+      permanentOperationalJobsEstimate: 40,
+      metricRatioText: "High CapEx / Low Labor: Sprawling multi-million square foot industrial real estate cluster operating with minimal facility oversight."
     }
   },
   {
     name: "Tract Cannon Falls Technology Park",
-    description: "A massive multi-story 1.2-1.3 million sq. ft. regional tech center layout spanning across a custom 240-acre infrastructure parcel.",
+    description: "A massive multi-story 1.2-1.3 million sq. ft. regional master-planned tech center campus layout spanning across a custom 240-acre infrastructure parcel.",
     coordinates: [44.5264, -92.9341],
     url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
-    businessImpact: "🟢 <strong>Development Compact Finalized</strong> | Projected 10,000 seasonal builder jobs.",
+    businessImpact: "🟢 <strong>Development Compact Finalized</strong> | Pre-planned infrastructure designed for unannounced hyperscalers.",
     status: "planned",
-    estimatedCost: "$1.2 Billion",
-    powerCapacityMW: "240 MW",
-    waterFootprint: "50+ Million Gallons/Year project threshold requested",
+    estimatedCost: "$1.5 Billion",
+    powerCapacityMW: "708 MW",
+    waterFootprint: "Liquid-to-chip high-density configurations requiring custom local grid interconnection substations.",
     publicRecord: {
       title: "Randolph Township Annexation Dispute Archive",
       url: "https://www.house.mn.gov/members/profile/news/15602/51328"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 1500,
+      permanentOperationalJobsEstimate: 80,
+      metricRatioText: "High CapEx / Low Labor: Master-planned infrastructure for absolute machine density where permanent humans are restricted to facilities security and perimeter monitoring."
     }
   },
   {
     name: "Hermantown: Project Loon (Google)",
-    description: "A planned $2 billion, 1.8 million sq. ft. project heavily contested in local courts due to ongoing community environmental mitigation debates.",
+    description: "A planned $2 billion, 1.8 million sq. ft. hyperscale campus complex consisting of up to 4 large-scale data halls.",
     coordinates: [46.8042, -92.2858],
     url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
-    businessImpact: "🟡 <strong>Environmental Review Testing</strong> | Initial $130M infrastructure extension investment.",
+    businessImpact: "🟡 <strong>Environmental Review Testing</strong> | Advanced via municipal channels despite public pushback over noise and developer NDAs.",
     status: "planned",
     estimatedCost: "$2.0 Billion",
     powerCapacityMW: "180 MW",
-    waterFootprint: "Contested aquifer impact targets under legal review",
+    waterFootprint: "Isolated closed-loop chilled water loops designed to insulate local northern water tables.",
     publicRecord: {
       title: "St. Louis County District Court Case Filings",
       url: "https://www.mncenter.org/data-centers"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 900,
+      permanentOperationalJobsEstimate: 50,
+      metricRatioText: "High CapEx / Low Labor: $2B compute center relying almost exclusively on remote automation software, capping native operational headcounts near 50."
     }
   },
   {
     name: "Elk River Data Center (IronGate)",
-    description: "Proposed 60,000 sq. ft., 33 MW data facility generating local traction due to proximity with local school fields.",
+    description: "Proposed 60,000 sq. ft., 33 MW mid-scale facility generating local energy traction.",
     coordinates: [45.3288, -93.5704],
     url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
-    businessImpact: "🟢 <strong>Public Hearings Active</strong> | Projected 50%+ local municipal energy draw load increase.",
+    businessImpact: "🟢 <strong>Public Hearings Active</strong> | Integrates into municipal energy infrastructure framework under custom industrial rates.",
     status: "planned",
-    estimatedCost: "$115 Million",
+    estimatedCost: "$120 Million",
     powerCapacityMW: "33 MW",
-    waterFootprint: "Closed loops loop variant promised by developers",
+    waterFootprint: "Closed-loop system designs deployed to mitigate municipal system stress.",
     publicRecord: {
       title: "Elk River City Council Public Hearing Agenda",
       url: "https://www.elkrivermn.gov/"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 250,
+      permanentOperationalJobsEstimate: 20,
+      metricRatioText: "High CapEx / Low Labor: Regional server node housing major structural arrays while employing a skeletal maintenance staff of 20."
     }
   },
   {
     name: "Pine Island: Project Skyway (Google)",
-    description: "A 482-acre regional power infrastructure play designed to pull 1,900 MW. Currently frozen by a district court restraining order.",
+    description: "A 482-acre regional power infrastructure play designed to pull 1,900 MW. Frozen by a district court temporary restraining order (TRO) following environmental review challenges.",
     coordinates: [44.2215, -92.6410],
     url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
-    businessImpact: "🔴 <strong>Legal Restraining Order</strong> | $20M infrastructure upgrades currently frozen.",
+    businessImpact: "🔴 <strong>Legal Restraining Order</strong> | Halted by Goodhue County District Court on May 22, 2026, over environmental assessment adequacy.",
     status: "paused",
-    estimatedCost: "$3.5 Billion",
-    powerCapacityMW: "1,900 MW",
-    waterFootprint: "Massive localized aquifer draw concerns pending court resolution",
+    estimatedCost: "$1.0 Billion", // Reflects standard Initial Google investment projection
+    powerCapacityMW: "1,900 MW", // Scales up to 2700MW at complete target capacity
+    waterFootprint: "Advanced air-cooling variant planned to use zero operational water, trading water draw for immense electrical grid draw.",
     publicRecord: {
       title: "Third District Court Temporary Injunction Decrees",
       url: "https://www.mncourts.gov/"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 800,
+      permanentOperationalJobsEstimate: 35,
+      metricRatioText: "Extreme Asymmetry: $1B technical infrastructure play supporting massive local grid energy investments, yet running with an operational skeleton crew."
     }
   },
   {
     name: "Faribault Industrial Campus (Archer)",
-    description: "Planned 500,000 sq. ft. industrial campus footprint over 84.3 acres. Halted by a formal MCEA environmental appeal court order.",
+    description: "Planned 500,000 sq. ft. industrial multi-tenant colocation campus footprint spanning over 84 acres.",
     coordinates: [44.3218, -93.2562],
     url: "https://www.archerdatacenters.com/news-resources/archer-acquires-land-in-faribault-minnesota-for-120mw-data-center-campus-g68bg",
-    businessImpact: "🔴 <strong>Court Action Pause</strong> | 120 MW design footprint delayed pending appellate review.",
+    businessImpact: "🔴 <strong>Court Action Pause</strong> | 120 MW design footprint delayed pending regional tenant commitments and grid interconnection reassessments.",
     status: "paused",
-    estimatedCost: "$280 Million",
+    estimatedCost: "$350 Million",
     powerCapacityMW: "120 MW",
-    waterFootprint: "MCEA Water Appropriations Appeal Pending",
+    waterFootprint: "Standard closed-loop chilled water configurations with containment parameters.",
     publicRecord: {
       title: "Minnesota Court of Appeals Case Filings",
       url: "https://www.mncenter.org/data-centers"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 400,
+      permanentOperationalJobsEstimate: 25,
+      metricRatioText: "High CapEx / Low Labor: Built for wholesale server tenancy where corporate clients manage server loads remotely, avoiding local headcount requirements."
     }
   },
   {
     name: "Inver Grove Heights Data Hub (QLevr)",
-    description: "Proposed 54,000-square-foot data facility near Fleming Field Airport. Currently stalled due to community pushback and a citizen-led environmental review petition.",
+    description: "Proposed 54,000-square-foot data facility near Fleming Field Airport. Stalled due to a 3-2 city council vote passing a one-year data center moratorium in June 2026.",
     coordinates: [44.8481, -93.0425],
     url: "https://couriermn.com/news/environment/where-are-data-centers-being-proposed-in-minnesota-we-are-tracking-them/",
-    businessImpact: "🔴 <strong>Development Paused</strong> | One-year city council moratorium enacted to study grid and local impacts.",
+    businessImpact: "🔴 <strong>Development Paused</strong> | Moratorium enacted; developer is actively preparing a $150M lawsuit alleging illegal zoning interference.",
     status: "paused",
     estimatedCost: "$90 Million",
     powerCapacityMW: "5 MW",
-    waterFootprint: "Closed-loop design proposed; pending Environmental Assessment Worksheet (EAW) review",
+    waterFootprint: "Closed-loop chilled water design proposed; subject to a citizen-led petition for an Environmental Assessment Worksheet (EAW).",
     publicRecord: {
       title: "IGH Council Interim Data Center Ordinance Study",
       url: "https://www.ighmn.gov/"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 150,
+      permanentOperationalJobsEstimate: 12,
+      metricRatioText: "Localized Node: Under 15 permanent employees required to service localized cloud caching and data replication sets."
     }
   },
   {
@@ -370,7 +422,7 @@ export const clientProjects: Project[] = [
     businessImpact: "🔵 <strong>Planned Stage</strong> | Feasibility power parameters ongoing.",
     status: "planned",
     estimatedCost: "$70 Million",
-    powerCapacityMW: "50 MW (Substation Upgrade)",
+    powerCapacityMW: "50 MW",
     waterFootprint: "None at current transmission stage",
     publicRecord: {
       title: "Anoka County Utility Transmission Proposals",
