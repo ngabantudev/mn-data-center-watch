@@ -1,6 +1,6 @@
 ---
 // src/layouts/Layout.astro
-import '~/styles/global.css';
+import '../styles/global.css';
 
 interface Props {
   metadata?: {
@@ -28,10 +28,12 @@ const displayDescription = metadata.description || siteDescription;
   <title>{displayTitle}</title>
   <meta name="description" content={displayDescription} />
 
-  <link 
-    rel="stylesheet" 
-    href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" 
-  />
+  <!--
+    MapLibre's CSS is imported directly in Map.astro's script
+    (`import 'maplibre-gl/dist/maplibre-gl.css'`), so it always matches
+    whatever maplibre-gl version is actually installed. Intentionally not
+    duplicated here via CDN to avoid loading two different versions.
+  -->
 </head>
 
 <body class="bg-[#131314] text-neutral-200 antialiased h-full flex flex-col">

@@ -1,0 +1,42 @@
+/* src/styles/mapPins.css */
+/* Pin-marker-specific animation styles, scoped to Map.astro's own import.
+   Popup structure/visuals live in global.css alongside the rest of the
+   app-wide MapLibre overrides — kept out of here to avoid duplicate,
+   conflicting `.maplibregl-popup-content` rules across two files. */
+
+/* 1. Core glow dissolving smoothly */
+@keyframes pin-bottom-glow {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
+  40% { opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}
+
+/* 2. Concentric sharp ring fading completely outward */
+@keyframes pin-bottom-ripple {
+  0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0.95; }
+  50% { opacity: 0.45; }
+  100% { transform: translate(-50%, -50%) scale(3.8); opacity: 0; }
+}
+
+.custom-map-pin {
+  overflow: visible !important;
+}
+
+.pin-icon-wrapper {
+  position: relative;
+  overflow: visible !important;
+  width: 24px;
+  height: 24px;
+}
+
+.construction-pulse-marker::before {
+  content: ''; position: absolute; width: 20px; height: 20px; top: 90%; left: 50%;
+  transform: translate(-50%, -50%); background-color: rgba(249, 115, 22, 0.4); border-radius: 50%; z-index: -1;
+  animation: pin-bottom-glow 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite; pointer-events: none;
+}
+
+.construction-pulse-marker::after {
+  content: ''; position: absolute; width: 20px; height: 20px; top: 90%; left: 50%;
+  transform: translate(-50%, -50%); border: 1.5px solid rgba(249, 115, 22, 0.75); border-radius: 50%; z-index: -1;
+  animation: pin-bottom-ripple 2.6s cubic-bezier(0.1, 0.8, 0.2, 1) infinite; animation-delay: 0.15s; pointer-events: none;
+}

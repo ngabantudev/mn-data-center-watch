@@ -1,4 +1,26 @@
+/* src/styles/global.css */
 @import "tailwindcss";
+
+/*
+  Shared alignment for the bottom-right map control stack: MapLibre's own
+  NavigationControl (zoom buttons) plus our MapThemeSelector.astro button,
+  stacked directly above it. Both read from these variables so they can
+  never drift out of alignment with each other.
+
+  --map-controls-bottom is the single source of truth for how far the
+  whole stack sits off the bottom edge. It defaults to the same 10px inset
+  MapLibre uses natively. On mobile, MapFilters.astro raises it dynamically
+  (via inline style on :root) to whatever clears its own current rendered
+  height, since that panel's height changes as it expands/collapses. On
+  desktop it's left at the default, since the filters sidebar lives on the
+  left and never competes for this corner.
+*/
+:root {
+  --map-ctrl-edge: 10px;
+  --map-ctrl-gap: 10px;
+  --map-ctrl-group-height: 59px; /* two 29px NavigationControl buttons + 1px divider */
+  --map-controls-bottom: var(--map-ctrl-edge);
+}
 
 /* --- MapLibre Global Overrides --- */
 html, body {
@@ -22,16 +44,47 @@ html, body {
   left: 0;
 }
 
+/*
+  Anchor MapLibre's NavigationControl to the shared control-stack
+  variables above instead of its built-in 10px margin, so it always lines
+  up with MapThemeSelector.astro and moves together with it on mobile.
+*/
+.maplibregl-ctrl-bottom-right {
+  bottom: var(--map-controls-bottom) !important;
+  right: var(--map-ctrl-edge) !important;
+  transition: bottom 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+  margin: 0 !important;
+}
+
+/* Keeps popups clickable/contained; pairs with the visual styling below */
+.maplibregl-popup {
+  z-index: 50 !important;
+  pointer-events: none;
+}
+
 .maplibregl-popup-content {
   background: #ffffff !important;
   border-radius: 0.85rem !important;
   padding: 14px 16px !important;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.12) !important;
   border: 1px solid rgba(0,0,0,0.06);
+  pointer-events: auto !important;
+  max-width: calc(100vw - 32px) !important;
+  box-sizing: border-box !important;
 }
 
 .maplibregl-popup-close-button { 
   display: none !important; 
+}
+
+@media (max-height: 500px) {
+  .maplibregl-popup-content {
+    max-height: 220px !important;
+    overflow-y: auto !important;
+  }
 }
 
 /* --- Universal Interactive Pin Scaling --- */
