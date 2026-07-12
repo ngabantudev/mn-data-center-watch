@@ -12,40 +12,43 @@ const totalCount = clientProjects.length;
 ---
 
 <!--
-  Collapsible facility filter sidebar — dark themed, deflock.org/Google-Maps style.
-  - Mobile: anchored bottom-4 left-4 right-4, collapses down to a slim header bar.
+  Facility filter sidebar — deflock.org / Google-Maps style edge panel.
+  - Mobile: bottom sheet anchored to bottom-4/left-4/right-4, collapses to a slim header bar.
     The toggle handle sits centered on the panel's TOP edge.
-  - Desktop: a true left-edge sidebar (below the theme control), collapses to a narrow icon rail.
-    The toggle handle sits centered on the panel's RIGHT edge, like Google Maps / deflock.org.
+  - Desktop: a true full-height, flush-to-edge left sidebar (below the theme control),
+    collapses to a narrow icon rail. The toggle handle sits centered on the panel's
+    RIGHT edge, like Google Maps / deflock.org.
   Dispatches a `mapfilterchange` CustomEvent on `document` with `{ statuses: string[] }`
   whenever the active set of statuses changes, so Map.astro can show/hide markers.
 -->
 <div
   id="map-filters"
   data-total={totalCount}
-  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-20 md:bottom-6 md:left-6 w-auto md:w-64 bg-[#0a0a0f]/95 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/60 rounded-xl flex flex-col overflow-visible transition-[width] duration-300 ease-out"
+  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-[#0a0a0f]/95 backdrop-blur-md border border-white/10 md:border-l-0 shadow-2xl shadow-black/60 rounded-xl md:rounded-none md:rounded-r-2xl flex flex-col overflow-visible transition-[width] duration-300 ease-out"
 >
-  <!-- Header: title + live count -->
-  <div class="flex items-center gap-2 px-3 py-2.5 md:px-3.5 md:py-3 shrink-0 min-w-0">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="shrink-0 text-neutral-500" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4 5h16l-6 8v6l-4-2v-4L4 5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
-    </svg>
-    <div class="min-w-0">
+  <!-- Header: brand mark + title + live count, pinned above the scroll area -->
+  <div id="mf-header-row" class="flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-white/10">
+    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="text-emerald-400" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 5h16l-6 8v6l-4-2v-4L4 5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div id="mf-header-text" class="min-w-0 flex-1">
       <h4 class="text-[9px] md:text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none whitespace-nowrap">
         Facility Filters
       </h4>
-      <p id="mf-count" class="text-[10px] md:text-[11px] font-semibold text-neutral-200 mt-0.5 leading-none whitespace-nowrap">
+      <p id="mf-count" class="text-[10.5px] md:text-[11.5px] font-semibold text-neutral-100 mt-1 leading-none whitespace-nowrap">
         Showing {totalCount} of {totalCount}
       </p>
     </div>
   </div>
 
   <!-- Compact rail: shown only while collapsed. Dots double as quick toggles. -->
-  <div id="mf-compact" class="hidden flex-row md:flex-col items-center gap-2 px-3 pb-3 md:px-0 md:pb-3">
+  <div id="mf-compact" class="hidden flex-row md:flex-col items-center gap-1.5 px-3 py-3 md:px-0 md:py-4 md:flex-1 md:overflow-y-auto">
     {STATUS_META.map((meta) => (
       <button
         type="button"
-        class="mf-dot relative flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-full hover:bg-white/10 transition"
+        class="mf-dot relative flex items-center justify-center w-7 h-7 rounded-lg hover:bg-white/10 transition shrink-0"
         data-status={meta.status}
         aria-label={`Toggle ${meta.filterLabel}`}
         title={`${meta.filterLabel} (${countsByStatus[meta.status]})`}
@@ -55,44 +58,52 @@ const totalCount = clientProjects.length;
     ))}
   </div>
 
-  <!-- Full content: checkbox list, shown while expanded -->
-  <div id="mf-content" class="px-3 pb-3 md:px-3.5 md:pb-3.5 flex flex-col gap-2.5 border-t border-white/10 pt-2.5">
-    <div class="flex items-center gap-2 text-[10px] font-semibold">
-      <button id="mf-select-all" type="button" class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2">
-        All
-      </button>
-      <span class="text-neutral-700">/</span>
-      <button id="mf-clear-all" type="button" class="text-neutral-500 hover:text-neutral-300 underline underline-offset-2">
-        None
-      </button>
+  <!-- Full content: shown while expanded. Scrolls independently so the header stays put. -->
+  <div id="mf-content" class="flex flex-col min-h-0 flex-1 md:overflow-y-auto">
+    <!-- Select all / none row -->
+    <div class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2.5 border-b border-white/5 shrink-0">
+      <div class="flex items-center gap-2 text-[10px] font-semibold">
+        <button id="mf-select-all" type="button" class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2">
+          All
+        </button>
+        <span class="text-neutral-700">/</span>
+        <button id="mf-clear-all" type="button" class="text-neutral-500 hover:text-neutral-300 underline underline-offset-2">
+          None
+        </button>
+      </div>
+      <span class="text-[9px] uppercase tracking-wider text-neutral-600 font-semibold whitespace-nowrap">
+        {STATUS_META.length} types
+      </span>
     </div>
 
-    <div class="grid grid-cols-2 gap-2 md:flex md:flex-col md:gap-2.5">
+    <!-- Filter rows -->
+    <div class="grid grid-cols-2 gap-1 p-2 md:flex md:flex-col md:gap-0.5 md:p-1.5">
       {STATUS_META.map((meta) => (
-        <label class="mf-row flex items-start gap-2 md:gap-3 cursor-pointer transition-opacity">
+        <label class="mf-row group flex items-start md:items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
           <input
             type="checkbox"
-            class="mf-checkbox mt-0.5 w-3 h-3 md:w-3.5 md:h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer"
+            class="mf-checkbox mt-0.5 md:mt-0 w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer"
             style={`accent-color: ${meta.hex}`}
             value={meta.status}
             data-count={countsByStatus[meta.status]}
             checked
           />
-          <div class="relative w-2.5 h-2.5 md:w-3 md:h-3 mt-0.5 shrink-0 flex items-center justify-center">
+          <div class="relative w-2.5 h-2.5 md:w-3 md:h-3 mt-0.5 md:mt-0 shrink-0 flex items-center justify-center">
             {meta.activePulse && (
               <span class="absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75 animate-ping"></span>
             )}
             <span class={`relative inline-block w-2.5 h-2.5 md:w-3 md:h-3 rounded-full ${meta.color}`} />
           </div>
-          <span class="flex flex-col min-w-0">
+          <span class="flex flex-col min-w-0 flex-1">
             <span class="text-[11px] md:text-xs font-semibold text-neutral-100 leading-none">
               {meta.filterLabel}
             </span>
-            <span class="hidden md:flex items-center gap-1 text-[10px] text-neutral-500 font-medium mt-0.5 leading-tight">
+            <span class="hidden md:flex items-center gap-1 text-[10px] text-neutral-500 font-medium mt-1 leading-tight">
               <span>{meta.description}</span>
-              <span class="text-neutral-700">&middot;</span>
-              <span class="font-semibold text-neutral-400">{countsByStatus[meta.status]}</span>
             </span>
+          </span>
+          <span class="hidden md:inline-block text-[10px] font-semibold text-neutral-500 tabular-nums shrink-0 group-hover:text-neutral-300">
+            {countsByStatus[meta.status]}
           </span>
         </label>
       ))}
@@ -135,6 +146,8 @@ const totalCount = clientProjects.length;
     const toggleIconDesktop = document.getElementById('mf-toggle-icon-desktop') as SVGElement | null;
     const content = document.getElementById('mf-content') as HTMLElement | null;
     const compact = document.getElementById('mf-compact') as HTMLElement | null;
+    const headerText = document.getElementById('mf-header-text') as HTMLElement | null;
+    const headerRow = document.getElementById('mf-header-row') as HTMLElement | null;
     const countLabel = document.getElementById('mf-count') as HTMLElement | null;
     const selectAllBtn = document.getElementById('mf-select-all');
     const clearAllBtn = document.getElementById('mf-clear-all');
@@ -182,7 +195,7 @@ const totalCount = clientProjects.length;
     function syncRowOpacity(): void {
       checkboxes.forEach((cb) => {
         const row = cb.closest('.mf-row') as HTMLElement | null;
-        if (row) row.style.opacity = cb.checked ? '1' : '0.4';
+        if (row) row.style.opacity = cb.checked ? '1' : '0.45';
       });
     }
 
@@ -215,8 +228,13 @@ const totalCount = clientProjects.length;
         // Mobile handle points up (expand upward); desktop handle points right (expand rightward)
         toggleIconMobile?.style.setProperty('transform', 'rotate(180deg)');
         toggleIconDesktop?.style.setProperty('transform', 'rotate(0deg)');
-        root?.classList.remove('md:w-64');
+        root?.classList.remove('md:w-72');
         root?.classList.add('md:w-14');
+        // Rail is too narrow for the title/count text on desktop — hide it there.
+        // (Mobile stays full-width even when collapsed, so its header text still fits.)
+        headerText?.classList.add('md:hidden');
+        headerRow?.classList.add('md:justify-center');
+        headerRow?.classList.remove('md:px-4');
       } else {
         content?.classList.remove('hidden');
         compact?.classList.add('hidden');
@@ -226,7 +244,10 @@ const totalCount = clientProjects.length;
         toggleIconMobile?.style.setProperty('transform', 'rotate(0deg)');
         toggleIconDesktop?.style.setProperty('transform', 'rotate(180deg)');
         root?.classList.remove('md:w-14');
-        root?.classList.add('md:w-64');
+        root?.classList.add('md:w-72');
+        headerText?.classList.remove('md:hidden');
+        headerRow?.classList.remove('md:justify-center');
+        headerRow?.classList.add('md:px-4');
       }
     }
 
