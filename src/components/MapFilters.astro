@@ -2,6 +2,7 @@
 // src/components/MapFilters.astro
 import { clientProjects, type ProjectStatus } from '~/data/dataCenters';
 import { STATUS_META } from '~/data/mapStatusMeta';
+import { SlidersHorizontal, Zap, HardHat, ClipboardList, CirclePause, CircleX } from 'lucide-astro';
 
 const countsByStatus = STATUS_META.reduce((acc, meta) => {
   acc[meta.status] = clientProjects.filter((p) => p.status === meta.status).length;
@@ -9,6 +10,22 @@ const countsByStatus = STATUS_META.reduce((acc, meta) => {
 }, {} as Record<ProjectStatus, number>);
 
 const totalCount = clientProjects.length;
+
+// One icon per status — swap these out here if the status list changes;
+// nothing else in this file needs to know about icon choices.
+// NOTE: these are the same icons used for the map pins (see ~/lib/mapMarkers.ts),
+// just via the lucide-astro component form instead of raw lucide-static SVG strings.
+// Keep the two in sync if you change one.
+// (Typed off `typeof Zap` rather than a shared `Icon` type — lucide-astro
+// doesn't export one the way lucide-react does; every icon component has the
+// same shape, so any one of them works fine as the type source.)
+const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
+  active: Zap,
+  construction: HardHat,
+  planned: ClipboardList,
+  paused: CirclePause,
+  rejected: CircleX,
+};
 ---
 
 <!--
@@ -29,9 +46,7 @@ const totalCount = clientProjects.length;
   <!-- Header: brand mark + title + live count, pinned above the scroll area -->
   <div id="mf-header-row" class="flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-white/10">
     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="text-emerald-400" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 5h16l-6 8v6l-4-2v-4L4 5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
-      </svg>
+      <SlidersHorizontal size={14} stroke-width={2} class="text-emerald-400" />
     </div>
     <div id="mf-header-text" class="min-w-0 flex-1">
       <h4 class="text-[9px] md:text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none whitespace-nowrap">
@@ -43,19 +58,33 @@ const totalCount = clientProjects.length;
     </div>
   </div>
 
-  <!-- Compact rail: shown only while collapsed. Dots double as quick toggles. -->
+  <!-- Compact rail: shown only while collapsed. Icon chips double as quick toggles. -->
   <div id="mf-compact" class="hidden flex-row md:flex-col items-center gap-1.5 px-3 py-3 md:px-0 md:py-4 md:flex-1 md:overflow-y-auto">
-    {STATUS_META.map((meta) => (
-      <button
-        type="button"
-        class="mf-dot relative flex items-center justify-center w-7 h-7 rounded-lg hover:bg-white/10 transition shrink-0"
-        data-status={meta.status}
-        aria-label={`Toggle ${meta.filterLabel}`}
-        title={`${meta.filterLabel} (${countsByStatus[meta.status]})`}
-      >
-        <span class={`block w-2.5 h-2.5 rounded-full ${meta.color}`} />
-      </button>
-    ))}
+    {STATUS_META.map((meta) => {
+      const Icon = STATUS_ICONS[meta.status];
+      return (
+        <button
+          type="button"
+          class="mf-dot relative flex items-center justify-center w-8 h-8 rounded-full hover:bg-white/10 transition shrink-0"
+          data-status={meta.status}
+          aria-label={`Toggle ${meta.filterLabel}`}
+          title={`${meta.filterLabel} (${countsByStatus[meta.status]})`}
+        >
+          {meta.activePulse && (
+            <span
+              class="absolute inline-flex h-6 w-6 rounded-full opacity-60 animate-ping"
+              style={`background-color: ${meta.hex}`}
+            />
+          )}
+          <span
+            class="relative flex items-center justify-center w-6 h-6 rounded-full"
+            style={`background-color: ${meta.hex}26; color: ${meta.hex};`}
+          >
+            <Icon size={13} stroke-width={2.25} />
+          </span>
+        </button>
+      );
+    })}
   </div>
 
   <!-- Full content: shown while expanded. Scrolls independently so the header stays put. -->
@@ -78,35 +107,46 @@ const totalCount = clientProjects.length;
 
     <!-- Filter rows -->
     <div class="grid grid-cols-2 gap-1 p-2 md:flex md:flex-col md:gap-0.5 md:p-1.5">
-      {STATUS_META.map((meta) => (
-        <label class="mf-row group flex items-start md:items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
-          <input
-            type="checkbox"
-            class="mf-checkbox mt-0.5 md:mt-0 w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer"
-            style={`accent-color: ${meta.hex}`}
-            value={meta.status}
-            data-count={countsByStatus[meta.status]}
-            checked
-          />
-          <div class="relative w-2.5 h-2.5 md:w-3 md:h-3 mt-0.5 md:mt-0 shrink-0 flex items-center justify-center">
-            {meta.activePulse && (
-              <span class="absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75 animate-ping"></span>
-            )}
-            <span class={`relative inline-block w-2.5 h-2.5 md:w-3 md:h-3 rounded-full ${meta.color}`} />
-          </div>
-          <span class="flex flex-col min-w-0 flex-1">
-            <span class="text-[11px] md:text-xs font-semibold text-neutral-100 leading-none">
-              {meta.filterLabel}
+      {STATUS_META.map((meta) => {
+        const Icon = STATUS_ICONS[meta.status];
+        return (
+          <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
+            <input
+              type="checkbox"
+              class="mf-checkbox w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer"
+              style={`accent-color: ${meta.hex}`}
+              value={meta.status}
+              data-count={countsByStatus[meta.status]}
+              checked
+            />
+            <div class="relative w-6 h-6 md:w-7 md:h-7 shrink-0 flex items-center justify-center">
+              {meta.activePulse && (
+                <span
+                  class="absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping"
+                  style={`background-color: ${meta.hex}`}
+                />
+              )}
+              <span
+                class="relative flex items-center justify-center w-full h-full rounded-full"
+                style={`background-color: ${meta.hex}26; color: ${meta.hex};`}
+              >
+                <Icon size={14} stroke-width={2.25} />
+              </span>
+            </div>
+            <span class="flex flex-col min-w-0 flex-1">
+              <span class="text-[11px] md:text-xs font-semibold text-neutral-100 leading-none">
+                {meta.filterLabel}
+              </span>
+              <span class="hidden md:flex items-center gap-1 text-[10px] text-neutral-500 font-medium mt-1 leading-tight">
+                <span>{meta.description}</span>
+              </span>
             </span>
-            <span class="hidden md:flex items-center gap-1 text-[10px] text-neutral-500 font-medium mt-1 leading-tight">
-              <span>{meta.description}</span>
+            <span class="hidden md:inline-block text-[10px] font-semibold text-neutral-500 tabular-nums shrink-0 group-hover:text-neutral-300">
+              {countsByStatus[meta.status]}
             </span>
-          </span>
-          <span class="hidden md:inline-block text-[10px] font-semibold text-neutral-500 tabular-nums shrink-0 group-hover:text-neutral-300">
-            {countsByStatus[meta.status]}
-          </span>
-        </label>
-      ))}
+          </label>
+        );
+      })}
     </div>
   </div>
 

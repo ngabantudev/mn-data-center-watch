@@ -2,17 +2,49 @@
 import type { Project, ProjectStatus } from '~/data/dataCenters';
 import { STATUS_HEX, STATUS_POPUP_LABEL } from '~/data/mapStatusMeta';
 
+// --- Status glyphs for the map pins -----------------------------------------
+//
+// These must be the SAME icons as MapFilters.astro's STATUS_ICONS map, just
+// imported a different way. MapFilters.astro renders <lucide-astro> components
+// (JSX-like, works because Astro compiles them to markup at build time). This
+// file instead builds pin markup by hand at runtime inside a plain <script>
+// block (see Map.astro) — there's no Astro component pipeline running there,
+// so we can't import/render an Astro component directly.
+//
+// Instead we pull the *raw SVG source* for each icon from `lucide-static`
+// (a plain npm package that ships each Lucide icon as a literal .svg file)
+// and inline that markup directly into the pin. The `?raw` suffix is a Vite
+// feature: instead of resolving the SVG as an image asset, Vite imports its
+// file contents as a plain string — no extra config needed in an Astro project.
+//
+// Requires `lucide-static` as a dependency: npm install lucide-static
+import zapIconSvg from 'lucide-static/icons/zap.svg?raw';
+import hardHatIconSvg from 'lucide-static/icons/hard-hat.svg?raw';
+import clipboardListIconSvg from 'lucide-static/icons/clipboard-list.svg?raw';
+import circlePauseIconSvg from 'lucide-static/icons/circle-pause.svg?raw';
+import circleXIconSvg from 'lucide-static/icons/circle-x.svg?raw';
+
+const STATUS_ICON_SVG: Record<ProjectStatus, string> = {
+  active: zapIconSvg,
+  construction: hardHatIconSvg,
+  planned: clipboardListIconSvg,
+  paused: circlePauseIconSvg,
+  rejected: circleXIconSvg,
+};
+
 /** Builds the custom pin element (with the construction pulse animation hook) for a marker. */
 export function createMarkerElement(status: ProjectStatus): HTMLElement {
   const color = STATUS_HEX[status];
+  const iconSvg = STATUS_ICON_SVG[status];
 
   const el = document.createElement('div');
   el.className = 'custom-map-pin';
   el.innerHTML = `
     <div class="pin-icon-wrapper ${status === 'construction' ? 'construction-pulse-marker' : ''}">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="${color}"/>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/>
       </svg>
+      <span class="pin-glyph">${iconSvg}</span>
     </div>
   `;
   return el;
