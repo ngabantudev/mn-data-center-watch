@@ -96,9 +96,9 @@ export const clientProjects: Project[] = [
     }
   },
   {
-    name: "Brooklyn Park Technology Center",
+    name: "Brooklyn Park Data Center (MSP3)",
     description: "Co-location operational space utilized for multi-county civil information hosting.",
-    coordinates: [45.0943, -93.3563],
+    coordinates: [45.143925989932136, -93.38717940354411],
     url: "https://www.hennepin.us/",
     businessImpact: "🟢 <strong>Operational</strong> | Core infrastructure fiber pathways validated.",
     status: "active",
