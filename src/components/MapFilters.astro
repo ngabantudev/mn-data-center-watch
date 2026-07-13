@@ -2,23 +2,29 @@
 // src/components/MapFilters.astro
 import { clientProjects, type ProjectStatus } from '~/data/dataCenters';
 import { STATUS_META } from '~/data/mapStatusMeta';
-import { SlidersHorizontal, Zap, HardHat, ClipboardList, CirclePause, CircleX } from 'lucide-astro';
+import { SlidersHorizontal, Zap, HardHat, ClipboardList, CirclePause, CircleX, ChevronRight } from 'lucide-astro';
 
 const countsByStatus = STATUS_META.reduce((acc, meta) => {
   acc[meta.status] = clientProjects.filter((p) => p.status === meta.status).length;
   return acc;
 }, {} as Record<ProjectStatus, number>);
 
+// Helper to extract numeric value from string (e.g., "1,900" -> 1900)
+const parseMW = (val: string | undefined): number => {
+  if (!val) return 0;
+  // Remove commas, then match the first numeric sequence
+  const cleaned = val.replace(/,/g, '');
+  const match = cleaned.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+};
+
+// Sort projects by numeric power capacity descending
+const largestProjects = [...clientProjects].sort((a, b) => 
+  parseMW(b.powerCapacityMW) - parseMW(a.powerCapacityMW)
+);
+
 const totalCount = clientProjects.length;
 
-// One icon per status — swap these out here if the status list changes;
-// nothing else in this file needs to know about icon choices.
-// NOTE: these are the same icons used for the map pins (see ~/lib/mapMarkers.ts),
-// just via the lucide-astro component form instead of raw lucide-static SVG strings.
-// Keep the two in sync if you change one.
-// (Typed off `typeof Zap` rather than a shared `Icon` type — lucide-astro
-// doesn't export one the way lucide-react does; every icon component has the
-// same shape, so any one of them works fine as the type source.)
 const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
   active: Zap,
   construction: HardHat,
@@ -28,22 +34,24 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 };
 ---
 
-<!--
-  Facility filter sidebar — deflock.org / Google-Maps style edge panel.
-  - Mobile: bottom sheet anchored to bottom-4/left-4/right-4, collapses to a slim header bar.
-    The toggle handle sits centered on the panel's TOP edge.
-  - Desktop: a true full-height, flush-to-edge left sidebar (below the theme control),
-    collapses to a narrow icon rail. The toggle handle sits centered on the panel's
-    RIGHT edge, like Google Maps / deflock.org.
-  Dispatches a `mapfilterchange` CustomEvent on `document` with `{ statuses: string[] }`
-  whenever the active set of statuses changes, so Map.astro can show/hide markers.
--->
+<style>
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+</style>
+
 <div
   id="map-filters"
   data-total={totalCount}
   class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-neutral-900 backdrop-blur-md border border-white/10 md:border-l-0 shadow-2xl shadow-black/60 flex flex-col overflow-visible transition-[width] duration-300 ease-out"
 >
-  <!-- Header: brand mark + title + live count, pinned above the scroll area -->
+  <!-- Header: Fixed at top -->
   <div id="mf-header-row" class="flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-white/10">
     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0">
       <SlidersHorizontal size={14} stroke-width={2} class="text-emerald-400" />
@@ -58,7 +66,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     </div>
   </div>
 
-  <!-- Compact rail: shown only while collapsed. Icon chips double as quick toggles. -->
+  <!-- Compact rail -->
   <div id="mf-compact" class="hidden flex-row md:flex-col items-center gap-1.5 px-3 py-3 md:px-0 md:py-4 md:flex-1 md:overflow-y-auto">
     {STATUS_META.map((meta) => {
       const Icon = STATUS_ICONS[meta.status];
@@ -71,15 +79,9 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
           title={`${meta.filterLabel} (${countsByStatus[meta.status]})`}
         >
           {meta.activePulse && (
-            <span
-              class="absolute inline-flex h-6 w-6 rounded-full opacity-60 animate-ping"
-              style={`background-color: ${meta.hex}`}
-            />
+            <span class="absolute inline-flex h-6 w-6 rounded-full opacity-60 animate-ping" style={`background-color: ${meta.hex}`} />
           )}
-          <span
-            class="relative flex items-center justify-center w-6 h-6 rounded-full"
-            style={`background-color: ${meta.hex}26; color: ${meta.hex};`}
-          >
+          <span class="relative flex items-center justify-center w-6 h-6 rounded-full" style={`background-color: ${meta.hex}26; color: ${meta.hex};`}>
             <Icon size={13} stroke-width={2.25} />
           </span>
         </button>
@@ -87,74 +89,60 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     })}
   </div>
 
-  <!-- Full content: shown while expanded. Scrolls independently so the header stays put. -->
-  <div id="mf-content" class="flex flex-col min-h-0 flex-1 md:overflow-y-auto">
-    <!-- Select all / none row -->
-    <div class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2.5 border-b border-white/5 shrink-0">
-      <div class="flex items-center gap-2 text-[10px] font-semibold">
-        <button id="mf-select-all" type="button" class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2">
-          All
-        </button>
-        <span class="text-neutral-700">/</span>
-        <button id="mf-clear-all" type="button" class="text-neutral-500 hover:text-neutral-300 underline underline-offset-2">
-          None
-        </button>
-      </div>
-      <span class="text-[9px] uppercase tracking-wider text-neutral-600 font-semibold whitespace-nowrap">
-        {STATUS_META.length} types
-      </span>
+  <!-- Full content wrapper -->
+  <div id="mf-content" class="flex flex-col min-h-0 flex-1 overflow-hidden">
+    <!-- Filter Controls (Pinned) -->
+    <div class="shrink-0">
+        <div class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2.5 border-b border-white/5">
+        <div class="flex items-center gap-2 text-[10px] font-semibold">
+            <button id="mf-select-all" type="button" class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2">All</button>
+            <span class="text-neutral-700">/</span>
+            <button id="mf-clear-all" type="button" class="text-neutral-500 hover:text-neutral-300 underline underline-offset-2">None</button>
+        </div>
+        <span class="text-[9px] uppercase tracking-wider text-neutral-600 font-semibold whitespace-nowrap">{STATUS_META.length} types</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-1 p-2 md:flex md:flex-col md:gap-0.5 md:p-1.5 border-b border-white/5">
+        {STATUS_META.map((meta) => {
+            const Icon = STATUS_ICONS[meta.status];
+            return (
+            <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
+                <input type="checkbox" class="mf-checkbox w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer" style={`accent-color: ${meta.hex}`} value={meta.status} data-count={countsByStatus[meta.status]} checked />
+                <div class="relative w-6 h-6 md:w-7 md:h-7 shrink-0 flex items-center justify-center">
+                {meta.activePulse && <span class="absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping" style={`background-color: ${meta.hex}`} />}
+                <span class="relative flex items-center justify-center w-full h-full rounded-full" style={`background-color: ${meta.hex}26; color: ${meta.hex};`}>
+                    <Icon size={14} stroke-width={2.25} />
+                </span>
+                </div>
+                <span class="text-[11px] md:text-xs font-semibold text-neutral-100 leading-none">{meta.filterLabel}</span>
+            </label>
+            );
+        })}
+        </div>
     </div>
 
-    <!-- Filter rows -->
-    <div class="grid grid-cols-2 gap-1 p-2 md:flex md:flex-col md:gap-0.5 md:p-1.5">
-      {STATUS_META.map((meta) => {
-        const Icon = STATUS_ICONS[meta.status];
-        return (
-          <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
-            <input
-              type="checkbox"
-              class="mf-checkbox w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer"
-              style={`accent-color: ${meta.hex}`}
-              value={meta.status}
-              data-count={countsByStatus[meta.status]}
-              checked
-            />
-            <div class="relative w-6 h-6 md:w-7 md:h-7 shrink-0 flex items-center justify-center">
-              {meta.activePulse && (
-                <span
-                  class="absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping"
-                  style={`background-color: ${meta.hex}`}
-                />
-              )}
-              <span
-                class="relative flex items-center justify-center w-full h-full rounded-full"
-                style={`background-color: ${meta.hex}26; color: ${meta.hex};`}
-              >
-                <Icon size={14} stroke-width={2.25} />
-              </span>
+    <!-- Largest Projects Section: Scrollable List -->
+    <div class="flex flex-col flex-1 min-h-0 p-3.5 md:p-4">
+      <h5 class="text-[9px] font-bold text-neutral-500 uppercase tracking-wider mb-2.5 shrink-0">Largest Centers</h5>
+      <div class="hide-scrollbar overflow-y-auto flex-1 space-y-0.5">
+        {largestProjects.map((project) => (
+          <button
+            type="button"
+            data-project-name={project.name}
+            class="mf-project-link flex items-center justify-between w-full px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors text-left group"
+          >
+            <div class="min-w-0 flex flex-col">
+              <span class="text-[11px] font-medium text-neutral-200 truncate">{project.name}</span>
+              <span class="text-[9px] text-neutral-500">{project.powerCapacityMW}</span>
             </div>
-            <span class="flex flex-col min-w-0 flex-1">
-              <span class="text-[11px] md:text-xs font-semibold text-neutral-100 leading-none">
-                {meta.filterLabel}
-              </span>
-              <span class="hidden md:flex items-center gap-1 text-[10px] text-neutral-500 font-medium mt-1 leading-tight">
-                <span>{meta.description}</span>
-              </span>
-            </span>
-            <span class="hidden md:inline-block text-[10px] font-semibold text-neutral-500 tabular-nums shrink-0 group-hover:text-neutral-300">
-              {countsByStatus[meta.status]}
-            </span>
-          </label>
-        );
-      })}
+            <ChevronRight size={14} class="text-neutral-600 group-hover:text-neutral-300 shrink-0 ml-2" />
+          </button>
+        ))}
+      </div>
     </div>
   </div>
 
-  <!--
-    Edge-centered collapse handle.
-    Mobile: straddles the TOP edge, centered horizontally.
-    Desktop: straddles the RIGHT edge, centered vertically (Google Maps / deflock.org style).
-  -->
+  <!-- Collapse handle -->
   <button
     id="mf-toggle"
     type="button"
@@ -175,6 +163,9 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 </div>
 
 <script>
+  // ... (Keep existing script content)
+  import { clientProjects } from '~/data/dataCenters';
+
   const STORAGE_KEY = 'mapFiltersCollapsed';
 
   function initMapFilters(): void {
@@ -193,30 +184,23 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     const clearAllBtn = document.getElementById('mf-clear-all');
     const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('.mf-checkbox'));
     const dots = Array.from(document.querySelectorAll<HTMLButtonElement>('.mf-dot'));
+    const projectLinks = document.querySelectorAll('.mf-project-link');
 
     const totalCount = Number(root.dataset.total || checkboxes.length);
 
     let collapsed = false;
-    try {
-      collapsed = localStorage.getItem(STORAGE_KEY) === 'true';
-    } catch {
-      // localStorage unavailable (e.g. private browsing) — default to expanded
-    }
+    try { collapsed = localStorage.getItem(STORAGE_KEY) === 'true'; } catch {}
 
     function checkboxFor(status: string): HTMLInputElement | undefined {
       return checkboxes.find((cb) => cb.value === status);
     }
 
-    // --- Keep the bottom-right control stack (MapThemeSelector + MapLibre's
-    // NavigationControl, see global.css) above this panel on mobile. ---
     const MOBILE_QUERY = '(max-width: 767px)';
-    const FILTERS_BOTTOM_OFFSET = 16; // matches the `bottom-4` Tailwind class on `root`
+    const FILTERS_BOTTOM_OFFSET = 16;
     const CONTROLS_GAP_ABOVE_FILTERS = 12;
 
     function updateControlsOffset(): void {
       if (!window.matchMedia(MOBILE_QUERY).matches) {
-        // Desktop: filters live in the left sidebar, so just use the
-        // default inset defined in global.css — no need to raise anything.
         document.documentElement.style.removeProperty('--map-controls-bottom');
         return;
       }
@@ -225,9 +209,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
       document.documentElement.style.setProperty('--map-controls-bottom', `${offset}px`);
     }
 
-    // Panel height changes whenever it's toggled collapsed/expanded, or if
-    // its content reflows (e.g. text wrapping on resize) — ResizeObserver
-    // catches all of these, not just the explicit toggle click.
     const controlsResizeObserver = new ResizeObserver(() => updateControlsOffset());
     controlsResizeObserver.observe(root);
     window.addEventListener('resize', updateControlsOffset);
@@ -265,13 +246,10 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
         compact?.classList.remove('hidden');
         compact?.classList.add('flex');
         toggleBtn?.setAttribute('aria-expanded', 'false');
-        // Mobile handle points up (expand upward); desktop handle points right (expand rightward)
         toggleIconMobile?.style.setProperty('transform', 'rotate(180deg)');
         toggleIconDesktop?.style.setProperty('transform', 'rotate(0deg)');
         root?.classList.remove('md:w-72');
         root?.classList.add('md:w-14');
-        // Rail is too narrow for the title/count text on desktop — hide it there.
-        // (Mobile stays full-width even when collapsed, so its header text still fits.)
         headerText?.classList.add('md:hidden');
         headerRow?.classList.add('md:justify-center');
         headerRow?.classList.remove('md:px-4');
@@ -280,7 +258,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
         compact?.classList.add('hidden');
         compact?.classList.remove('flex');
         toggleBtn?.setAttribute('aria-expanded', 'true');
-        // Mobile handle points down (collapse downward); desktop handle points left (collapse leftward)
         toggleIconMobile?.style.setProperty('transform', 'rotate(0deg)');
         toggleIconDesktop?.style.setProperty('transform', 'rotate(180deg)');
         root?.classList.remove('md:w-14');
@@ -293,11 +270,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 
     toggleBtn?.addEventListener('click', () => {
       collapsed = !collapsed;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(collapsed));
-      } catch {
-        // ignore persistence failures
-      }
+      try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch {}
       applyCollapsedState();
       updateControlsOffset();
     });
@@ -311,6 +284,16 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
         if (cb) {
           cb.checked = !cb.checked;
           emitChange();
+        }
+      });
+    });
+
+    projectLinks.forEach((link) => {
+      link.addEventListener('click', () => {
+        const projectName = (link as HTMLElement).dataset.projectName;
+        const project = clientProjects.find(p => p.name === projectName);
+        if (project) {
+          document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: { project } }));
         }
       });
     });

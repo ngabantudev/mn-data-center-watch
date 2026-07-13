@@ -49,7 +49,6 @@ import '../styles/mapPins.css';
           coordinates: [project.coordinates[1], project.coordinates[0]] // [lng, lat]
         },
         properties: {
-          // Store index to easily fetch the full object later on click/hover
           projectIndex: index,
           status: project.status || 'planned',
           parsedMW: mw,
@@ -80,13 +79,12 @@ import '../styles/mapPins.css';
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
 
-    // Helper to add/re-add the data source and layer
     const addDataLayer = () => {
       if (!map.getSource('data-centers')) {
         map.addSource('data-centers', {
           type: 'geojson',
           data: geoJsonData,
-          generateId: true // Needed for hover states
+          generateId: true
         });
       }
 
@@ -97,17 +95,15 @@ import '../styles/mapPins.css';
           source: 'data-centers',
           paint: {
             'circle-color': ['get', 'color'],
-            // Square root scaling done natively on the GPU
             'circle-radius': [
               'interpolate',
               ['linear'],
               ['sqrt', ['get', 'parsedMW']],
-              Math.sqrt(5), 6,      // Min MW radius
-              Math.sqrt(1900), 24   // Max MW radius
+              Math.sqrt(5), 6,
+              Math.sqrt(1900), 24
             ],
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
-            // Optional hover effect: increase opacity on hover
             'circle-opacity': [
               'case',
               ['boolean', ['feature-state', 'hover'], false],
@@ -117,14 +113,13 @@ import '../styles/mapPins.css';
           }
         });
 
-        // Add this immediately after the circle layer definition
         map.addLayer({
           id: 'data-centers-labels',
           type: 'symbol',
-          source: 'data-centers', // This must match the id used in map.addSource
+          source: 'data-centers',
           layout: {
             'text-field': ['to-string', ['get', 'parsedMW']],
-            'text-font': ['Open Sans Bold'], // Ensure this matches your style's font stack
+            'text-font': ['Open Sans Bold'],
             'text-size': 10,
             'text-allow-overlap': true
           },
@@ -133,7 +128,7 @@ import '../styles/mapPins.css';
             'text-halo-color': '#000000',
             'text-halo-width': 1.5
           }
-        } as maplibregl.SymbolLayerSpecification); // Type assertion solves the interface mismatch
+        } as maplibregl.SymbolLayerSpecification);
       }
     };
 
@@ -142,14 +137,13 @@ import '../styles/mapPins.css';
       addDataLayer();
     });
 
-    // Handle Map Theme Changes (Styles wipe out custom layers, so we must re-add them)
+    // Handle Map Theme Changes
     document.addEventListener('mapstylechange', (event) => {
       const detail = (event as CustomEvent<{ url: string }>).detail;
       if (detail?.url) {
         map.setStyle(detail.url);
         map.once('style.load', () => {
           addDataLayer();
-          // Re-apply current filters to the newly loaded layer
           document.dispatchEvent(new CustomEvent('mapfilterchange', { detail: { statuses: Array.from(currentFilters) } }));
         });
       }
@@ -162,9 +156,7 @@ import '../styles/mapPins.css';
       if (!detail) return;
       currentFilters = new Set(detail.statuses);
       
-      // Apply the same filter to both the circles and the labels
       const layersToFilter = ['data-centers-circles', 'data-centers-labels'];
-      
       layersToFilter.forEach(layerId => {
         if (map.getLayer(layerId)) {
           map.setFilter(layerId, ['in', 'status', ...detail.statuses]);
@@ -180,10 +172,24 @@ import '../styles/mapPins.css';
       }
     });
 
-    // Handle Deselection Camera Return
+    // Centralized Mapmarkerselect Logic (Handles flyTo and state)
     document.addEventListener('mapmarkerselect', (event) => {
       const detail = (event as CustomEvent<{ project: typeof clientProjects[number] } | null>).detail;
-      if (!detail?.project && hasSelection) {
+      
+      // Case: Selection (Marker or Sidebar Click)
+      if (detail?.project) {
+        const project = detail.project;
+        const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
+
+        if (!hasSelection) {
+          previousView = { center: map.getCenter(), zoom: map.getZoom() };
+        }
+        
+        hasSelection = true;
+        map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), essential: true });
+      } 
+      // Case: Deselection
+      else if (hasSelection) {
         hasSelection = false;
         const target = previousView ?? { center: MINNESOTA_CENTER, zoom: DEFAULT_ZOOM };
         map.flyTo({ center: target.center, zoom: target.zoom, essential: true });
@@ -194,7 +200,6 @@ import '../styles/mapPins.css';
     // WebGL Hover & Popup Logic
     map.on('mouseenter', 'data-centers-circles', (e) => {
       map.getCanvas().style.cursor = 'pointer';
-      
       if (e.features && e.features.length > 0) {
         if (hoverStateId !== null) {
           map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: false });
@@ -202,23 +207,14 @@ import '../styles/mapPins.css';
         hoverStateId = e.features[0].id as number;
         map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: true });
 
-        // Show Popup (Desktop only logic)
         if (window.innerWidth >= 768) {
           if (activePopup) activePopup.remove();
-          
           const feature = e.features[0];
-          const projectIndex = feature.properties.projectIndex;
-          const project = clientProjects[projectIndex];
-          const coords = feature.geometry.coordinates;
-
-          activePopup = new maplibregl.Popup({
-            closeButton: false,
-            offset: 15,
-            maxWidth: '280px'
-          })
-          .setLngLat(coords as [number, number])
-          .setHTML(buildPreviewHtml(project))
-          .addTo(map);
+          const project = clientProjects[feature.properties.projectIndex];
+          activePopup = new maplibregl.Popup({ closeButton: false, offset: 15, maxWidth: '280px' })
+            .setLngLat(feature.geometry.coordinates as [number, number])
+            .setHTML(buildPreviewHtml(project))
+            .addTo(map);
         }
       }
     });
@@ -232,23 +228,13 @@ import '../styles/mapPins.css';
       if (activePopup) activePopup.remove();
     });
 
-    // WebGL Click Logic
+    // WebGL Click Logic (Dispatch event only)
     map.on('click', 'data-centers-circles', (e) => {
       if (!e.features || e.features.length === 0) return;
-      
       if (activePopup) activePopup.remove();
-
-      const feature = e.features[0];
-      const projectIndex = feature.properties.projectIndex;
-      const project = clientProjects[projectIndex];
-      const coords = feature.geometry.coordinates as [number, number];
-
-      if (!hasSelection) {
-        previousView = { center: map.getCenter(), zoom: map.getZoom() };
-      }
       
-      hasSelection = true;
-      map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), essential: true });
+      const feature = e.features[0];
+      const project = clientProjects[feature.properties.projectIndex];
       document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: { project } }));
     });
   }
