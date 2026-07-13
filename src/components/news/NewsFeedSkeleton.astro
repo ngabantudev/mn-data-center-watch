@@ -1,0 +1,13 @@
+---
+// src/components/news/NewsFeedSkeleton.astro
+---
+<div class="space-y-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100 animate-pulse">
+  <div class="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+  {[1, 2, 3].map(() => (
+    <div class="border-b border-gray-100 pb-4 last:border-0">
+      <div class="h-3 bg-gray-200 rounded w-16 mb-2"></div>
+      <div class="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
+      <div class="h-4 bg-gray-200 rounded w-full"></div>
+    </div>
+  ))}
+</div>

@@ -207,13 +207,33 @@ export const clientProjects: Project[] = [
   // ==========================================
   // SITES UNDER CONSTRUCTION
   // ==========================================
+{
+    name: "Oppidan Eagan Data Center",
+    description: "Single-story, build-to-suit edge data center located south of the Eagan YMCA, optimized for regional enterprise logistics.",
+    coordinates: [44.82613684076696, -93.10676078822209],
+    url: "https://cityofeagan.com/eagan-business-news-q3-2025",
+    businessImpact: "🟠 <strong>Under Construction</strong> | Core building shell erected; interior infrastructure fit-out underway for October 2026 launch.",
+    status: "construction",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "5 MW",
+    waterFootprint: "Standard cooling configuration (61,554 sq ft facility)",
+    publicRecord: {
+      title: "City of Eagan Business News & Development Updates",
+      url: "https://cityofeagan.com/eagan-business-news-q3-2025"
+    },
+    economicAsymmetry: {
+      constructionJobsEstimate: 0,
+      permanentOperationalJobsEstimate: 0,
+      metricRatioText: "Data not provided in local public record."
+    }
+  },
   {
     name: "Meta Rosemount Campus",
     developer: "Meta",
     description: "A 715,000 sq. ft. hyper-scale facility built explicitly for next-generation generative AI infrastructure footprints.",
     coordinates: [44.7303, -93.0185],
     url: "https://datacenters.atmeta.com/wp-content/uploads/2025/02/Metas-Rosemount-Data-Center.pdf",
-    businessImpact: "🟢 <strong>Under Construction</strong> | 308 MW AI optimization workloads backed by 100% renewable energy.",
+    businessImpact: "🟠 <strong>Under Construction</strong> | 308 MW AI optimization workloads backed by 100% renewable energy.",
     status: "construction",
     estimatedCost: "$800+ Million",
     powerCapacityMW: "308 MW",

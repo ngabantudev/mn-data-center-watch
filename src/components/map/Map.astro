@@ -3,15 +3,36 @@
 import MapThemeSelector from './MapThemeSelector.astro';
 import MapFilters from './MapFilters.astro';
 import MapDetailPanel from './MapDetailPanel.astro';
+import NewsFeedList from '../news/NewsFeedList.astro';
+import { fetchLocalNews } from '~/lib/newsFeed';
 import '~/styles/mapPins.css';
+
+// Pre-fetch news once to pass into both desktop and mobile views
+const { newsItems, errorMessage } = await fetchLocalNews();
+
+if (import.meta.env.PROD) {
+  Astro.response.headers.set(
+    "Cache-Control",
+    "public, max-age=0, s-maxage=900, stale-while-revalidate=600"
+  );
+}
 ---
 
-<section class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]">
+<section id="map-workspace" class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]">
   <MapThemeSelector />
 
-  <MapFilters />
+  <MapFilters newsItems={newsItems} errorMessage={errorMessage} />
 
+  <!-- The MapDetailPanel component inherently manages its own absolute positioning, z-index, and translates -->
   <MapDetailPanel />
+
+  <!-- Desktop News Feed Panel (Shows ONLY when NO data center is selected) -->
+  <div 
+    id="news-feed-panel" 
+    class="hidden md:flex pointer-events-auto font-sans absolute z-30 top-0 bottom-0 right-0 w-96 bg-neutral-900 backdrop-blur-md border-l border-white/10 shadow-2xl shadow-black/60 flex-col overflow-hidden transition-transform duration-300 ease-out translate-x-0"
+  >
+    <NewsFeedList newsItems={newsItems} errorMessage={errorMessage} />
+  </div>
 
   <div class="relative w-full h-full">
     <div id="map" class="absolute inset-0 w-full h-full bg-[#f4f4f5]"></div>
@@ -31,11 +52,9 @@ import '~/styles/mapPins.css';
   const DESKTOP_ZOOM = 6;
   const DEFAULT_ZOOM = window.innerWidth < 768 ? MOBILE_ZOOM : DESKTOP_ZOOM;
 
-  // 1. Convert clientProjects to GeoJSON
   const geoJsonData = {
     type: 'FeatureCollection',
     features: clientProjects.map((project, index) => {
-      // Extract MW for WebGL scaling
       const mwMatch = project.powerCapacityMW ? project.powerCapacityMW.replace(/,/g, '').match(/\d+(\.\d+)?/) : null;
       const mw = mwMatch ? parseFloat(mwMatch[0]) : 5;
 
@@ -76,14 +95,12 @@ import '~/styles/mapPins.css';
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
 
-    // Track state globally within init scope to replay cleanly during style loads
     let cachedStatuses: string[] = ['active', 'construction', 'planned', 'paused', 'rejected'];
     let cachedMinMW: number = 0;
 
     const applyMapFilters = () => {
       const layersToFilter = ['data-centers-circles', 'data-centers-labels'];
       
-      // FIXED: Pure modern expression format avoids type-safety and parser collisions
       const filterExpression = [
         'all',
         ['in', ['get', 'status'], ['literal', cachedStatuses]],
@@ -149,7 +166,6 @@ import '~/styles/mapPins.css';
         } as maplibregl.SymbolLayerSpecification);
       }
 
-      // Re-apply expressions state over freshly injected layers
       applyMapFilters();
     };
 
@@ -158,7 +174,6 @@ import '~/styles/mapPins.css';
       addDataLayer();
     });
 
-    // Handle Map Theme Changes
     document.addEventListener('mapstylechange', (event) => {
       const detail = (event as CustomEvent<{ url: string }>).detail;
       if (detail?.url) {
@@ -169,7 +184,6 @@ import '~/styles/mapPins.css';
       }
     });
 
-    // Integrated Filter Updates (Listens for status selections and slider mutations)
     document.addEventListener('mapfilterchange', (event) => {
       const detail = (event as CustomEvent<{ statuses: string[]; minMW?: number }>).detail;
       if (!detail) return;
@@ -180,7 +194,6 @@ import '~/styles/mapPins.css';
       applyMapFilters();
     });
     
-    // Handle Clicks on Empty Map
     map.on('click', (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['data-centers-circles'] });
       if (!features.length) {
@@ -188,11 +201,11 @@ import '~/styles/mapPins.css';
       }
     });
 
-    // Centralized Mapmarkerselect Logic (Handles flyTo and state)
+    // Centralized Mapmarkerselect Logic (Handles flyTo and panel UI state)
     document.addEventListener('mapmarkerselect', (event) => {
       const detail = (event as CustomEvent<{ project: typeof clientProjects[number] } | null>).detail;
-      
-      // Case: Selection (Marker or Sidebar Click)
+      const newsPanel = document.getElementById('news-feed-panel');
+
       if (detail?.project) {
         const project = detail.project;
         const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
@@ -203,17 +216,29 @@ import '~/styles/mapPins.css';
         
         hasSelection = true;
         map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), essential: true });
+
+        // Slide the News Feed off-screen when a detail is active
+        if (newsPanel) {
+          newsPanel.classList.add('translate-x-full');
+          newsPanel.classList.remove('translate-x-0');
+        }
       } 
-      // Case: Deselection
-      else if (hasSelection) {
-        hasSelection = false;
-        const target = previousView ?? { center: MINNESOTA_CENTER, zoom: DEFAULT_ZOOM };
-        map.flyTo({ center: target.center, zoom: target.zoom, essential: true });
-        previousView = null;
+      else {
+        if (hasSelection) {
+          hasSelection = false;
+          const target = previousView ?? { center: MINNESOTA_CENTER, zoom: DEFAULT_ZOOM };
+          map.flyTo({ center: target.center, zoom: target.zoom, essential: true });
+          previousView = null;
+        }
+
+        // Return the News Feed onto the screen
+        if (newsPanel) {
+          newsPanel.classList.remove('translate-x-full');
+          newsPanel.classList.add('translate-x-0');
+        }
       }
     });
 
-    // WebGL Hover & Popup Logic
     map.on('mouseenter', 'data-centers-circles', (e) => {
       map.getCanvas().style.cursor = 'pointer';
       if (e.features && e.features.length > 0) {
@@ -244,7 +269,6 @@ import '~/styles/mapPins.css';
       if (activePopup) activePopup.remove();
     });
 
-    // WebGL Click Logic (Dispatch event only)
     map.on('click', 'data-centers-circles', (e) => {
       if (!e.features || e.features.length === 0) return;
       if (activePopup) activePopup.remove();

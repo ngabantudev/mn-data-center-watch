@@ -1,12 +1,22 @@
 ---
+// src/components/map/MapFilters.astro
 import { clientProjects, type ProjectStatus } from '~/data/dataCenters';
 import { STATUS_META } from '~/data/mapStatusMeta';
 import { Zap, HardHat, ClipboardList, CirclePause, CircleX, ChevronRight } from 'lucide-astro';
+import type { NewsItem } from '~/lib/newsFeed';
 
-// Component imports
-import FilterHeader from '../filter/FilterHeader.astro';
-import FilterCompactRail from '../filter/FilterCompactRail.astro';
-import AccordionSection from '../ui/AccordionSection.astro';
+// Component imports (Migrated to path aliases to fix resolution errors)
+import FilterHeader from '~/components/filter/FilterHeader.astro';
+import FilterCompactRail from '~/components/filter/FilterCompactRail.astro';
+import AccordionSection from '~/components/ui/AccordionSection.astro';
+import NewsFeedList from '~/components/news/NewsFeedList.astro';
+
+interface Props {
+  newsItems: NewsItem[];
+  errorMessage: string | null;
+}
+
+const { newsItems, errorMessage } = Astro.props;
 
 const countsByStatus = STATUS_META.reduce((acc, meta) => {
   acc[meta.status] = clientProjects.filter((p) => p.status === meta.status).length;
@@ -120,6 +130,12 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
       </div>
     </AccordionSection>
 
+    <div class="md:hidden">
+      <AccordionSection id="news" title="Local Updates" openByDefault={false}>
+        <NewsFeedList newsItems={newsItems} errorMessage={errorMessage} />
+      </AccordionSection>
+    </div>
+
   </div>
 
   <button
@@ -146,7 +162,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 
   const STORAGE_KEY = 'mapFiltersCollapsed';
 
-  // Mini parsing utility duplicated contextually inside component boundaries
   const parseMW = (val: string | undefined): number => {
     if (!val) return 0;
     const cleaned = val.replace(/,/g, '');
@@ -245,7 +260,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 
       const activeStatuses = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
 
-      // Compute total matching elements balancing criteria pairs dynamically
       const activeCount = clientProjects.filter((p) => {
         const projectMW = parseMW(p.powerCapacityMW);
         return activeStatuses.includes(p.status) && projectMW >= minMW;
