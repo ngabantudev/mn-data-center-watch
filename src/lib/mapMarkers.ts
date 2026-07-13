@@ -50,12 +50,66 @@ export function createMarkerElement(status: ProjectStatus): HTMLElement {
   return el;
 }
 
-/** Builds the inner HTML for a project's popup card. */
-export function buildPopupHtml(project: Project, popupId: string): string {
+/** Builds the compact hover-preview popup: status, name, description, and a highlight grid of key stats. */
+export function buildPreviewHtml(project: Project): string {
+  const color = STATUS_HEX[project.status];
+  const statusText = STATUS_POPUP_LABEL[project.status];
+
+  const statsHtml = `
+    ${project.developer ? `
+      <div class="col-span-2 flex justify-between items-center gap-2">
+        <span class="text-neutral-400 font-medium shrink-0">Developer:</span>
+        <span class="font-bold text-neutral-800 text-right truncate">${project.developer}</span>
+      </div>
+    ` : ''}
+    ${project.estimatedCost ? `
+      <div>
+        <span class="block text-neutral-400 font-medium">Est. Cost</span>
+        <span class="font-bold text-neutral-800">${project.estimatedCost}</span>
+      </div>
+    ` : ''}
+    ${project.powerCapacityMW ? `
+      <div>
+        <span class="block text-neutral-400 font-medium">Power Draw</span>
+        <span class="font-bold text-neutral-800">${project.powerCapacityMW}</span>
+      </div>
+    ` : ''}
+    ${project.waterFootprint ? `
+      <div class="col-span-2">
+        <span class="block text-neutral-400 font-medium">Water Use</span>
+        <span class="font-semibold text-neutral-700 leading-tight">${project.waterFootprint}</span>
+      </div>
+    ` : ''}
+  `;
+
+  return `
+    <div class="p-0.5 text-neutral-900 font-sans w-64 select-text">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${color}"></span>
+        <span class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">${statusText}</span>
+      </div>
+      <h3 class="font-bold text-[13px] text-neutral-900 leading-snug mb-1 wrap-break-word">${project.name}</h3>
+      <p class="text-[11px] text-neutral-600 leading-snug mb-2 line-clamp-2 wrap-break-word">${project.description}</p>
+      <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] bg-neutral-50 border border-neutral-100 rounded-md p-1.5 mb-1.5">
+        ${statsHtml}
+      </div>
+      <p class="text-[9px] font-semibold text-blue-600 uppercase tracking-wide">Click for full details &rarr;</p>
+    </div>
+  `;
+}
+
+/** Builds the full detail-panel content for a project (opened on marker click). */
+export function buildDetailHtml(project: Project): string {
   const color = STATUS_HEX[project.status];
   const statusText = STATUS_POPUP_LABEL[project.status];
 
   const metricsHtml = `
+    ${project.developer ? `
+      <div class="flex justify-between items-center text-[11px] border-b border-neutral-100 pb-1 mb-1">
+        <span class="text-neutral-400 font-medium">Developer:</span>
+        <span class="font-bold text-neutral-800">${project.developer}</span>
+      </div>
+    ` : ''}
     ${project.estimatedCost ? `
       <div class="flex justify-between items-center text-[11px] border-b border-neutral-100 pb-1 mb-1">
         <span class="text-neutral-400 font-medium">Est. Cost:</span>
@@ -103,17 +157,17 @@ export function buildPopupHtml(project: Project, popupId: string): string {
   ` : '';
 
   return `
-    <div id="container-${popupId}" class="p-0.5 text-neutral-900 font-sans max-h-[45vh] sm:max-h-[55vh] overflow-y-auto overflow-x-hidden select-text">
+    <div class="p-0.5 text-neutral-900 font-sans select-text">
       <div class="flex items-center gap-2 mb-1">
         <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${color}"></span>
         <span class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">${statusText}</span>
       </div>
-      <h3 class="font-bold text-sm md:text-base text-neutral-900 border-b border-neutral-200 pb-1 mb-2 leading-snug wrap-break-word">${project.name}</h3>
-      <p class="text-[11px] md:text-xs text-neutral-600 leading-relaxed mb-3 wrap-break-word">${project.description}</p>
+      <h3 class="font-bold text-base text-neutral-900 border-b border-neutral-200 pb-1 mb-2 leading-snug wrap-break-word">${project.name}</h3>
+      <p class="text-xs text-neutral-600 leading-relaxed mb-3 wrap-break-word">${project.description}</p>
 
       <div class="bg-neutral-50 border border-neutral-200/60 p-2 rounded-lg mb-2">
         <span class="block text-[9px] text-neutral-400 font-bold uppercase tracking-wider mb-1">Impact & Status</span>
-        <p class="text-[11px] md:text-xs text-neutral-700 leading-normal font-medium mb-2 wrap-break-word">${project.businessImpact}</p>
+        <p class="text-xs text-neutral-700 leading-normal font-medium mb-2 wrap-break-word">${project.businessImpact}</p>
         ${metricsHtml}
         ${asymmetryHtml}
       </div>

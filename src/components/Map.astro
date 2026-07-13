@@ -2,6 +2,7 @@
 // src/components/Map.astro
 import MapThemeSelector from './MapThemeSelector.astro';
 import MapFilters from './MapFilters.astro';
+import MapDetailPanel from './MapDetailPanel.astro';
 import '../styles/mapPins.css';
 ---
 
@@ -11,6 +12,9 @@ import '../styles/mapPins.css';
 
   <!-- Collapsible Facility Filters Sidebar -->
   <MapFilters />
+
+  <!-- Full-detail panel, opened on marker click (see mapmarkerselect events below) -->
+  <MapDetailPanel />
 
   <div class="relative w-full h-full">
     <div id="map" class="absolute inset-0 w-full h-full bg-[#f4f4f5]"></div>
@@ -22,7 +26,7 @@ import '../styles/mapPins.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { clientProjects } from '~/data/dataCenters';
   import { getDefaultMapStyleUrl } from '~/data/mapStyles';
-  import { createMarkerElement, buildPopupHtml, MarkerFilterController, type MarkerRecord } from '~/lib/mapMarkers';
+  import { createMarkerElement, buildPreviewHtml, MarkerFilterController, type MarkerRecord } from '~/lib/mapMarkers';
 
   const MINNESOTA_CENTER: [number, number] = [-93.2650, 44.9778];
   const MOBILE_ZOOM = 6.8;
@@ -52,6 +56,12 @@ import '../styles/mapPins.css';
       setTimeout(() => map.resize(), 100);
     });
 
+    // Empty-map click closes an open detail panel (marker clicks stopPropagation
+    // below, so this only fires for genuine background clicks).
+    map.on('click', () => {
+      document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
+    });
+
     // MapThemeSelector.astro dispatches this when the user picks a new style.
     document.addEventListener('mapstylechange', (event) => {
       const detail = (event as CustomEvent<{ url: string }>).detail;
@@ -62,20 +72,30 @@ import '../styles/mapPins.css';
     let closeTimer: number | null = null;
     const markerRegistry: MarkerRecord[] = [];
 
+    function closePreview(): void {
+      if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+      if (activePopup) { activePopup.remove(); activePopup = null; }
+    }
+
+    /** Flies the camera to a project and opens its full detail panel. Used by both desktop click and mobile tap. */
+    function selectProject(project: (typeof clientProjects)[number], coords: [number, number]): void {
+      closePreview();
+      map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), essential: true });
+      document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: { project } }));
+    }
+
     if (Array.isArray(clientProjects)) {
       clientProjects.forEach((project, index) => {
         if (!project.coordinates) return;
         const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
-        const popupId = `dc-${index}`;
         const currentStatus = project.status || 'planned';
 
         const el = createMarkerElement(currentStatus);
         const marker = new maplibregl.Marker({ element: el }).setLngLat(coords).addTo(map);
         markerRegistry.push({ el, status: currentStatus });
 
-        function showPopup() {
-          if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
-          if (activePopup) { activePopup.remove(); }
+        function showPreview() {
+          closePreview();
 
           const pixel = map.project(coords);
           const width = map.getContainer().clientWidth;
@@ -87,35 +107,35 @@ import '../styles/mapPins.css';
 
           activePopup = new maplibregl.Popup({
             offset: [horizontalAnchor === 'left' ? 12 : -12, verticalAnchor === 'top' ? 12 : -12],
-            closeButton: window.innerWidth < 768,
+            closeButton: false,
             anchor: calculatedAnchor,
-            maxWidth: window.innerWidth < 768 ? '240px' : '310px'
-          }).setHTML(buildPopupHtml(project, popupId)).setLngLat(coords).addTo(map);
+            maxWidth: '280px'
+          }).setHTML(buildPreviewHtml(project)).setLngLat(coords).addTo(map);
 
-          if (window.innerWidth >= 768) {
-            const popupNode = activePopup.getElement();
-            if (popupNode) {
-              popupNode.addEventListener('mouseenter', () => {
-                if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
-              });
-              popupNode.addEventListener('mouseleave', () => {
-                closeTimer = window.setTimeout(() => { if (activePopup) activePopup.remove(); }, 300);
-              });
-            }
+          const popupNode = activePopup.getElement();
+          if (popupNode) {
+            popupNode.addEventListener('mouseenter', () => {
+              if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+            });
+            popupNode.addEventListener('mouseleave', () => {
+              closeTimer = window.setTimeout(closePreview, 300);
+            });
           }
         }
 
+        // Desktop: hover shows the compact preview; click flies in and opens full detail.
+        // Mobile: no hover state, so tap goes straight to full detail.
         if (window.innerWidth >= 768) {
-          el.addEventListener('mouseenter', showPopup);
+          el.addEventListener('mouseenter', showPreview);
           el.addEventListener('mouseleave', () => {
-            closeTimer = window.setTimeout(() => { if (activePopup) activePopup.remove(); }, 300);
-          });
-        } else {
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showPopup();
+            closeTimer = window.setTimeout(closePreview, 300);
           });
         }
+
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectProject(project, coords);
+        });
       });
     }
 

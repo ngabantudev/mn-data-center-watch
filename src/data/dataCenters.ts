@@ -24,6 +24,7 @@ export interface Project {
   businessImpact: string;
   status: ProjectStatus;
   // Enhanced public accountability metrics
+  developer?: string; // Developer / operating company behind the project, where publicly known
   estimatedCost?: string;
   powerCapacityMW?: string;
   waterFootprint?: string;
@@ -37,6 +38,7 @@ export const clientProjects: Project[] = [
   // ==========================================
 {
     name: "Downtown Minneapolis Data Center (MSP4)",
+    developer: "DataBank",
     description: "The primary carrier-hotel and network interconnection hub for the Upper Midwest, hosting the Midwest Internet Cooperative Exchange (MICE) and over 75 unique network providers.",
     coordinates: [44.971814446268695, -93.25470914945399],
     url: "https://www.databank.com/data-centers/minneapolis/511-11th-avenue/",
@@ -52,6 +54,7 @@ export const clientProjects: Project[] = [
   },
 {
     name: "East Twin Cities Data Center (MSP2)",
+    developer: "DataBank",
     description: "Purpose-built multi-tenant colocation facility and Tier III carrier-hotel leveraging Eagan's open-access wholesale fiber rings.",
     coordinates: [44.83859577221845, -93.1457908457609],
     url: "https://www.databank.com/data-centers/minneapolis/eagan/",
@@ -206,6 +209,7 @@ export const clientProjects: Project[] = [
   // ==========================================
   {
     name: "Meta Rosemount Campus",
+    developer: "Meta",
     description: "A 715,000 sq. ft. hyper-scale facility built explicitly for next-generation generative AI infrastructure footprints.",
     coordinates: [44.7303, -93.0185],
     url: "https://datacenters.atmeta.com/wp-content/uploads/2025/02/Metas-Rosemount-Data-Center.pdf",
@@ -229,6 +233,7 @@ export const clientProjects: Project[] = [
   // ==========================================
   {
     name: "Monticello Tech Park (Frattalone / Microsoft)",
+    developer: "Frattalone Companies / Microsoft (Azure)",
     description: "Proposed $5 billion, 3-million sq. ft. massive campus spanning six separate data halls designed for Azure cloud ecosystems.",
     coordinates: [45.2755, -93.7912],
     url: "https://monticellodatacenterjobs.com/monticello-mn-data-center-construction-timeline/",
@@ -249,6 +254,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "Scannell Technology Park (Monticello)",
+    developer: "Scannell Properties",
     description: "Planned 1.3-million-square-foot data center footprint layout seeking capacity output across a 106-acre technology park parcel.",
     coordinates: [45.2891, -93.8184],
     url: "https://monticellodatacenterjobs.com/monticello-mn-data-center-construction-timeline/",
@@ -269,6 +275,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "Cannon Falls Technology Park",
+    developer: "Tract",
     description: "A master-planned data center campus on ~253 acres north of Cannon Falls led by developer Tract.",
     coordinates: [44.5264, -92.9341],
     url: "https://www.cannonfallstechnologypark.com/",
@@ -289,6 +296,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "Hermantown: Project Loon (Google)",
+    developer: "Google",
     description: "A planned hyperscale campus complex chosen due to the region's energy-efficient climate and resilient power grid.",
     coordinates: [46.8042, -92.2858],
     url: "https://hermantownmn.com/community/community-highlights/google-announces-plans-for-hermantown-data-center/",
@@ -309,6 +317,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "Elk River Data Center (IronGate)",
+    developer: "IronGate",
     description: "Proposed 60,000 sq. ft., 33 MW mid-scale facility generating local energy traction.",
     coordinates: [45.3288, -93.5704],
     url: "https://elkriverdatacenter.com/research-analysis/meetings/2026-06-23-planning-commission/", // Fact-Checked
@@ -329,6 +338,7 @@ export const clientProjects: Project[] = [
   },
     {
     name: "Unisys Eagan Data Center",
+    developer: "Unisys (facility since sold; new owner not confirmed)",
     description: "Enterprise data corridor footprint servicing legacy cloud infrastructure and high-volume redundancy architectures.",
     coordinates: [44.8392, -93.1341], // True Central Commons / Pilot Knob industrial corridor
     url: "https://www.datacenterdynamics.com/en/news/unisys-sells-data-center-outside-minneapolis-minnesota/",
@@ -344,6 +354,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "Pine Island: Project Skyway (Google)",
+    developer: "Google (in partnership with Xcel Energy)",
     description: "A 400+ acre regional infrastructure technology campus in partnership with Google and Xcel Energy.",
     coordinates: [44.2215, -92.6410],
     url: "https://pineislandskyway.com/",
@@ -364,6 +375,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "Faribault Industrial Campus (Archer)",
+    developer: "Archer Datacenters",
     description: "Planned 500,000 sq. ft. industrial multi-tenant colocation campus footprint spanning over ~84 acres.",
     coordinates: [44.3218, -93.2562],
     url: "https://www.faribaultmn.gov/815/Archer-Datacenters",
@@ -384,6 +396,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "Inver Grove Heights Data Hub (QLevr)",
+    developer: "QLevr",
     description: "Proposed 54,000-square-foot data facility on Carmen Avenue East proposed by Florida developer QLevr.",
     coordinates: [44.8481, -93.0425],
     url: "https://blandinonbroadband.org/2026/07/01/inver-grove-heights-city-council-approves-one-year-moratorium-on-data-centers-dakota-county/",
@@ -498,6 +511,7 @@ export const clientProjects: Project[] = [
   // ==========================================
   {
     name: "Nobles County Campus (Geronimo Power)",
+    developer: "Geronimo Power",
     description: "A proposed 959-acre powered data park project in Summit Lake and Elk Township spearheaded by Geronimo Power.",
     coordinates: [43.6661, -95.9405],
     url: "https://geronimopower.com/in-development/nobles-county-powered-data-park/",
@@ -513,6 +527,7 @@ export const clientProjects: Project[] = [
   },
   {
     name: "North Mankato Tech Facility (Oppidan)",
+    developer: "Oppidan Investment Company",
     description: "Early exploratory venture dropped entirely by Oppidan Investment following early environmental pushback actions.",
     coordinates: [44.1812, -94.0415],
     url: "https://www.northmankato.com/",
@@ -528,6 +543,7 @@ export const clientProjects: Project[] = [
   },
   {
   "name": "Apple Valley Technology Park (Oppidan)",
+  "developer": "Oppidan Investment Co.",
   "description": "In late March 2026, the Apple Valley City Council unanimously passed resolutions denying the preliminary plat, site plans, and conditional use permit for Oppidan Investment Co.'s proposed 300 MW, 1-million-square-foot data center campus on a 134-acre sand and gravel mining site at County Road 42 and Pilot Knob Road.",
   "coordinates": [44.7314, -93.1856],
   "url": "https://bringmethenews.com/minnesota-news/oppidans-plan-to-build-five-data-centers-in-apple-valley-is-rejected",
