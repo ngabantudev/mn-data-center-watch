@@ -5,32 +5,47 @@
 // `selectProject`). Listens for a `mapmarkerselect` CustomEvent on `document`
 // with `{ project } | null` — `null` closes the panel.
 //
-// Desktop: a right-edge sidebar, mirroring MapFilters.astro on the left.
-// Mobile: a bottom sheet that overlays MapFilters.astro while open (there's
-// no room for both to be visible at once on a small screen) — tapping
-// outside, hitting Escape, or clicking empty map all close it.
+// Styling mirrors MapFilters.astro: dark neutral-900 panel, white/10 hairline
+// borders, emerald-400 accent chip in the header. Desktop: a right-edge
+// sidebar (MapFilters.astro is the left-edge counterpart). Mobile: a bottom
+// sheet that overlays MapFilters.astro while open — tapping outside, hitting
+// Escape, or clicking empty map all close it.
+import { Building2 } from 'lucide-astro';
 ---
 
 <div
   id="map-detail-panel"
   class="hidden pointer-events-auto font-sans absolute z-40
-         inset-x-0 bottom-0 max-h-[70vh] rounded-t-2xl translate-y-full
+         bottom-0 inset-x-0 max-h-[70vh] rounded-t-2xl translate-y-full
          md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto md:w-96 md:max-h-none md:rounded-none md:translate-y-0 md:translate-x-full
-         bg-white border-t md:border-t-0 md:border-l border-neutral-200 shadow-2xl shadow-black/40 flex-col overflow-hidden transition-transform duration-300 ease-out"
+         bg-neutral-900 backdrop-blur-md border border-white/10 md:border-r-0
+         shadow-2xl shadow-black/60 flex-col overflow-hidden transition-transform duration-300 ease-out"
 >
-  <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-100 shrink-0">
-    <span class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Facility Detail</span>
+  <!-- Header: brand-consistent icon chip + title, matching MapFilters.astro's #mf-header-row -->
+  <div class="flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-white/10">
+    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0">
+      <Building2 size={14} stroke-width={2} class="text-emerald-400" />
+    </div>
+    <div class="min-w-0 flex-1">
+      <h4 class="text-[9px] md:text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none whitespace-nowrap">
+        Facility Detail
+      </h4>
+      <p id="mdp-title" class="text-[10.5px] md:text-[11.5px] font-semibold text-neutral-100 mt-1 leading-none truncate">
+        &nbsp;
+      </p>
+    </div>
     <button
       id="mdp-close"
       type="button"
       aria-label="Close detail panel"
-      class="w-7 h-7 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition"
+      class="w-7 h-7 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-100 hover:bg-white/10 transition shrink-0"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </button>
   </div>
+
   <div id="mdp-content" class="flex-1 overflow-y-auto p-3"></div>
 </div>
 
@@ -42,10 +57,12 @@
     const panel = document.getElementById('map-detail-panel');
     const content = document.getElementById('mdp-content');
     const closeBtn = document.getElementById('mdp-close');
+    const titleEl = document.getElementById('mdp-title');
     if (!panel || !content) return;
 
     function open(project: Project): void {
       content!.innerHTML = buildDetailHtml(project);
+      if (titleEl) titleEl.textContent = project.name;
       panel!.classList.remove('hidden');
       content!.scrollTop = 0;
       // Next frame so the transition actually animates in from the hidden state.
@@ -57,6 +74,7 @@
     function close(): void {
       panel!.classList.add('translate-y-full', 'md:translate-x-full');
       window.setTimeout(() => panel!.classList.add('hidden'), 300);
+      if (titleEl) titleEl.textContent = '\u00A0';
     }
 
     document.addEventListener('mapmarkerselect', (event) => {
