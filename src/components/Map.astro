@@ -26,15 +26,38 @@ import '../styles/mapPins.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { clientProjects } from '~/data/dataCenters';
   import { getDefaultMapStyleUrl } from '~/data/mapStyles';
-  import { createMarkerElement, buildPreviewHtml, MarkerFilterController, type MarkerRecord } from '~/lib/mapMarkers';
+  import { STATUS_HEX } from '~/data/mapStatusMeta';
+  import { buildPreviewHtml } from '~/lib/mapMarkers';
 
   const MINNESOTA_CENTER: [number, number] = [-93.2650, 44.9778];
   const MOBILE_ZOOM = 6.8;
   const DESKTOP_ZOOM = 6;
   const DEFAULT_ZOOM = window.innerWidth < 768 ? MOBILE_ZOOM : DESKTOP_ZOOM;
 
-  // Owns the marker-visibility registry; listens for `mapfilterchange` on its own.
-  const filterController = new MarkerFilterController();
+  // 1. Convert clientProjects to GeoJSON
+  const geoJsonData = {
+    type: 'FeatureCollection',
+    features: clientProjects.map((project, index) => {
+      // Extract MW for WebGL scaling
+      const mwMatch = project.powerCapacityMW ? project.powerCapacityMW.replace(/,/g, '').match(/\d+(\.\d+)?/) : null;
+      const mw = mwMatch ? parseFloat(mwMatch[0]) : 5;
+
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [project.coordinates[1], project.coordinates[0]] // [lng, lat]
+        },
+        properties: {
+          // Store index to easily fetch the full object later on click/hover
+          projectIndex: index,
+          status: project.status || 'planned',
+          parsedMW: mw,
+          color: STATUS_HEX[project.status || 'planned'] 
+        }
+      };
+    })
+  };
 
   function initMap(): void {
     const mapElement = document.getElementById('map');
@@ -52,28 +75,114 @@ import '../styles/mapPins.css';
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
-    map.on('load', () => {
-      setTimeout(() => map.resize(), 100);
-    });
-
-    // Empty-map click closes an open detail panel (marker clicks stopPropagation
-    // below, so this only fires for genuine background clicks).
-    map.on('click', () => {
-      document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
-    });
-
-    // Tracks whether a marker is currently selected, and what the camera looked
-    // like right before the user started browsing pins — so deselecting returns
-    // to wherever they actually were, not a hardcoded default.
     let hasSelection = false;
     let previousView: { center: maplibregl.LngLat; zoom: number } | null = null;
+    let activePopup: maplibregl.Popup | null = null;
+    let hoverStateId: number | null = null;
 
-    // Fires for every mapmarkerselect dispatch — including the × button and
-    // Escape in MapDetailPanel.astro, and the map background click above —
-    // so "zoom back out" is handled in one place regardless of how a
-    // selection got cleared.
+    // Helper to add/re-add the data source and layer
+    const addDataLayer = () => {
+      if (!map.getSource('data-centers')) {
+        map.addSource('data-centers', {
+          type: 'geojson',
+          data: geoJsonData,
+          generateId: true // Needed for hover states
+        });
+      }
+
+      if (!map.getLayer('data-centers-circles')) {
+        map.addLayer({
+          id: 'data-centers-circles',
+          type: 'circle',
+          source: 'data-centers',
+          paint: {
+            'circle-color': ['get', 'color'],
+            // Square root scaling done natively on the GPU
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['sqrt', ['get', 'parsedMW']],
+              Math.sqrt(5), 6,      // Min MW radius
+              Math.sqrt(1900), 24   // Max MW radius
+            ],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
+            // Optional hover effect: increase opacity on hover
+            'circle-opacity': [
+              'case',
+              ['boolean', ['feature-state', 'hover'], false],
+              1,
+              0.85
+            ]
+          }
+        });
+
+        // Add this immediately after the circle layer definition
+        map.addLayer({
+          id: 'data-centers-labels',
+          type: 'symbol',
+          source: 'data-centers', // This must match the id used in map.addSource
+          layout: {
+            'text-field': ['to-string', ['get', 'parsedMW']],
+            'text-font': ['Open Sans Bold'], // Ensure this matches your style's font stack
+            'text-size': 10,
+            'text-allow-overlap': true
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.5
+          }
+        } as maplibregl.SymbolLayerSpecification); // Type assertion solves the interface mismatch
+      }
+    };
+
+    map.on('load', () => {
+      setTimeout(() => map.resize(), 100);
+      addDataLayer();
+    });
+
+    // Handle Map Theme Changes (Styles wipe out custom layers, so we must re-add them)
+    document.addEventListener('mapstylechange', (event) => {
+      const detail = (event as CustomEvent<{ url: string }>).detail;
+      if (detail?.url) {
+        map.setStyle(detail.url);
+        map.once('style.load', () => {
+          addDataLayer();
+          // Re-apply current filters to the newly loaded layer
+          document.dispatchEvent(new CustomEvent('mapfilterchange', { detail: { statuses: Array.from(currentFilters) } }));
+        });
+      }
+    });
+
+    // Handle Filters Natively
+    let currentFilters = new Set(['active', 'construction', 'planned', 'paused', 'rejected']);
+    document.addEventListener('mapfilterchange', (event) => {
+      const detail = (event as CustomEvent<{ statuses: string[] }>).detail;
+      if (!detail) return;
+      currentFilters = new Set(detail.statuses);
+      
+      // Apply the same filter to both the circles and the labels
+      const layersToFilter = ['data-centers-circles', 'data-centers-labels'];
+      
+      layersToFilter.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+          map.setFilter(layerId, ['in', 'status', ...detail.statuses]);
+        }
+      });
+    });
+    
+    // Handle Clicks on Empty Map
+    map.on('click', (e) => {
+      const features = map.queryRenderedFeatures(e.point, { layers: ['data-centers-circles'] });
+      if (!features.length) {
+        document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
+      }
+    });
+
+    // Handle Deselection Camera Return
     document.addEventListener('mapmarkerselect', (event) => {
-      const detail = (event as CustomEvent<{ project: (typeof clientProjects)[number] } | null>).detail;
+      const detail = (event as CustomEvent<{ project: typeof clientProjects[number] } | null>).detail;
       if (!detail?.project && hasSelection) {
         hasSelection = false;
         const target = previousView ?? { center: MINNESOTA_CENTER, zoom: DEFAULT_ZOOM };
@@ -82,90 +191,66 @@ import '../styles/mapPins.css';
       }
     });
 
-    // MapThemeSelector.astro dispatches this when the user picks a new style.
-    document.addEventListener('mapstylechange', (event) => {
-      const detail = (event as CustomEvent<{ url: string }>).detail;
-      if (detail?.url) map.setStyle(detail.url);
+    // WebGL Hover & Popup Logic
+    map.on('mouseenter', 'data-centers-circles', (e) => {
+      map.getCanvas().style.cursor = 'pointer';
+      
+      if (e.features && e.features.length > 0) {
+        if (hoverStateId !== null) {
+          map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: false });
+        }
+        hoverStateId = e.features[0].id as number;
+        map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: true });
+
+        // Show Popup (Desktop only logic)
+        if (window.innerWidth >= 768) {
+          if (activePopup) activePopup.remove();
+          
+          const feature = e.features[0];
+          const projectIndex = feature.properties.projectIndex;
+          const project = clientProjects[projectIndex];
+          const coords = feature.geometry.coordinates;
+
+          activePopup = new maplibregl.Popup({
+            closeButton: false,
+            offset: 15,
+            maxWidth: '280px'
+          })
+          .setLngLat(coords as [number, number])
+          .setHTML(buildPreviewHtml(project))
+          .addTo(map);
+        }
+      }
     });
 
-    let activePopup: maplibregl.Popup | null = null;
-    let closeTimer: number | null = null;
-    const markerRegistry: MarkerRecord[] = [];
+    map.on('mouseleave', 'data-centers-circles', () => {
+      map.getCanvas().style.cursor = '';
+      if (hoverStateId !== null) {
+        map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: false });
+      }
+      hoverStateId = null;
+      if (activePopup) activePopup.remove();
+    });
 
-    function closePreview(): void {
-      if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
-      if (activePopup) { activePopup.remove(); activePopup = null; }
-    }
+    // WebGL Click Logic
+    map.on('click', 'data-centers-circles', (e) => {
+      if (!e.features || e.features.length === 0) return;
+      
+      if (activePopup) activePopup.remove();
 
-    /** Flies the camera to a project and opens its full detail panel. Used by both desktop click and mobile tap. */
-    function selectProject(project: (typeof clientProjects)[number], coords: [number, number]): void {
-      closePreview();
+      const feature = e.features[0];
+      const projectIndex = feature.properties.projectIndex;
+      const project = clientProjects[projectIndex];
+      const coords = feature.geometry.coordinates as [number, number];
+
       if (!hasSelection) {
-        // First click in this browsing session — remember where the user was
-        // so deselecting later returns here, not to a fixed default.
         previousView = { center: map.getCenter(), zoom: map.getZoom() };
       }
+      
       hasSelection = true;
       map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), essential: true });
       document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: { project } }));
-    }
-
-    if (Array.isArray(clientProjects)) {
-      clientProjects.forEach((project, index) => {
-        if (!project.coordinates) return;
-        const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
-        const currentStatus = project.status || 'planned';
-
-        const el = createMarkerElement(currentStatus);
-        const marker = new maplibregl.Marker({ element: el }).setLngLat(coords).addTo(map);
-        markerRegistry.push({ el, status: currentStatus });
-
-        function showPreview() {
-          closePreview();
-
-          const pixel = map.project(coords);
-          const width = map.getContainer().clientWidth;
-          const height = map.getContainer().clientHeight;
-
-          const verticalAnchor = pixel.y < height / 2 ? 'top' : 'bottom';
-          const horizontalAnchor = pixel.x < width / 2 ? 'left' : 'right';
-          const calculatedAnchor = `${verticalAnchor}-${horizontalAnchor}` as any;
-
-          activePopup = new maplibregl.Popup({
-            offset: [horizontalAnchor === 'left' ? 12 : -12, verticalAnchor === 'top' ? 12 : -12],
-            closeButton: false,
-            anchor: calculatedAnchor,
-            maxWidth: '280px'
-          }).setHTML(buildPreviewHtml(project)).setLngLat(coords).addTo(map);
-
-          const popupNode = activePopup.getElement();
-          if (popupNode) {
-            popupNode.addEventListener('mouseenter', () => {
-              if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
-            });
-            popupNode.addEventListener('mouseleave', () => {
-              closeTimer = window.setTimeout(closePreview, 300);
-            });
-          }
-        }
-
-        // Desktop: hover shows the compact preview; click flies in and opens full detail.
-        // Mobile: no hover state, so tap goes straight to full detail.
-        if (window.innerWidth >= 768) {
-          el.addEventListener('mouseenter', showPreview);
-          el.addEventListener('mouseleave', () => {
-            closeTimer = window.setTimeout(closePreview, 300);
-          });
-        }
-
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          selectProject(project, coords);
-        });
-      });
-    }
-
-    filterController.setRegistry(markerRegistry);
+    });
   }
 
   document.addEventListener('astro:page-load', initMap);

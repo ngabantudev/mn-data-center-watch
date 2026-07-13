@@ -232,7 +232,7 @@ export const clientProjects: Project[] = [
   // PLANNED / ONGOING / PIPELINE (15 TOTAL)
   // ==========================================
   {
-    name: "Monticello Tech Park (Frattalone / Microsoft)",
+    name: "Monticello Tech Park",
     developer: "Frattalone Companies / Microsoft (Azure)",
     description: "Proposed $5 billion, 3-million sq. ft. massive campus spanning six separate data halls designed for Azure cloud ecosystems.",
     coordinates: [45.2755, -93.7912],
@@ -253,7 +253,7 @@ export const clientProjects: Project[] = [
     }
   },
   {
-    name: "Scannell Technology Park (Monticello)",
+    name: "Scannell Technology Park",
     developer: "Scannell Properties",
     description: "Planned 1.3-million-square-foot data center footprint layout seeking capacity output across a 106-acre technology park parcel.",
     coordinates: [45.2891, -93.8184],

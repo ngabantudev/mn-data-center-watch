@@ -2,22 +2,6 @@
 import type { Project, ProjectStatus } from '~/data/dataCenters';
 import { STATUS_HEX, STATUS_POPUP_LABEL } from '~/data/mapStatusMeta';
 
-// --- Status glyphs for the map pins -----------------------------------------
-//
-// These must be the SAME icons as MapFilters.astro's STATUS_ICONS map, just
-// imported a different way. MapFilters.astro renders <lucide-astro> components
-// (JSX-like, works because Astro compiles them to markup at build time). This
-// file instead builds pin markup by hand at runtime inside a plain <script>
-// block (see Map.astro) — there's no Astro component pipeline running there,
-// so we can't import/render an Astro component directly.
-//
-// Instead we pull the *raw SVG source* for each icon from `lucide-static`
-// (a plain npm package that ships each Lucide icon as a literal .svg file)
-// and inline that markup directly into the pin. The `?raw` suffix is a Vite
-// feature: instead of resolving the SVG as an image asset, Vite imports its
-// file contents as a plain string — no extra config needed in an Astro project.
-//
-// Requires `lucide-static` as a dependency: npm install lucide-static
 import zapIconSvg from 'lucide-static/icons/zap.svg?raw';
 import hardHatIconSvg from 'lucide-static/icons/hard-hat.svg?raw';
 import clipboardListIconSvg from 'lucide-static/icons/clipboard-list.svg?raw';
@@ -32,19 +16,62 @@ const STATUS_ICON_SVG: Record<ProjectStatus, string> = {
   rejected: circleXIconSvg,
 };
 
-/** Builds the custom pin element (with the construction pulse animation hook) for a marker. */
-export function createMarkerElement(status: ProjectStatus): HTMLElement {
+/** Extracts the first numeric value from a MW string and calculates a visual scale */
+function getMarkerScale(mwString?: string): number {
+  if (!mwString) return 1; // Default scale if undefined
+
+  // Remove commas (e.g. "1,900") and extract the first number sequence
+  const cleanString = mwString.replace(/,/g, '');
+  const match = cleanString.match(/\d+(\.\d+)?/);
+  if (!match) return 1;
+
+  const mw = parseFloat(match[0]);
+
+  // Set visual boundaries (adjust as needed based on UI feel)
+  const MIN_MW = 5;
+  const MAX_MW = 1900;
+  const MIN_SCALE = 0.75; // Smallest pins
+  const MAX_SCALE = 2.25; // Largest hyperscale pins
+
+  // Square-root normalization prevents extreme outliers from breaking the UI
+  const normalized = Math.sqrt(mw) / Math.sqrt(MAX_MW);
+  const scale = MIN_SCALE + normalized * (MAX_SCALE - MIN_SCALE);
+
+  return Math.max(MIN_SCALE, Math.min(scale, MAX_SCALE));
+}
+
+/** Builds the custom circle element (with dynamic scaling and construction pulse) */
+export function createMarkerElement(project: Project): HTMLElement {
+  const status = project.status;
   const color = STATUS_HEX[status];
   const iconSvg = STATUS_ICON_SVG[status];
+  
+  // Calculate size based on the project's MW capacity
+  const scale = getMarkerScale(project.powerCapacityMW);
 
   const el = document.createElement('div');
-  el.className = 'custom-map-pin';
+  el.className = 'custom-map-pin'; // Kept to preserve any external CSS targeting
+  
+  // Replaced the SVG pin with a CSS circle. 
+  // transform-origin is set to 'center center' so it anchors perfectly to the coordinates.
   el.innerHTML = `
-    <div class="pin-icon-wrapper ${status === 'construction' ? 'construction-pulse-marker' : ''}">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/>
-      </svg>
-      <span class="pin-glyph">${iconSvg}</span>
+    <div class="pin-icon-wrapper ${status === 'construction' ? 'construction-pulse-marker' : ''}" 
+         style="
+           width: 36px; 
+           height: 36px; 
+           border-radius: 50%; 
+           background-color: ${color}; 
+           display: flex; 
+           align-items: center; 
+           justify-content: center; 
+           border: 2px solid white; 
+           box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+           transform: scale(${scale}); 
+           transform-origin: center center;
+         ">
+      <span class="pin-glyph" style="display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: white;">
+        ${iconSvg}
+      </span>
     </div>
   `;
   return el;
