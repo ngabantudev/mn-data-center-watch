@@ -24,6 +24,12 @@ const largestProjects = [...clientProjects].sort((a, b) =>
   parseMW(b.powerCapacityMW) - parseMW(a.powerCapacityMW)
 );
 
+// Dynamically determine the maximum capacity value across data profiles
+const maxMW = largestProjects.reduce((max, p) => {
+  const val = parseMW(p.powerCapacityMW);
+  return val > max ? val : max;
+}, 100);
+
 const totalCount = clientProjects.length;
 
 const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
@@ -52,7 +58,23 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
   <div id="mf-content" class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar">
     
     <AccordionSection id="filters" title="Filter Controls">
-      <div class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-t border-b border-white/5 bg-neutral-950/30">
+      <div class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5 flex flex-col gap-1.5">
+        <div class="flex justify-between items-center text-[11px] font-semibold">
+          <span class="text-neutral-400">Min Capacity</span>
+          <span id="mf-mw-val" class="text-emerald-400 font-bold font-mono text-xs">0 MW</span>
+        </div>
+        <input 
+          id="mf-mw-slider" 
+          type="range" 
+          min="0" 
+          max={maxMW} 
+          value="0" 
+          step="10"
+          class="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-400" 
+        />
+      </div>
+
+      <div class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-b border-white/5 bg-neutral-950/30">
         <div class="flex items-center gap-2 text-[10px] font-semibold">
           <button id="mf-select-all" type="button" class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2">All</button>
           <span class="text-neutral-700">/</span>
@@ -124,6 +146,14 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 
   const STORAGE_KEY = 'mapFiltersCollapsed';
 
+  // Mini parsing utility duplicated contextually inside component boundaries
+  const parseMW = (val: string | undefined): number => {
+    if (!val) return 0;
+    const cleaned = val.replace(/,/g, '');
+    const match = cleaned.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+
   function initMapFilters(): void {
     const root = document.getElementById('map-filters');
     if (!root) return;
@@ -141,8 +171,10 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('.mf-checkbox'));
     const dots = Array.from(document.querySelectorAll<HTMLButtonElement>('.mf-dot'));
     const projectLinks = document.querySelectorAll('.mf-project-link');
+    const mwSlider = document.getElementById('mf-mw-slider') as HTMLInputElement | null;
+    const mwLabel = document.getElementById('mf-mw-val');
 
-    const totalCount = Number(root.dataset.total || checkboxes.length);
+    const totalCount = clientProjects.length;
 
     let collapsed = false;
     try { collapsed = localStorage.getItem(STORAGE_KEY) === 'true'; } catch {}
@@ -169,7 +201,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     controlsResizeObserver.observe(root);
     window.addEventListener('resize', updateControlsOffset);
 
-    // Dynamic handling works for dynamically bundled children too
     const accordionSections = document.querySelectorAll('.mf-accordion-section');
     accordionSections.forEach((section) => {
       const trigger = section.querySelector('.mf-accordion-trigger') as HTMLButtonElement | null;
@@ -209,12 +240,28 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     }
 
     function emitChange(): void {
-      const active = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
-      const activeCount = checkboxes.reduce((sum, cb) => sum + (cb.checked ? Number(cb.dataset.count || 0) : 0), 0);
+      const minMW = mwSlider ? Number(mwSlider.value) : 0;
+      if (mwLabel) mwLabel.textContent = `${minMW.toLocaleString()} MW`;
+
+      const activeStatuses = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+
+      // Compute total matching elements balancing criteria pairs dynamically
+      const activeCount = clientProjects.filter((p) => {
+        const projectMW = parseMW(p.powerCapacityMW);
+        return activeStatuses.includes(p.status) && projectMW >= minMW;
+      }).length;
+
       if (countLabel) countLabel.textContent = `Showing ${activeCount} of ${totalCount}`;
+      
       syncRowOpacity();
       syncDots();
-      document.dispatchEvent(new CustomEvent('mapfilterchange', { detail: { statuses: active } }));
+      
+      document.dispatchEvent(new CustomEvent('mapfilterchange', { 
+        detail: { 
+          statuses: activeStatuses,
+          minMW: minMW
+        } 
+      }));
     }
 
     function applyCollapsedState(): void {
@@ -253,6 +300,8 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     });
 
     checkboxes.forEach((cb) => cb.addEventListener('change', emitChange));
+    mwSlider?.addEventListener('input', emitChange);
+
     dots.forEach((dot) => {
       dot.addEventListener('click', () => {
         const status = dot.dataset.status;

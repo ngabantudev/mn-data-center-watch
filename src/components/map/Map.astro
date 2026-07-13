@@ -7,13 +7,10 @@ import '~/styles/mapPins.css';
 ---
 
 <section class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]">
-  <!-- Collapsible Map Theme Selector (layers icon → popover) -->
   <MapThemeSelector />
 
-  <!-- Collapsible Facility Filters Sidebar -->
   <MapFilters />
 
-  <!-- Full-detail panel, opened on marker click (see mapmarkerselect events below) -->
   <MapDetailPanel />
 
   <div class="relative w-full h-full">
@@ -79,6 +76,27 @@ import '~/styles/mapPins.css';
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
 
+    // Track state globally within init scope to replay cleanly during style loads
+    let cachedStatuses: string[] = ['active', 'construction', 'planned', 'paused', 'rejected'];
+    let cachedMinMW: number = 0;
+
+    const applyMapFilters = () => {
+      const layersToFilter = ['data-centers-circles', 'data-centers-labels'];
+      
+      // FIXED: Pure modern expression format avoids type-safety and parser collisions
+      const filterExpression = [
+        'all',
+        ['in', ['get', 'status'], ['literal', cachedStatuses]],
+        ['>=', ['get', 'parsedMW'], cachedMinMW]
+      ];
+
+      layersToFilter.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+          map.setFilter(layerId, filterExpression as any);
+        }
+      });
+    };
+
     const addDataLayer = () => {
       if (!map.getSource('data-centers')) {
         map.addSource('data-centers', {
@@ -130,6 +148,9 @@ import '~/styles/mapPins.css';
           }
         } as maplibregl.SymbolLayerSpecification);
       }
+
+      // Re-apply expressions state over freshly injected layers
+      applyMapFilters();
     };
 
     map.on('load', () => {
@@ -144,24 +165,19 @@ import '~/styles/mapPins.css';
         map.setStyle(detail.url);
         map.once('style.load', () => {
           addDataLayer();
-          document.dispatchEvent(new CustomEvent('mapfilterchange', { detail: { statuses: Array.from(currentFilters) } }));
         });
       }
     });
 
-    // Handle Filters Natively
-    let currentFilters = new Set(['active', 'construction', 'planned', 'paused', 'rejected']);
+    // Integrated Filter Updates (Listens for status selections and slider mutations)
     document.addEventListener('mapfilterchange', (event) => {
-      const detail = (event as CustomEvent<{ statuses: string[] }>).detail;
+      const detail = (event as CustomEvent<{ statuses: string[]; minMW?: number }>).detail;
       if (!detail) return;
-      currentFilters = new Set(detail.statuses);
       
-      const layersToFilter = ['data-centers-circles', 'data-centers-labels'];
-      layersToFilter.forEach(layerId => {
-        if (map.getLayer(layerId)) {
-          map.setFilter(layerId, ['in', 'status', ...detail.statuses]);
-        }
-      });
+      if (detail.statuses) cachedStatuses = detail.statuses;
+      if (typeof detail.minMW === 'number') cachedMinMW = detail.minMW;
+      
+      applyMapFilters();
     });
     
     // Handle Clicks on Empty Map
