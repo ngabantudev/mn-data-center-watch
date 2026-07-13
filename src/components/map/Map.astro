@@ -7,7 +7,6 @@ import NewsFeedList from '../news/NewsFeedList.astro';
 import { fetchLocalNews } from '~/lib/newsFeed';
 import '~/styles/mapPins.css';
 
-// Pre-fetch news once to pass into both desktop and mobile views
 const { newsItems, errorMessage } = await fetchLocalNews();
 
 if (import.meta.env.PROD) {
@@ -23,15 +22,29 @@ if (import.meta.env.PROD) {
 
   <MapFilters newsItems={newsItems} errorMessage={errorMessage} />
 
-  <!-- The MapDetailPanel component inherently manages its own absolute positioning, z-index, and translates -->
   <MapDetailPanel />
 
-  <!-- Desktop News Feed Panel (Shows ONLY when NO data center is selected) -->
+  <!-- Desktop News Feed Panel -->
   <div 
     id="news-feed-panel" 
-    class="hidden md:flex pointer-events-auto font-sans absolute z-30 top-0 bottom-0 right-0 w-96 bg-neutral-900 backdrop-blur-md border-l border-white/10 shadow-2xl shadow-black/60 flex-col overflow-hidden transition-transform duration-300 ease-out translate-x-0"
+    class="hidden md:flex pointer-events-auto font-sans absolute z-30 top-0 bottom-0 right-0 w-96 bg-neutral-900 backdrop-blur-md border-l border-white/10 shadow-2xl shadow-black/60 flex-col overflow-visible transition-transform duration-300 ease-out translate-x-0"
   >
     <NewsFeedList newsItems={newsItems} errorMessage={errorMessage} />
+    
+    <!-- Optimized Pull-Tab Toggle Button -->
+    <button
+      id="nf-toggle"
+      type="button"
+      aria-expanded="true"
+      aria-controls="news-feed-panel"
+      aria-label="Toggle news feed panel"
+      class="hidden md:flex absolute z-40 items-center justify-center bg-[#111116] border border-white/10 border-r-0 text-neutral-400 hover:text-neutral-100 hover:bg-[#17171d] shadow-lg shadow-black/50 transition-colors
+             top-1/2 left-0 -translate-x-full -translate-y-1/2 w-8 h-12 rounded-l-xl"
+    >
+      <svg id="nf-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" class="transition-transform duration-300 ease-out" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
   </div>
 
   <div class="relative w-full h-full">
@@ -51,6 +64,12 @@ if (import.meta.env.PROD) {
   const MOBILE_ZOOM = 6.8;
   const DESKTOP_ZOOM = 6;
   const DEFAULT_ZOOM = window.innerWidth < 768 ? MOBILE_ZOOM : DESKTOP_ZOOM;
+  const STORAGE_KEY = 'newsFeedCollapsed';
+
+  let isMarkerSelected = false;
+  let isNewsCollapsed = false;
+
+  try { isNewsCollapsed = localStorage.getItem(STORAGE_KEY) === 'true'; } catch {}
 
   const geoJsonData = {
     type: 'FeatureCollection',
@@ -62,7 +81,7 @@ if (import.meta.env.PROD) {
         type: 'Feature',
         geometry: {
           type: 'Point',
-          coordinates: [project.coordinates[1], project.coordinates[0]] // [lng, lat]
+          coordinates: [project.coordinates[1], project.coordinates[0]]
         },
         properties: {
           projectIndex: index,
@@ -73,6 +92,44 @@ if (import.meta.env.PROD) {
       };
     })
   };
+
+  function updateNewsPanelDOM(): void {
+    const root = document.getElementById('news-feed-panel');
+    const toggleBtn = document.getElementById('nf-toggle');
+    const toggleIcon = document.getElementById('nf-toggle-icon') as SVGElement | null;
+    if (!root) return;
+
+    if (isMarkerSelected) {
+      root.classList.add('translate-x-full');
+      root.classList.remove('translate-x-0');
+      toggleBtn?.classList.add('hidden');
+    } else {
+      toggleBtn?.classList.remove('hidden');
+      if (isNewsCollapsed) {
+        root.classList.add('translate-x-full');
+        root.classList.remove('translate-x-0');
+        toggleBtn?.setAttribute('aria-expanded', 'false');
+        if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)'; // Rotates base '>' to point Left '<' (Expand)
+      } else {
+        root.classList.remove('translate-x-full');
+        root.classList.add('translate-x-0');
+        toggleBtn?.setAttribute('aria-expanded', 'true');
+        if (toggleIcon) toggleIcon.style.transform = 'rotate(0deg)';   // Keeps base '>' pointing Right (Collapse)
+      }
+    }
+  }
+
+  function initNewsFeedToggle(): void {
+    const toggleBtn = document.getElementById('nf-toggle');
+    
+    toggleBtn?.addEventListener('click', () => {
+      isNewsCollapsed = !isNewsCollapsed;
+      try { localStorage.setItem(STORAGE_KEY, String(isNewsCollapsed)); } catch {}
+      updateNewsPanelDOM();
+    });
+
+    updateNewsPanelDOM();
+  }
 
   function initMap(): void {
     const mapElement = document.getElementById('map');
@@ -90,7 +147,6 @@ if (import.meta.env.PROD) {
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
-    let hasSelection = false;
     let previousView: { center: maplibregl.LngLat; zoom: number } | null = null;
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
@@ -201,42 +257,30 @@ if (import.meta.env.PROD) {
       }
     });
 
-    // Centralized Mapmarkerselect Logic (Handles flyTo and panel UI state)
     document.addEventListener('mapmarkerselect', (event) => {
       const detail = (event as CustomEvent<{ project: typeof clientProjects[number] } | null>).detail;
-      const newsPanel = document.getElementById('news-feed-panel');
 
       if (detail?.project) {
         const project = detail.project;
         const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
 
-        if (!hasSelection) {
+        if (!isMarkerSelected) {
           previousView = { center: map.getCenter(), zoom: map.getZoom() };
         }
         
-        hasSelection = true;
+        isMarkerSelected = true;
         map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), essential: true });
-
-        // Slide the News Feed off-screen when a detail is active
-        if (newsPanel) {
-          newsPanel.classList.add('translate-x-full');
-          newsPanel.classList.remove('translate-x-0');
-        }
       } 
       else {
-        if (hasSelection) {
-          hasSelection = false;
+        if (isMarkerSelected) {
+          isMarkerSelected = false;
           const target = previousView ?? { center: MINNESOTA_CENTER, zoom: DEFAULT_ZOOM };
           map.flyTo({ center: target.center, zoom: target.zoom, essential: true });
           previousView = null;
         }
-
-        // Return the News Feed onto the screen
-        if (newsPanel) {
-          newsPanel.classList.remove('translate-x-full');
-          newsPanel.classList.add('translate-x-0');
-        }
       }
+      
+      updateNewsPanelDOM();
     });
 
     map.on('mouseenter', 'data-centers-circles', (e) => {
@@ -279,10 +323,17 @@ if (import.meta.env.PROD) {
     });
   }
 
-  document.addEventListener('astro:page-load', initMap);
+  document.addEventListener('astro:page-load', () => {
+    initNewsFeedToggle();
+    initMap();
+  });
   if (document.readyState !== 'loading') {
+    initNewsFeedToggle();
     initMap();
   } else {
-    document.addEventListener('DOMContentLoaded', initMap);
+    document.addEventListener('DOMContentLoaded', () => {
+      initNewsFeedToggle();
+      initMap();
+    });
   }
 </script>

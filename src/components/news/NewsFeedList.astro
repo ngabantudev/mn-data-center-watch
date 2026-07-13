@@ -13,11 +13,11 @@ const { newsItems, errorMessage } = Astro.props;
 
 <div class="flex flex-col h-full w-full">
   <!-- Desktop Header: Hidden inside mobile accordion contexts via hidden md:flex -->
-  <div class="hidden md:flex items-center gap-2.5 px-4 py-3.5 shrink-0 min-w-0 border-b border-white/10">
+  <div id="nf-header-row" class="hidden md:flex items-center gap-2.5 px-4 py-3.5 shrink-0 min-w-0 border-b border-white/10">
     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0">
       <Newspaper size={14} stroke-width={2} class="text-emerald-400" />
     </div>
-    <div class="min-w-0 flex-1">
+    <div id="nf-header-text" class="min-w-0 flex-1">
       <h4 class="text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none whitespace-nowrap">
         Local Coverage
       </h4>
@@ -29,11 +29,10 @@ const { newsItems, errorMessage } = Astro.props;
 
   <!-- 
     News List Content:
-    Optimized scrolling architecture to avoid nested viewport conflicts.
-    Mobile: expands naturally (overflow-visible) to allow the parent accordion/sidebar wrapper to handle layout scrolling.
-    Desktop: acts as an independent scroll container (md:overflow-y-auto) inside the dedicated right-hand desktop panel.
+    Constrained to max-h-64 with internal overflow-y-auto scrolling on mobile devices. 
+    This prevents layout expansion issues and preserves the visibility of accordion headers.
   -->
-  <div class="flex-1 overflow-visible md:overflow-y-auto p-3.5 md:p-4 space-y-4 hide-scrollbar">
+  <div id="nf-content-area" class="flex-1 max-h-64 md:max-h-none overflow-y-auto p-3.5 md:p-4 space-y-4 hide-scrollbar">
     {errorMessage ? (
       <div class="p-3 bg-red-950/30 text-red-400 rounded-lg text-xs border border-red-900/50">
         <strong>Error:</strong> {errorMessage}
@@ -59,8 +58,35 @@ const { newsItems, errorMessage } = Astro.props;
         </article>
       ))
     )}
+
+    <!-- Mobile-Only Navigation Close Action -->
+    <div class="block md:hidden pt-2 border-t border-white/5">
+      <button
+        id="nf-mobile-close"
+        type="button"
+        class="w-full py-2 text-center text-[10px] font-bold uppercase tracking-wider text-neutral-400 hover:text-neutral-200 bg-white/5 rounded-md transition-colors"
+      >
+        Minimize Feed
+      </button>
+    </div>
   </div>
 </div>
+
+<script>
+  function initNewsListActions(): void {
+    const closeBtn = document.getElementById('nf-mobile-close');
+    closeBtn?.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('collapsenewsaccordion'));
+    });
+  }
+
+  document.addEventListener('astro:page-load', initNewsListActions);
+  if (document.readyState !== 'loading') {
+    initNewsListActions();
+  } else {
+    document.addEventListener('DOMContentLoaded', initNewsListActions);
+  }
+</script>
 
 <style>
   .hide-scrollbar::-webkit-scrollbar { display: none; }
