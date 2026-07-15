@@ -530,6 +530,22 @@ export const clientProjects: Project[] = [
   // REJECTED / WITHDRAWN SITES (HISTORICAL)
   // ==========================================
   {
+    name: "Amazon Web Services Becker Campus (Scraped)",
+    developer: "Amazon Web Services (AWS)",
+    description: "A proposed hyperscale computing campus on roughly 350 acres near the Sherco power plant. The project was tracking as active in scrapers until it was abruptly halted.",
+    coordinates: [45.2266, -93.9594], // Coordinates for Becker, MN area
+    url: "https://constructionreviewonline.com/who-loses-as-amazon-cancels-billion-dollar-data-center-project-in-becker-minnesota/",
+    businessImpact: "❌ <strong>Officially Withdrawn</strong> | Canceled by AWS following regulatory disputes regarding backup diesel generator environmental reviews and state-level rollbacks on data center electricity sales tax exemptions.",
+    status: "rejected",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "325 MW",
+    waterFootprint: "Withdrawn before final utility footprints were established.",
+    publicRecord: {
+      title: "Sherburne County Board of Commissioners Zoning Archive",
+      url: "https://www.co.sherburne.mn.us/"
+    }
+  },
+  {
     name: "Nobles County Campus (Geronimo Power)",
     developer: "Geronimo Power",
     description: "A proposed 959-acre powered data park project in Summit Lake and Elk Township spearheaded by Geronimo Power.",
