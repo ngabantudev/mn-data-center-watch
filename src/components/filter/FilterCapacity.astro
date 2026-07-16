@@ -1,0 +1,526 @@
+---
+// src/components/map/FilterCapcity.astro
+import { clientProjects, type ProjectStatus } from "~/data/dataCenters";
+import { STATUS_META } from "~/data/mapStatusMeta";
+import {
+  Zap,
+  HardHat,
+  ClipboardList,
+  CirclePause,
+  CircleX,
+  ChevronRight,
+  Trees,
+} from "lucide-astro";
+import type { NewsItem } from "~/lib/newsFeed";
+import FilterHeader from "~/components/filter/FilterHeader.astro";
+import AccordionSection from "~/components/ui/AccordionSection.astro";
+import NewsFeedList from "~/components/news/NewsFeedList.astro";
+
+interface Props {
+  newsItems: NewsItem[];
+  errorMessage: string | null;
+}
+
+const { newsItems, errorMessage } = Astro.props;
+
+const countsByStatus = STATUS_META.reduce(
+  (acc, meta) => {
+    acc[meta.status] = clientProjects.filter(
+      (p) => p.status === meta.status,
+    ).length;
+    return acc;
+  },
+  {} as Record<ProjectStatus, number>,
+);
+
+const parseMW = (val: string | undefined): number => {
+  if (!val) return 0;
+  const cleaned = val.replace(/,/g, "");
+  const match = cleaned.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+};
+
+const largestProjects = [...clientProjects].sort(
+  (a, b) => parseMW(b.powerCapacityMW) - parseMW(a.powerCapacityMW),
+);
+
+const maxMW = largestProjects.reduce((max, p) => {
+  const val = parseMW(p.powerCapacityMW);
+  return val > max ? val : max;
+}, 100);
+
+const totalCount = clientProjects.length;
+
+const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
+  active: Zap,
+  construction: HardHat,
+  planned: ClipboardList,
+  paused: CirclePause,
+  rejected: CircleX,
+};
+---
+
+<style>
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+</style>
+
+<div
+  id="map-filters"
+  data-total={totalCount}
+  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-neutral-900 backdrop-blur-md border border-white/10 md:border-l-0 shadow-2xl shadow-black/60 flex flex-col overflow-visible transition-[width] duration-300 ease-out"
+>
+  <FilterHeader totalCount={totalCount} />
+
+  <div
+    id="mf-content"
+    class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
+  >
+    <AccordionSection id="filters" title="Project Status">
+      <div
+        class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5 flex flex-col gap-1.5"
+      >
+        <div
+          class="flex justify-between items-center text-[11px] font-semibold"
+        >
+          <span class="text-neutral-400">Min Capacity</span>
+          <span
+            id="mf-mw-val"
+            class="text-emerald-400 font-bold font-mono text-xs">0 MW</span
+          >
+        </div>
+        <input
+          id="mf-mw-slider"
+          type="range"
+          min="0"
+          max={maxMW}
+          value="0"
+          step="10"
+          class="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+        />
+      </div>
+
+      <div
+        class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-b border-white/5 bg-neutral-950/30"
+      >
+        <div class="flex items-center gap-2 text-[10px] font-semibold">
+          <button
+            id="mf-select-all"
+            type="button"
+            class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2"
+            >All</button
+          >
+          <span class="text-neutral-700">/</span>
+          <button
+            id="mf-clear-all"
+            type="button"
+            class="text-neutral-500 hover:text-neutral-300 underline underline-offset-2"
+            >None</button
+          >
+        </div>
+        <span
+          class="text-[9px] uppercase tracking-wider text-neutral-600 font-semibold whitespace-nowrap"
+          >{STATUS_META.length} types</span
+        >
+      </div>
+
+      <div
+        class="grid grid-cols-2 gap-1 p-2 md:flex md:flex-col md:gap-0.5 md:p-1.5 pb-3"
+      >
+        {
+          STATUS_META.map((meta) => {
+            const Icon = STATUS_ICONS[meta.status];
+            return (
+              <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
+                <input
+                  type="checkbox"
+                  class="mf-checkbox w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer"
+                  style={`accent-color: ${meta.hex}`}
+                  value={meta.status}
+                  data-count={countsByStatus[meta.status]}
+                  checked
+                />
+                <div class="relative w-6 h-6 md:w-7 md:h-7 shrink-0 flex items-center justify-center">
+                  {meta.activePulse && (
+                    <span
+                      class="absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping"
+                      style={`background-color: ${meta.hex}`}
+                    />
+                  )}
+                  <span
+                    class="relative flex items-center justify-center w-full h-full rounded-full"
+                    style={`background-color: ${meta.hex}26; color: ${meta.hex};`}
+                  >
+                    <Icon size={14} stroke-width={2.25} />
+                  </span>
+                </div>
+                <span class="text-[11px] md:text-xs font-semibold text-neutral-100 leading-none">
+                  {meta.filterLabel}
+                </span>
+              </label>
+            );
+          })
+        }
+      </div>
+    </AccordionSection>
+
+    <AccordionSection id="layers" title="Community Impacts">
+      <div
+        class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5"
+      >
+        <label
+          class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-white/5"
+        >
+          <input
+            type="checkbox"
+            id="mf-toggle-protected"
+            class="w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 accent-emerald-400 cursor-pointer"
+          />
+
+          <span
+            class="text-emerald-500 group-hover:text-emerald-400 transition-colors"
+          >
+            <Trees size={16} stroke-width={2} />
+          </span>
+
+          <span
+            class="text-xs font-semibold text-neutral-200 group-hover:text-white transition-colors"
+          >
+            Protected Areas
+          </span>
+        </label>
+      </div>
+    </AccordionSection>
+
+    <AccordionSection id="projects" title="Largest Centers">
+      <div
+        class="px-3.5 md:px-4 pb-4 max-h-60 overflow-y-auto hide-scrollbar space-y-0.5 pt-2"
+      >
+        {
+          largestProjects.map((project) => (
+            <button
+              type="button"
+              data-project-name={project.name}
+              class="mf-project-link flex items-center justify-between w-full px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors text-left group"
+            >
+              <div class="min-w-0 flex flex-col">
+                <span class="text-[11px] font-medium text-neutral-200 truncate">
+                  {project.name}
+                </span>
+                <span class="text-[9px] text-neutral-500">
+                  {project.powerCapacityMW}
+                </span>
+              </div>
+              <ChevronRight
+                size={14}
+                class="text-neutral-600 group-hover:text-neutral-300 shrink-0 ml-2"
+              />
+            </button>
+          ))
+        }
+      </div>
+    </AccordionSection>
+
+    <div class="md:hidden">
+      <AccordionSection id="news" title="Local Updates" openByDefault={false}>
+        <NewsFeedList newsItems={newsItems} errorMessage={errorMessage} />
+      </AccordionSection>
+    </div>
+  </div>
+
+  <button
+    id="mf-toggle"
+    type="button"
+    aria-expanded="true"
+    aria-controls="mf-content"
+    aria-label="Toggle filters panel"
+    class="hidden md:flex absolute z-40 items-center justify-center bg-neutral-900 border border-white/10 border-l-0 text-neutral-400 hover:text-neutral-100 hover:bg-[#17171d] transition-colors
+         top-1/2 right-0 translate-x-full -translate-y-1/2 w-8 h-12 rounded-r-xl"
+  >
+    <svg
+      id="mf-toggle-icon"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      class="transition-transform duration-300 ease-out"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"></path>
+    </svg>
+  </button>
+</div>
+
+<script>
+  import { clientProjects } from "~/data/dataCenters";
+
+  const STORAGE_KEY = "mapFiltersCollapsed";
+  const parseMW = (val: string | undefined): number => {
+    if (!val) return 0;
+    const cleaned = val.replace(/,/g, "");
+    const match = cleaned.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+
+  let filterCleanups: (() => void)[] = [];
+
+  function initMapFilters(): void {
+    const root = document.getElementById("map-filters");
+    if (!root) return;
+
+    while (filterCleanups.length > 0) {
+      filterCleanups.pop()?.();
+    }
+
+    const toggleBtn = document.getElementById(
+      "mf-toggle",
+    ) as HTMLButtonElement | null;
+    const toggleIconMobile = document.getElementById(
+      "mf-toggle-icon-mobile",
+    ) as SVGElement | null;
+    const toggleIconDesktop = document.getElementById(
+      "mf-toggle-icon-desktop",
+    ) as SVGElement | null;
+    const content = document.getElementById("mf-content") as HTMLElement | null;
+    const compact = document.getElementById("mf-compact") as HTMLElement | null;
+    const headerText = document.getElementById(
+      "mf-header-text",
+    ) as HTMLElement | null;
+    const headerRow = document.getElementById(
+      "mf-header-row",
+    ) as HTMLElement | null;
+    const countLabel = document.getElementById(
+      "mf-count",
+    ) as HTMLElement | null;
+    const selectAllBtn = document.getElementById("mf-select-all");
+    const clearAllBtn = document.getElementById("mf-clear-all");
+    const checkboxes = Array.from(
+      document.querySelectorAll<HTMLInputElement>(".mf-checkbox"),
+    );
+    const dots = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".mf-dot"),
+    );
+    const projectLinks = document.querySelectorAll(".mf-project-link");
+    const mwSlider = document.getElementById(
+      "mf-mw-slider",
+    ) as HTMLInputElement | null;
+    const mwLabel = document.getElementById("mf-mw-val");
+    const protectedToggle = document.getElementById(
+      "mf-toggle-protected",
+    ) as HTMLInputElement | null;
+
+    const totalCount = clientProjects.length;
+
+    let collapsed = false;
+    try {
+      collapsed = localStorage.getItem(STORAGE_KEY) === "true";
+    } catch {}
+
+    function checkboxFor(status: string): HTMLInputElement | undefined {
+      return checkboxes.find((cb) => cb.value === status);
+    }
+
+    const MOBILE_QUERY = "(max-width: 767px)";
+    const FILTERS_BOTTOM_OFFSET = 16;
+    const CONTROLS_GAP_ABOVE_FILTERS = 12;
+    function updateControlsOffset(): void {
+      if (!window.matchMedia(MOBILE_QUERY).matches) {
+        document.documentElement.style.removeProperty("--map-controls-bottom");
+        return;
+      }
+      const filtersHeight = root!.getBoundingClientRect().height;
+      const offset =
+        FILTERS_BOTTOM_OFFSET + filtersHeight + CONTROLS_GAP_ABOVE_FILTERS;
+      document.documentElement.style.setProperty(
+        "--map-controls-bottom",
+        `${offset}px`,
+      );
+    }
+
+    const controlsResizeObserver = new ResizeObserver(() =>
+      updateControlsOffset(),
+    );
+    controlsResizeObserver.observe(root);
+    window.addEventListener("resize", updateControlsOffset);
+
+    filterCleanups.push(() => {
+      controlsResizeObserver.disconnect();
+      window.removeEventListener("resize", updateControlsOffset);
+    });
+
+    const accordionSections = document.querySelectorAll(
+      ".mf-accordion-section",
+    );
+    accordionSections.forEach((section) => {
+      const trigger = section.querySelector(
+        ".mf-accordion-trigger",
+      ) as HTMLButtonElement | null;
+      const contentWrapper = section.querySelector(
+        ".mf-accordion-content",
+      ) as HTMLElement | null;
+      const arrowIcon = trigger?.querySelector("svg");
+
+      if (!trigger || !contentWrapper) return;
+
+      const onTriggerClick = () => {
+        const isExpanded = trigger.getAttribute("aria-expanded") === "true";
+        if (isExpanded) {
+          trigger.setAttribute("aria-expanded", "false");
+          contentWrapper.classList.replace(
+            "grid-rows-[1fr]",
+            "grid-rows-[0fr]",
+          );
+          arrowIcon?.classList.add("-rotate-90");
+        } else {
+          trigger.setAttribute("aria-expanded", "true");
+          contentWrapper.classList.replace(
+            "grid-rows-[0fr]",
+            "grid-rows-[1fr]",
+          );
+          arrowIcon?.classList.remove("-rotate-90");
+        }
+        setTimeout(updateControlsOffset, 200);
+      };
+
+      trigger.addEventListener("click", onTriggerClick);
+      filterCleanups.push(() =>
+        trigger.removeEventListener("click", onTriggerClick),
+      );
+    });
+
+    function syncRowOpacity(): void {
+      checkboxes.forEach((cb) => {
+        const row = cb.closest(".mf-row") as HTMLElement | null;
+        if (row) row.style.opacity = cb.checked ? "1" : "0.45";
+      });
+    }
+
+    function syncDots(): void {
+      dots.forEach((dot) => {
+        const status = dot.dataset.status;
+        const cb = status ? checkboxFor(status) : undefined;
+        dot.style.opacity = cb && !cb.checked ? "0.35" : "1";
+      });
+    }
+
+    function emitChange(): void {
+      const minMW = mwSlider ? Number(mwSlider.value) : 0;
+      if (mwLabel) mwLabel.textContent = `${minMW.toLocaleString()} MW`;
+
+      const activeStatuses = checkboxes
+        .filter((cb) => cb.checked)
+        .map((cb) => cb.value);
+      const activeCount = clientProjects.filter((p) => {
+        const projectMW = parseMW(p.powerCapacityMW);
+        return activeStatuses.includes(p.status) && projectMW >= minMW;
+      }).length;
+      if (countLabel)
+        countLabel.textContent = `Showing ${activeCount} of ${totalCount}`;
+
+      syncRowOpacity();
+      syncDots();
+      document.dispatchEvent(
+        new CustomEvent("mapfilterchange", {
+          detail: {
+            statuses: activeStatuses,
+            minMW: minMW,
+            showProtectedLands: protectedToggle?.checked || false,
+          },
+        }),
+      );
+    }
+
+    function applyCollapsedState(): void {
+      if (collapsed) {
+        content?.classList.add("hidden");
+        compact?.classList.remove("hidden");
+        compact?.classList.add("flex");
+        toggleBtn?.setAttribute("aria-expanded", "false");
+        toggleIconMobile?.style.setProperty("transform", "rotate(180deg)");
+        toggleIconDesktop?.style.setProperty("transform", "rotate(0deg)");
+        root?.classList.remove("md:w-72");
+        root?.classList.add("md:w-14");
+        headerText?.classList.add("md:hidden");
+        headerRow?.classList.add("md:justify-center");
+        headerRow?.classList.remove("md:px-4");
+      } else {
+        content?.classList.remove("hidden");
+        compact?.classList.add("hidden");
+        compact?.classList.remove("flex");
+        toggleBtn?.setAttribute("aria-expanded", "true");
+        toggleIconMobile?.style.setProperty("transform", "rotate(0deg)");
+        toggleIconDesktop?.style.setProperty("transform", "rotate(180deg)");
+        root?.classList.remove("md:w-14");
+        root?.classList.add("md:w-72");
+        headerText?.classList.remove("md:hidden");
+        headerRow?.classList.remove("md:justify-center");
+        headerRow?.classList.add("md:px-4");
+      }
+    }
+
+    toggleBtn?.addEventListener("click", () => {
+      collapsed = !collapsed;
+      try {
+        localStorage.setItem(STORAGE_KEY, String(collapsed));
+      } catch {}
+      applyCollapsedState();
+      updateControlsOffset();
+    });
+
+    checkboxes.forEach((cb) => cb.addEventListener("change", emitChange));
+    mwSlider?.addEventListener("input", emitChange);
+    protectedToggle?.addEventListener("change", emitChange);
+
+    dots.forEach((dot) => {
+      dot.addEventListener("click", () => {
+        const status = dot.dataset.status;
+        const cb = status ? checkboxFor(status) : undefined;
+        if (cb) {
+          cb.checked = !cb.checked;
+          emitChange();
+        }
+      });
+    });
+
+    projectLinks.forEach((link) => {
+      link.addEventListener("click", () => {
+        const projectName = (link as HTMLElement).dataset.projectName;
+        const project = clientProjects.find((p) => p.name === projectName);
+        if (project)
+          document.dispatchEvent(
+            new CustomEvent("mapmarkerselect", { detail: { project } }),
+          );
+      });
+    });
+
+    selectAllBtn?.addEventListener("click", () => {
+      checkboxes.forEach((cb) => (cb.checked = true));
+      emitChange();
+    });
+    clearAllBtn?.addEventListener("click", () => {
+      checkboxes.forEach((cb) => (cb.checked = false));
+      emitChange();
+    });
+
+    applyCollapsedState();
+    emitChange();
+    updateControlsOffset();
+  }
+
+  document.addEventListener("astro:page-load", initMapFilters);
+  if (document.readyState !== "loading") {
+    initMapFilters();
+  } else {
+    document.addEventListener("DOMContentLoaded", initMapFilters);
+  }
+</script>

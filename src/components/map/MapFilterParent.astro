@@ -9,10 +9,10 @@ import {
   CirclePause,
   CircleX,
   ChevronRight,
+  Trees,
 } from "lucide-astro";
 import type { NewsItem } from "~/lib/newsFeed";
 import FilterHeader from "~/components/filter/FilterHeader.astro";
-import FilterCompactRail from "~/components/filter/FilterCompactRail.astro";
 import AccordionSection from "~/components/ui/AccordionSection.astro";
 import NewsFeedList from "~/components/news/NewsFeedList.astro";
 
@@ -77,17 +77,11 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 >
   <FilterHeader totalCount={totalCount} />
 
-  <FilterCompactRail
-    statusMeta={STATUS_META}
-    countsByStatus={countsByStatus}
-    statusIcons={STATUS_ICONS}
-  />
-
   <div
     id="mf-content"
     class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
   >
-    <AccordionSection id="filters" title="Filter Controls">
+    <AccordionSection id="filters" title="Project Status">
       <div
         class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5 flex flex-col gap-1.5"
       >
@@ -175,19 +169,30 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
       </div>
     </AccordionSection>
 
-    <AccordionSection id="layers" title="Map Overlays">
+    <AccordionSection id="layers" title="Community Impacts">
       <div
         class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5"
       >
-        <label class="flex items-center gap-2 cursor-pointer group">
+        <label
+          class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-white/5"
+        >
           <input
             type="checkbox"
             id="mf-toggle-protected"
             class="w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 accent-emerald-400 cursor-pointer"
           />
-          <span class="text-xs font-semibold text-neutral-200"
-            >Show Protected Lands</span
+
+          <span
+            class="text-emerald-500 group-hover:text-emerald-400 transition-colors"
           >
+            <Trees size={16} stroke-width={2} />
+          </span>
+
+          <span
+            class="text-xs font-semibold text-neutral-200 group-hover:text-white transition-colors"
+          >
+            Protected Areas
+          </span>
         </label>
       </div>
     </AccordionSection>
@@ -267,14 +272,12 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     return match ? parseInt(match[1], 10) : 0;
   };
 
-  // Clean up global listeners for MapFilters
   let filterCleanups: (() => void)[] = [];
 
   function initMapFilters(): void {
     const root = document.getElementById("map-filters");
     if (!root) return;
 
-    // Remove any lingering event listeners or observers
     while (filterCleanups.length > 0) {
       filterCleanups.pop()?.();
     }
@@ -350,7 +353,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     controlsResizeObserver.observe(root);
     window.addEventListener("resize", updateControlsOffset);
 
-    // Save cleanup actions
     filterCleanups.push(() => {
       controlsResizeObserver.disconnect();
       window.removeEventListener("resize", updateControlsOffset);

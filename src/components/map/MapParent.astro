@@ -1,11 +1,11 @@
 ---
 // src/components/map/Map.astro
-import MapThemeSelector from "./MapThemeSelector.astro";
-import MapFilters from "./MapFilters.astro";
-import MapDetailPanel from "./MapDetailPanel.astro";
-import NewsFeedList from "../news/NewsFeedList.astro";
 import { fetchLocalNews } from "~/lib/newsFeed";
 import "~/styles/mapPins.css";
+import MapFilterParent from "~/components/map/MapFilterParent.astro";
+import NewsFeedList from "../news/NewsFeedList.astro";
+import MapDetailParent from "~/components/map/MapDetailParent.astro";
+import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 
 const { newsItems, errorMessage } = await fetchLocalNews();
 ---
@@ -16,9 +16,9 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 >
   <MapThemeSelector />
 
-  <MapFilters newsItems={newsItems} errorMessage={errorMessage} />
+  <MapFilterParent newsItems={newsItems} errorMessage={errorMessage} />
 
-  <MapDetailPanel />
+  <MapDetailParent />
 
   <div
     id="news-feed-panel"
