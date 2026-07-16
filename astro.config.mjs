@@ -8,6 +8,11 @@ export default defineConfig({
   output: 'static',
   adapter: cloudflare(),
   vite: {
-    plugins: [tailwindcss()]
+    plugins: [tailwindcss()],
+    optimizeDeps: {
+      // This prevents the "file does not exist" error by forcing Vite
+      // to pre-bundle the compiler runtime correctly
+      include: ['astro/compiler-runtime']
+    }
   }
 });
