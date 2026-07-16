@@ -1,37 +1,31 @@
 ---
 // src/components/map/Map.astro
-import MapThemeSelector from './MapThemeSelector.astro';
-import MapFilters from './MapFilters.astro';
-import MapDetailPanel from './MapDetailPanel.astro';
-import NewsFeedList from '../news/NewsFeedList.astro';
-import { fetchLocalNews } from '~/lib/newsFeed';
-import '~/styles/mapPins.css';
+import MapThemeSelector from "./MapThemeSelector.astro";
+import MapFilters from "./MapFilters.astro";
+import MapDetailPanel from "./MapDetailPanel.astro";
+import NewsFeedList from "../news/NewsFeedList.astro";
+import { fetchLocalNews } from "~/lib/newsFeed";
+import "~/styles/mapPins.css";
 
 const { newsItems, errorMessage } = await fetchLocalNews();
-
-if (import.meta.env.PROD) {
-  Astro.response.headers.set(
-    "Cache-Control",
-    "public, max-age=0, s-maxage=900, stale-while-revalidate=600"
-  );
-}
 ---
 
-<section id="map-workspace" class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]">
+<section
+  id="map-workspace"
+  class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]"
+>
   <MapThemeSelector />
 
   <MapFilters newsItems={newsItems} errorMessage={errorMessage} />
 
   <MapDetailPanel />
 
-  <!-- Desktop News Feed Panel -->
-  <div 
-    id="news-feed-panel" 
+  <div
+    id="news-feed-panel"
     class="hidden md:flex pointer-events-auto font-sans absolute z-30 top-0 bottom-0 right-0 w-96 bg-neutral-900 backdrop-blur-md border-l border-white/10 shadow-2xl shadow-black/60 flex-col overflow-visible transition-transform duration-300 ease-out translate-x-0"
   >
     <NewsFeedList newsItems={newsItems} errorMessage={errorMessage} />
-    
-    <!-- Optimized Pull-Tab Toggle Button -->
+
     <button
       id="nf-toggle"
       type="button"
@@ -41,8 +35,21 @@ if (import.meta.env.PROD) {
       class="hidden md:flex absolute z-40 items-center justify-center bg-[#111116] border border-white/10 border-r-0 text-neutral-400 hover:text-neutral-100 hover:bg-[#17171d] shadow-lg shadow-black/50 transition-colors
              top-1/2 left-0 -translate-x-full -translate-y-1/2 w-8 h-12 rounded-l-xl"
     >
-      <svg id="nf-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" class="transition-transform duration-300 ease-out" xmlns="http://www.w3.org/2000/svg">
-        <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg
+        id="nf-toggle-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        class="transition-transform duration-300 ease-out"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M9 6l6 6-6 6"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"></path>
       </svg>
     </button>
   </div>
@@ -53,250 +60,436 @@ if (import.meta.env.PROD) {
 </section>
 
 <script>
-  import maplibregl from 'maplibre-gl';
-  import 'maplibre-gl/dist/maplibre-gl.css';
-  import { clientProjects } from '~/data/dataCenters';
-  import { getDefaultMapStyleUrl } from '~/data/mapStyles';
-  import { STATUS_HEX } from '~/data/mapStatusMeta';
-  import { buildPreviewHtml } from '~/lib/mapMarkers';
+  import maplibregl from "maplibre-gl";
+  import * as pmtiles from "pmtiles";
+  import "maplibre-gl/dist/maplibre-gl.css";
+  import { clientProjects } from "~/data/dataCenters";
+  import { getDefaultMapStyleUrl } from "~/data/mapStyles";
+  import { STATUS_HEX } from "~/data/mapStatusMeta";
+  import { buildPreviewHtml } from "~/lib/mapMarkers";
 
-  const MINNESOTA_CENTER: [number, number] = [-93.2650, 44.9778];
+  // Register PMTiles protocol globally
+  try {
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+  } catch (e) {}
+
+  const MINNESOTA_CENTER: [number, number] = [-93.265, 44.9778];
   const MOBILE_ZOOM = 6.8;
   const DESKTOP_ZOOM = 6;
   const DEFAULT_ZOOM = window.innerWidth < 768 ? MOBILE_ZOOM : DESKTOP_ZOOM;
-  const STORAGE_KEY = 'newsFeedCollapsed';
+  const STORAGE_KEY = "newsFeedCollapsed";
 
   let isMarkerSelected = false;
   let isNewsCollapsed = false;
 
-  try { isNewsCollapsed = localStorage.getItem(STORAGE_KEY) === 'true'; } catch {}
+  let mapInstance: maplibregl.Map | null = null;
+  let mapCleanups: (() => void)[] = [];
+
+  try {
+    isNewsCollapsed = localStorage.getItem(STORAGE_KEY) === "true";
+  } catch {}
 
   const geoJsonData = {
-    type: 'FeatureCollection',
+    type: "FeatureCollection",
     features: clientProjects.map((project, index) => {
-      const mwMatch = project.powerCapacityMW ? project.powerCapacityMW.replace(/,/g, '').match(/\d+(\.\d+)?/) : null;
+      const mwMatch = project.powerCapacityMW
+        ? project.powerCapacityMW.replace(/,/g, "").match(/\d+(\.\d+)?/)
+        : null;
       const mw = mwMatch ? parseFloat(mwMatch[0]) : 5;
 
       return {
-        type: 'Feature',
+        type: "Feature",
         geometry: {
-          type: 'Point',
-          coordinates: [project.coordinates[1], project.coordinates[0]]
+          type: "Point",
+          coordinates: [project.coordinates[1], project.coordinates[0]],
         },
         properties: {
           projectIndex: index,
-          status: project.status || 'planned',
+          status: project.status || "planned",
           parsedMW: mw,
-          color: STATUS_HEX[project.status || 'planned'] 
-        }
+          color: STATUS_HEX[project.status || "planned"],
+        },
       };
-    })
+    }),
   };
 
   function updateNewsPanelDOM(): void {
-    const root = document.getElementById('news-feed-panel');
-    const toggleBtn = document.getElementById('nf-toggle');
-    const toggleIcon = document.getElementById('nf-toggle-icon') as SVGElement | null;
+    const root = document.getElementById("news-feed-panel");
+    const toggleBtn = document.getElementById("nf-toggle");
+    const toggleIcon = document.getElementById(
+      "nf-toggle-icon",
+    ) as SVGElement | null;
     if (!root) return;
 
     if (isMarkerSelected) {
-      root.classList.add('translate-x-full');
-      root.classList.remove('translate-x-0');
-      toggleBtn?.classList.add('hidden');
+      root.classList.add("translate-x-full");
+      root.classList.remove("translate-x-0");
+      toggleBtn?.classList.add("hidden");
     } else {
-      toggleBtn?.classList.remove('hidden');
+      toggleBtn?.classList.remove("hidden");
       if (isNewsCollapsed) {
-        root.classList.add('translate-x-full');
-        root.classList.remove('translate-x-0');
-        toggleBtn?.setAttribute('aria-expanded', 'false');
-        if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)'; // Rotates base '>' to point Left '<' (Expand)
+        root.classList.add("translate-x-full");
+        root.classList.remove("translate-x-0");
+        toggleBtn?.setAttribute("aria-expanded", "false");
+        if (toggleIcon) toggleIcon.style.transform = "rotate(180deg)";
       } else {
-        root.classList.remove('translate-x-full');
-        root.classList.add('translate-x-0');
-        toggleBtn?.setAttribute('aria-expanded', 'true');
-        if (toggleIcon) toggleIcon.style.transform = 'rotate(0deg)';   // Keeps base '>' pointing Right (Collapse)
+        root.classList.remove("translate-x-full");
+        root.classList.add("translate-x-0");
+        toggleBtn?.setAttribute("aria-expanded", "true");
+        if (toggleIcon) toggleIcon.style.transform = "rotate(0deg)";
       }
     }
   }
 
   function initNewsFeedToggle(): void {
-    const toggleBtn = document.getElementById('nf-toggle');
-    
-    toggleBtn?.addEventListener('click', () => {
+    const toggleBtn = document.getElementById("nf-toggle");
+    toggleBtn?.addEventListener("click", () => {
       isNewsCollapsed = !isNewsCollapsed;
-      try { localStorage.setItem(STORAGE_KEY, String(isNewsCollapsed)); } catch {}
+      try {
+        localStorage.setItem(STORAGE_KEY, String(isNewsCollapsed));
+      } catch {}
       updateNewsPanelDOM();
     });
-
     updateNewsPanelDOM();
   }
 
   function initMap(): void {
-    const mapElement = document.getElementById('map');
+    const mapElement = document.getElementById("map");
     if (!mapElement) return;
 
+    if (mapInstance) {
+      try {
+        mapInstance.remove();
+      } catch (e) {}
+      mapInstance = null;
+    }
+    while (mapCleanups.length > 0) {
+      mapCleanups.pop()?.();
+    }
+
     const map = new maplibregl.Map({
-      container: 'map',
+      container: "map",
       style: getDefaultMapStyleUrl(),
       center: MINNESOTA_CENTER,
       zoom: DEFAULT_ZOOM,
       scrollZoom: true,
       attributionControl: false,
-      cooperativeGestures: window.innerWidth < 768
+      cooperativeGestures: window.innerWidth < 768,
     });
+    mapInstance = map;
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "bottom-right",
+    );
 
     let previousView: { center: maplibregl.LngLat; zoom: number } | null = null;
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
 
-    let cachedStatuses: string[] = ['active', 'construction', 'planned', 'paused', 'rejected'];
+    let cachedStatuses: string[] = [
+      "active",
+      "construction",
+      "planned",
+      "paused",
+      "rejected",
+    ];
     let cachedMinMW: number = 0;
+    let cachedShowProtectedLands: boolean = false;
+
+    // --- PMTILES DYNAMIC CONFIGURATION ---
+    const PROTECTED_SOURCE = "protected-lands";
+    const PROTECTED_LAYER = "protected-lands-layer";
+
+    // Create absolute HTTP path for metadata reading
+    const HTTP_FILE_URL = `${window.location.origin}/data/mn-protected-lands.pmtiles`;
+    // Create Protocol URL for MapLibre rendering
+    const PMTILES_PROTOCOL_URL = `pmtiles://${HTTP_FILE_URL}`;
+
+    // FIX: Initialize as an empty string to satisfy TypeScript strict mode
+    let discoveredSourceLayerName: string = "";
 
     const applyMapFilters = () => {
-      const layersToFilter = ['data-centers-circles', 'data-centers-labels'];
-      
+      const layersToFilter = ["data-centers-circles", "data-centers-labels"];
       const filterExpression = [
-        'all',
-        ['in', ['get', 'status'], ['literal', cachedStatuses]],
-        ['>=', ['get', 'parsedMW'], cachedMinMW]
+        "all",
+        ["in", ["get", "status"], ["literal", cachedStatuses]],
+        [">=", ["get", "parsedMW"], cachedMinMW],
       ];
-
-      layersToFilter.forEach(layerId => {
+      layersToFilter.forEach((layerId) => {
         if (map.getLayer(layerId)) {
           map.setFilter(layerId, filterExpression as any);
         }
       });
     };
 
+    // Define the expected structure of PMTiles metadata
+    interface PMTilesMetadata {
+      vector_layers?: Array<{ id: string; [key: string]: any }>;
+      [key: string]: any;
+    }
+
+    const syncProtectedLandsLayer = async () => {
+      if (!map.isStyleLoaded()) return;
+
+      if (cachedShowProtectedLands) {
+        console.log(
+          `[PMTiles] Toggle ON. Attempting to load: ${HTTP_FILE_URL}`,
+        );
+
+        if (!discoveredSourceLayerName) {
+          try {
+            const p = new pmtiles.PMTiles(HTTP_FILE_URL);
+            // Cast the result to our defined interface
+            const meta = (await p.getMetadata()) as PMTilesMetadata;
+
+            console.log("[PMTiles] Successfully read file metadata:", meta);
+
+            if (meta && meta.vector_layers && meta.vector_layers.length > 0) {
+              discoveredSourceLayerName = meta.vector_layers[0].id;
+              console.log(
+                `[PMTiles] Auto-discovered internal layer name: "${discoveredSourceLayerName}"`,
+              );
+            } else {
+              console.warn(
+                "[PMTiles] Metadata found but no vector layers defined.",
+              );
+              discoveredSourceLayerName = "mnprotectedlands";
+            }
+          } catch (err) {
+            console.error("[PMTiles ERROR] Could not read metadata.", err);
+            discoveredSourceLayerName = "mn-protected-lands";
+          }
+        }
+
+        // 2. ADD SOURCE
+        if (!map.getSource(PROTECTED_SOURCE)) {
+          map.addSource(PROTECTED_SOURCE, {
+            type: "vector",
+            url: PMTILES_PROTOCOL_URL,
+          });
+          console.log(
+            `[PMTiles] Source added. MapLibre is requesting tiles via Protocol.`,
+          );
+        }
+
+        // 3. ADD LAYER
+        if (!map.getLayer(PROTECTED_LAYER) && map.getSource(PROTECTED_SOURCE)) {
+          try {
+            const beforeId = map.getLayer("data-centers-circles")
+              ? "data-centers-circles"
+              : undefined;
+
+            map.addLayer(
+              {
+                id: PROTECTED_LAYER,
+                type: "fill",
+                source: PROTECTED_SOURCE,
+                "source-layer": discoveredSourceLayerName, // TypeScript is happy now!
+                paint: {
+                  "fill-color": "#10b981",
+                  "fill-opacity": 0.5,
+                  "fill-outline-color": "#047857",
+                },
+              },
+              beforeId,
+            );
+            console.log("[PMTiles] Layer successfully drawn onto the map!");
+          } catch (err) {
+            console.error(
+              "[PMTiles ERROR] Failed to add layer. Usually caused by beforeId strictly missing.",
+              err,
+            );
+          }
+        }
+      } else {
+        // TURN OFF LOGIC
+        if (map.getLayer(PROTECTED_LAYER)) map.removeLayer(PROTECTED_LAYER);
+        if (map.getSource(PROTECTED_SOURCE)) map.removeSource(PROTECTED_SOURCE);
+        console.log("[PMTiles] Layer & Source removed (Toggle OFF).");
+      }
+    };
+
     const addDataLayer = () => {
-      if (!map.getSource('data-centers')) {
-        map.addSource('data-centers', {
-          type: 'geojson',
+      if (!map.getSource("data-centers")) {
+        map.addSource("data-centers", {
+          type: "geojson",
           data: geoJsonData,
-          generateId: true
+          generateId: true,
         });
       }
 
-      if (!map.getLayer('data-centers-circles')) {
+      if (!map.getLayer("data-centers-circles")) {
         map.addLayer({
-          id: 'data-centers-circles',
-          type: 'circle',
-          source: 'data-centers',
+          id: "data-centers-circles",
+          type: "circle",
+          source: "data-centers",
           paint: {
-            'circle-color': ['get', 'color'],
-            'circle-radius': [
-              'interpolate',
-              ['linear'],
-              ['sqrt', ['get', 'parsedMW']],
-              Math.sqrt(5), 6,
-              Math.sqrt(1900), 24
+            "circle-color": ["get", "color"],
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["sqrt", ["get", "parsedMW"]],
+              Math.sqrt(5),
+              6,
+              Math.sqrt(1900),
+              24,
             ],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff',
-            'circle-opacity': [
-              'case',
-              ['boolean', ['feature-state', 'hover'], false],
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#ffffff",
+            "circle-opacity": [
+              "case",
+              ["boolean", ["feature-state", "hover"], false],
               1,
-              0.85
-            ]
-          }
+              0.85,
+            ],
+          },
         });
-
         map.addLayer({
-          id: 'data-centers-labels',
-          type: 'symbol',
-          source: 'data-centers',
+          id: "data-centers-labels",
+          type: "symbol",
+          source: "data-centers",
           layout: {
-            'text-field': ['to-string', ['get', 'parsedMW']],
-            'text-font': ['Open Sans Bold'],
-            'text-size': 10,
-            'text-allow-overlap': true
+            "text-field": ["to-string", ["get", "parsedMW"]],
+            "text-font": ["Open Sans Bold"],
+            "text-size": 10,
+            "text-allow-overlap": true,
           },
           paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': '#000000',
-            'text-halo-width': 1.5
-          }
+            "text-color": "#ffffff",
+            "text-halo-color": "#000000",
+            "text-halo-width": 1.5,
+          },
         } as maplibregl.SymbolLayerSpecification);
       }
 
       applyMapFilters();
+      syncProtectedLandsLayer();
     };
 
-    map.on('load', () => {
+    map.on("load", () => {
       setTimeout(() => map.resize(), 100);
       addDataLayer();
     });
 
-    document.addEventListener('mapstylechange', (event) => {
+    const handleStyleChange = (event: Event) => {
       const detail = (event as CustomEvent<{ url: string }>).detail;
       if (detail?.url) {
         map.setStyle(detail.url);
-        map.once('style.load', () => {
+        map.once("style.load", () => {
           addDataLayer();
         });
       }
-    });
+    };
+    document.addEventListener("mapstylechange", handleStyleChange);
+    mapCleanups.push(() =>
+      document.removeEventListener("mapstylechange", handleStyleChange),
+    );
 
-    document.addEventListener('mapfilterchange', (event) => {
-      const detail = (event as CustomEvent<{ statuses: string[]; minMW?: number }>).detail;
+    const handleFilterChange = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          statuses: string[];
+          minMW?: number;
+          showProtectedLands?: boolean;
+        }>
+      ).detail;
       if (!detail) return;
-      
+
       if (detail.statuses) cachedStatuses = detail.statuses;
-      if (typeof detail.minMW === 'number') cachedMinMW = detail.minMW;
-      
+      if (typeof detail.minMW === "number") cachedMinMW = detail.minMW;
+
       applyMapFilters();
-    });
-    
-    map.on('click', (e) => {
-      const features = map.queryRenderedFeatures(e.point, { layers: ['data-centers-circles'] });
-      if (!features.length) {
-        document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
+
+      if (typeof detail.showProtectedLands === "boolean") {
+        cachedShowProtectedLands = detail.showProtectedLands;
+        syncProtectedLandsLayer();
       }
+    };
+    document.addEventListener("mapfilterchange", handleFilterChange);
+    mapCleanups.push(() =>
+      document.removeEventListener("mapfilterchange", handleFilterChange),
+    );
+
+    map.on("click", (e) => {
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["data-centers-circles"],
+      });
+      if (!features.length)
+        document.dispatchEvent(
+          new CustomEvent("mapmarkerselect", { detail: null }),
+        );
     });
 
-    document.addEventListener('mapmarkerselect', (event) => {
-      const detail = (event as CustomEvent<{ project: typeof clientProjects[number] } | null>).detail;
+    const handleMarkerSelect = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          project: (typeof clientProjects)[number];
+        } | null>
+      ).detail;
 
       if (detail?.project) {
         const project = detail.project;
-        const coords: [number, number] = [project.coordinates[1], project.coordinates[0]];
+        const coords: [number, number] = [
+          project.coordinates[1],
+          project.coordinates[0],
+        ];
 
-        if (!isMarkerSelected) {
+        if (!isMarkerSelected)
           previousView = { center: map.getCenter(), zoom: map.getZoom() };
-        }
-        
+
         isMarkerSelected = true;
-        map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), essential: true });
-      } 
-      else {
+        map.flyTo({
+          center: coords,
+          zoom: Math.max(map.getZoom(), 11),
+          essential: true,
+        });
+      } else {
         if (isMarkerSelected) {
           isMarkerSelected = false;
-          const target = previousView ?? { center: MINNESOTA_CENTER, zoom: DEFAULT_ZOOM };
-          map.flyTo({ center: target.center, zoom: target.zoom, essential: true });
+          const target = previousView ?? {
+            center: MINNESOTA_CENTER,
+            zoom: DEFAULT_ZOOM,
+          };
+          map.flyTo({
+            center: target.center,
+            zoom: target.zoom,
+            essential: true,
+          });
           previousView = null;
         }
       }
-      
       updateNewsPanelDOM();
-    });
+    };
+    document.addEventListener("mapmarkerselect", handleMarkerSelect);
+    mapCleanups.push(() =>
+      document.removeEventListener("mapmarkerselect", handleMarkerSelect),
+    );
 
-    map.on('mouseenter', 'data-centers-circles', (e) => {
-      map.getCanvas().style.cursor = 'pointer';
+    map.on("mouseenter", "data-centers-circles", (e) => {
+      map.getCanvas().style.cursor = "pointer";
       if (e.features && e.features.length > 0) {
-        if (hoverStateId !== null) {
-          map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: false });
-        }
+        if (hoverStateId !== null)
+          map.setFeatureState(
+            { source: "data-centers", id: hoverStateId },
+            { hover: false },
+          );
         hoverStateId = e.features[0].id as number;
-        map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: true });
+        map.setFeatureState(
+          { source: "data-centers", id: hoverStateId },
+          { hover: true },
+        );
 
         if (window.innerWidth >= 768) {
           if (activePopup) activePopup.remove();
           const feature = e.features[0];
           const project = clientProjects[feature.properties.projectIndex];
-          activePopup = new maplibregl.Popup({ closeButton: false, offset: 15, maxWidth: '280px' })
+          activePopup = new maplibregl.Popup({
+            closeButton: false,
+            offset: 15,
+            maxWidth: "280px",
+          })
             .setLngLat(feature.geometry.coordinates as [number, number])
             .setHTML(buildPreviewHtml(project))
             .addTo(map);
@@ -304,34 +497,38 @@ if (import.meta.env.PROD) {
       }
     });
 
-    map.on('mouseleave', 'data-centers-circles', () => {
-      map.getCanvas().style.cursor = '';
-      if (hoverStateId !== null) {
-        map.setFeatureState({ source: 'data-centers', id: hoverStateId }, { hover: false });
-      }
+    map.on("mouseleave", "data-centers-circles", () => {
+      map.getCanvas().style.cursor = "";
+      if (hoverStateId !== null)
+        map.setFeatureState(
+          { source: "data-centers", id: hoverStateId },
+          { hover: false },
+        );
       hoverStateId = null;
       if (activePopup) activePopup.remove();
     });
 
-    map.on('click', 'data-centers-circles', (e) => {
+    map.on("click", "data-centers-circles", (e) => {
       if (!e.features || e.features.length === 0) return;
       if (activePopup) activePopup.remove();
-      
+
       const feature = e.features[0];
       const project = clientProjects[feature.properties.projectIndex];
-      document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: { project } }));
+      document.dispatchEvent(
+        new CustomEvent("mapmarkerselect", { detail: { project } }),
+      );
     });
   }
 
-  document.addEventListener('astro:page-load', () => {
+  document.addEventListener("astro:page-load", () => {
     initNewsFeedToggle();
     initMap();
   });
-  if (document.readyState !== 'loading') {
+  if (document.readyState !== "loading") {
     initNewsFeedToggle();
     initMap();
   } else {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener("DOMContentLoaded", () => {
       initNewsFeedToggle();
       initMap();
     });
