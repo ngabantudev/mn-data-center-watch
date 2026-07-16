@@ -2,7 +2,9 @@
 // src/components/news/NewsFeed.astro
 
 // Google News search query looking for data centers and AI in Minnesota within the last 7 days
-const query = encodeURIComponent('"data center" AND (AI OR "artificial intelligence") AND Minnesota when:7d');
+const query = encodeURIComponent(
+  '"data center" AND (AI OR "artificial intelligence") AND Minnesota when:7d',
+);
 const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
 // Define the shape of a news item for TypeScript
@@ -31,7 +33,7 @@ try {
 
     let fullTitle = titleMatch ? titleMatch[1] : "Local Update";
     let source = sourceMatch ? sourceMatch[1] : "Local News";
-    
+
     // Clean up Google News trailing sources in titles
     if (fullTitle.includes(` - ${source}`)) {
       fullTitle = fullTitle.split(` - ${source}`)[0];
@@ -41,10 +43,9 @@ try {
       title: fullTitle,
       url: linkMatch ? linkMatch[1] : "#",
       published: pubDateMatch ? pubDateMatch[1] : new Date().toString(),
-      source: source
+      source: source,
     };
   });
-
 } catch (error) {
   errorMessage = "Failed to fetch latest regional coverage.";
   console.error("Google News RSS Fetch Error:", error);
@@ -56,40 +57,51 @@ try {
 if (import.meta.env.PROD) {
   Astro.response.headers.set(
     "Cache-Control",
-    "public, max-age=0, s-maxage=900, stale-while-revalidate=600"
+    "public, max-age=0, s-maxage=900, stale-while-revalidate=600",
   );
 }
 ---
 
 <div class="space-y-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
   <div class="flex items-center justify-between mb-4">
-    <h2 class="text-xl font-bold text-gray-900">Latest Minnesota Data Center Updates</h2>
-    <span class="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-full border border-green-100">Past 7 Days</span>
+    <h2 class="text-xl font-bold text-gray-900">
+      Latest Minnesota Data Center Updates
+    </h2>
+    <span
+      class="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-full border border-green-100"
+      >Past 7 Days</span
+    >
   </div>
-  
-  {errorMessage ? (
-    <div class="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-      <strong>Error loading news:</strong> {errorMessage}
-    </div>
-  ) : newsItems.length === 0 ? (
-    <p class="text-gray-500 text-sm">No new local updates found within the last week.</p>
-  ) : (
-    newsItems.map((item) => (
-      <article class="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-        <span class="text-xs font-semibold text-blue-600 tracking-wide uppercase">
-          {item.source}
-        </span>
-        <h3 class="text-base font-medium text-gray-900 mt-1 hover:text-blue-700 leading-snug">
-          <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
-        </h3>
-        <span class="text-xs text-gray-400 block mt-2">
-          {new Date(item.published).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-          })}
-        </span>
-      </article>
-    ))
-  )}
+
+  {
+    errorMessage ? (
+      <div class="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+        <strong>Error loading news:</strong> {errorMessage}
+      </div>
+    ) : newsItems.length === 0 ? (
+      <p class="text-gray-500 text-sm">
+        No new local updates found within the last week.
+      </p>
+    ) : (
+      newsItems.map((item) => (
+        <article class="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+          <span class="text-xs font-semibold text-blue-600 tracking-wide uppercase">
+            {item.source}
+          </span>
+          <h3 class="text-base font-medium text-gray-900 mt-1 hover:text-blue-700 leading-snug">
+            <a href={item.url} target="_blank" rel="noopener noreferrer">
+              {item.title}
+            </a>
+          </h3>
+          <span class="text-xs text-gray-400 block mt-2">
+            {new Date(item.published).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+        </article>
+      ))
+    )
+  }
 </div>

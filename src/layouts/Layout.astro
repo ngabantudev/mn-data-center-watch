@@ -1,6 +1,6 @@
 ---
 // src/layouts/Layout.astro
-import '../styles/global.css';
+import "../styles/global.css";
 
 interface Props {
   metadata?: {
@@ -13,36 +13,40 @@ interface Props {
 
 const { metadata = {} } = Astro.props;
 
-const siteTitle = "MNAI Data Center Watch";
-const siteDescription = "An interactive dark-themed map resume showcasing AI data centers across Minnesota.";
+const siteTitle = "MN AI Data Center Watch";
+const siteDescription =
+  "An interactive dark-themed map resume showcasing AI data centers across Minnesota.";
 
 const displayTitle = metadata.title || siteTitle;
 const displayDescription = metadata.description || siteDescription;
 ---
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="dark motion-safe:scroll-smooth">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{displayTitle}</title>
-  <meta name="description" content={displayDescription} />
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{displayTitle}</title>
+    <meta name="description" content={displayDescription} />
 
-  <!--
+    <!--
     MapLibre's CSS is imported directly in Map.astro's script
     (`import 'maplibre-gl/dist/maplibre-gl.css'`), so it always matches
     whatever maplibre-gl version is actually installed. Intentionally not
     duplicated here via CDN to avoid loading two different versions.
   -->
-</head>
+  </head>
 
-<body class="bg-[#131314] text-neutral-200 antialiased h-full flex flex-col">
-  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-neutral-800 focus:text-white focus:z-50 m-2 rounded-lg">
-    Skip to content
-  </a>
+  <body class="bg-[#131314] text-neutral-200 antialiased h-full flex flex-col">
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-neutral-800 focus:text-white focus:z-50 m-2 rounded-lg"
+    >
+      Skip to content
+    </a>
 
-  <main id="main-content" class="grow">
-    <slot />
-  </main>
-</body>
+    <main id="main-content" class="grow">
+      <slot />
+    </main>
+  </body>
 </html>

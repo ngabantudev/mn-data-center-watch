@@ -40,6 +40,14 @@ export async function fetchLocalNews(): Promise<{ newsItems: NewsItem[], errorMe
       };
     });
 
+    // Sort newest first. Google's RSS feed order isn't guaranteed to be
+    // strictly chronological, so this must run before items leave this function.
+    newsItems.sort((a, b) => {
+      const timeA = new Date(a.published).getTime();
+      const timeB = new Date(b.published).getTime();
+      return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+    });
+
     return { newsItems, errorMessage: null };
   } catch (error) {
     console.error("Google News RSS Fetch Error:", error);
