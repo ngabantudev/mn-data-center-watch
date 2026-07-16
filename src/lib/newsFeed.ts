@@ -7,8 +7,11 @@ export interface NewsItem {
 }
 
 export async function fetchLocalNews(): Promise<{ newsItems: NewsItem[], errorMessage: string | null }> {
-  // Google News search query looking for data centers and AI in Minnesota within the last 7 days
-  const query = encodeURIComponent('"data center" AND (AI OR "artificial intelligence") AND Minnesota when:7d');
+  // Google News search query looking for data centers in Minnesota within the last 7 days.
+  // Not gated on "AI"/"artificial intelligence" as a required term — a lot of the
+  // relevant coverage (moratorium votes, zoning fights, utility agreements) doesn't
+  // use those words even though it's the same hyperscale story this site tracks.
+  const query = encodeURIComponent('"data center" AND Minnesota when:7d');
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
   try {
