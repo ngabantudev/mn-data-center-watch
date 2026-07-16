@@ -202,8 +202,10 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     const PROTECTED_SOURCE = "protected-lands";
     const PROTECTED_LAYER = "protected-lands-layer";
 
-    // Create absolute HTTP path for metadata reading
-    const HTTP_FILE_URL = `${window.location.origin}/data/mn-protected-lands.pmtiles`;
+    // Point directly to the GitHub Release URL
+    const HTTP_FILE_URL =
+      "https://github.com/steveyang-dev/mn-data-center-watch/releases/download/v1.0.0/mn-protected-lands.pmtiles";
+
     // Create Protocol URL for MapLibre rendering
     const PMTILES_PROTOCOL_URL = `pmtiles://${HTTP_FILE_URL}`;
 
