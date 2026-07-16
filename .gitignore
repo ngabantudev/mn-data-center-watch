@@ -25,3 +25,4 @@ pnpm-debug.log*
 .idea/
 .wrangler
 
+public/data/mn-protected-lands.json

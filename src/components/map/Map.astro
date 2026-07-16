@@ -202,16 +202,12 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     const PROTECTED_SOURCE = "protected-lands";
     const PROTECTED_LAYER = "protected-lands-layer";
 
-    // Served locally from public/data/. Astro serves everything under
-    // public/ verbatim at the site root, so this resolves to
-    // https://<your-domain>/data/mn-protected-lands.pmtiles
-    const LOCAL_FILE_URL = new URL(
-      "/data/mn-protected-lands.pmtiles",
-      window.location.origin,
-    ).toString();
+    // Hosted externally on GitHub Releases to bypass Cloudflare's 25MB limit
+    const PMTILES_URL =
+      "https://github.com/steveyang-dev/mn-data-center-watch/releases/download/v1.0.0/mn-protected-lands.pmtiles";
 
     // Create Protocol URL for MapLibre rendering
-    const PMTILES_PROTOCOL_URL = `pmtiles://${LOCAL_FILE_URL}`;
+    const PMTILES_PROTOCOL_URL = `pmtiles://${PMTILES_URL}`;
 
     // FIX: Initialize as an empty string to satisfy TypeScript strict mode
     let discoveredSourceLayerName: string = "";
@@ -240,13 +236,11 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       if (!map.isStyleLoaded()) return;
 
       if (cachedShowProtectedLands) {
-        console.log(
-          `[PMTiles] Toggle ON. Attempting to load: ${LOCAL_FILE_URL}`,
-        );
+        console.log(`[PMTiles] Toggle ON. Attempting to load: ${PMTILES_URL}`);
 
         if (!discoveredSourceLayerName) {
           try {
-            const p = new pmtiles.PMTiles(LOCAL_FILE_URL);
+            const p = new pmtiles.PMTiles(PMTILES_URL);
             // Cast the result to our defined interface
             const meta = (await p.getMetadata()) as PMTilesMetadata;
 
