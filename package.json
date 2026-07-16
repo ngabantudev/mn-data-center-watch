@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && npx wrangler pages deploy dist/client --project-name=mn-data-center-watch",
     "preview": "astro preview",
     "astro": "astro"
   },
