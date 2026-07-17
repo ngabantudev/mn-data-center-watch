@@ -1,5 +1,5 @@
 ---
-import { ChevronDown } from 'lucide-astro';
+import { ChevronDown } from "lucide-astro";
 
 interface Props {
   id: string;
@@ -7,20 +7,37 @@ interface Props {
   openByDefault?: boolean;
 }
 
-const { id, title, openByDefault = true } = Astro.props;
+const { id, title, openByDefault = false } = Astro.props;
 ---
 
-<div class="mf-accordion-section border-b border-white/10" data-accordion-id={id}>
-  <button 
-    type="button" 
+<div
+  class="mf-accordion-section border-b border-white/10"
+  data-accordion-id={id}
+>
+  <button
+    type="button"
     class="mf-accordion-trigger w-full flex items-center justify-between px-3.5 md:px-4 py-3 hover:bg-white/5 text-left transition-colors"
     aria-expanded={openByDefault ? "true" : "false"}
   >
-    <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{title}</span>
-    <ChevronDown size={14} class:list={["text-neutral-500 transition-transform duration-200", { "-rotate-90": !openByDefault }]} />
+    <span
+      class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider"
+      >{title}</span
+    >
+    <ChevronDown
+      size={14}
+      class:list={[
+        "text-neutral-500 transition-transform duration-200",
+        { "-rotate-90": !openByDefault },
+      ]}
+    />
   </button>
-  
-  <div class:list={["mf-accordion-content transition-[grid-template-rows] duration-200 ease-out grid", openByDefault ? "grid-rows-[1fr]" : "grid-rows-[0fr]"]}>
+
+  <div
+    class:list={[
+      "mf-accordion-content transition-[grid-template-rows] duration-200 ease-out grid",
+      openByDefault ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+    ]}
+  >
     <div class="overflow-hidden">
       <slot />
     </div>

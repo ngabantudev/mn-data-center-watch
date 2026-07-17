@@ -4,38 +4,37 @@ import { ChevronRight } from "lucide-astro";
 
 interface Props {
   largestProjects: any[];
+  openByDefault?: boolean;
 }
 
 const { largestProjects } = Astro.props;
 ---
 
-<div class="mf-accordion-section">
-  <AccordionSection id="projects" title="Largest Centers">
-    <div
-      class="px-3.5 md:px-4 pb-4 max-h-60 overflow-y-auto hide-scrollbar space-y-0.5 pt-2"
-    >
-      {
-        largestProjects.map((project) => (
-          <button
-            type="button"
-            data-project-name={project.name}
-            class="mf-project-link flex items-center justify-between w-full px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors text-left group"
-          >
-            <div class="min-w-0 flex flex-col">
-              <span class="text-[11px] font-medium text-neutral-200 truncate">
-                {project.name}
-              </span>
-              <span class="text-[9px] text-neutral-500">
-                {project.powerCapacityMW}
-              </span>
-            </div>
-            <ChevronRight
-              size={14}
-              class="text-neutral-600 group-hover:text-neutral-300 shrink-0 ml-2"
-            />
-          </button>
-        ))
-      }
-    </div>
-  </AccordionSection>
-</div>
+<AccordionSection id="projects" title="Largest Centers">
+  <div
+    class="px-3.5 md:px-4 pb-4 max-h-60 overflow-y-auto hide-scrollbar space-y-0.5 pt-2"
+  >
+    {
+      largestProjects.map((project) => (
+        <button
+          type="button"
+          data-project-name={project.name}
+          class="mf-project-link flex items-center justify-between w-full px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors text-left group"
+        >
+          <div class="min-w-0 flex flex-col">
+            <span class="text-[11px] font-medium text-neutral-200 truncate">
+              {project.name}
+            </span>
+            <span class="text-[9px] text-neutral-500">
+              {project.powerCapacityMW}
+            </span>
+          </div>
+          <ChevronRight
+            size={14}
+            class="text-neutral-600 group-hover:text-neutral-300 shrink-0 ml-2"
+          />
+        </button>
+      ))
+    }
+  </div>
+</AccordionSection>

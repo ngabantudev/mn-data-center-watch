@@ -1,0 +1,213 @@
+---
+// src/components/news/NewsFeedParent.astro
+import type { NewsItem } from "~/lib/newsFeed";
+import { Newspaper } from "lucide-astro";
+
+interface Props {
+  newsItems: NewsItem[];
+  errorMessage: string | null;
+}
+
+const { newsItems, errorMessage } = Astro.props;
+---
+
+<!-- 
+  POSITIONING: 
+  Fixed notification on mobile (top), static sidebar panel on desktop.
+-->
+<div
+  class="fixed md:static top-3 left-3 right-3 md:left-auto z-50 md:z-auto bg-neutral-900/90 md:bg-neutral-900 backdrop-blur-xl md:backdrop-blur-none border border-white/10 md:border-none rounded-2xl md:rounded-none shadow-2xl md:shadow-none overflow-hidden transition-all duration-300 md:w-72"
+>
+  <!-- Desktop Header -->
+  <div
+    id="nf-header-row"
+    class="hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-white/10"
+  >
+    <div
+      class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0"
+    >
+      <Newspaper size={14} stroke-width={2} class="text-emerald-400" />
+    </div>
+    <div class="min-w-0 flex-1">
+      <h4
+        class="text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none"
+      >
+        Local Coverage
+      </h4>
+      <p class="text-[11.5px] font-semibold text-neutral-100 mt-1 truncate">
+        Minnesota Data Centers
+      </p>
+    </div>
+  </div>
+
+  <!-- Mobile Notification (Carousel) -->
+  <div class="md:hidden relative w-full flex flex-col">
+    <div
+      id="nf-carousel"
+      class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"
+    >
+      {
+        errorMessage ? (
+          <div class="p-4 text-red-400 text-xs w-full text-center">
+            {errorMessage}
+          </div>
+        ) : newsItems.length === 0 ? (
+          <p class="text-neutral-500 text-xs w-full text-center p-4">
+            No updates found.
+          </p>
+        ) : (
+          newsItems.map((item) => (
+            <article class="w-full shrink-0 snap-center p-3 flex flex-col justify-center">
+              <span class="text-[9px] font-bold text-emerald-400 tracking-wider uppercase block mb-0.5">
+                Breaking News
+              </span>
+              <h3 class="text-xs font-medium text-neutral-200 leading-snug line-clamp-2">
+                <a href={item.url} target="_blank" rel="noopener noreferrer">
+                  {item.title}
+                </a>
+              </h3>
+            </article>
+          ))
+        )
+      }
+    </div>
+
+    {
+      newsItems.length > 0 && !errorMessage && (
+        <div class="flex justify-center gap-1.5 pb-2">
+          {newsItems.map((_, i) => (
+            <div
+              class="news-dot w-1 h-1 rounded-full bg-neutral-700 transition-colors"
+              data-index={i}
+            />
+          ))}
+        </div>
+      )
+    }
+  </div>
+
+  <!-- Desktop List Content -->
+  <div
+    id="nf-content-area"
+    class="hidden md:block overflow-y-auto p-4 space-y-4 hide-scrollbar"
+  >
+    {
+      errorMessage ? (
+        <div class="p-3 bg-red-950/30 text-red-400 rounded-lg text-xs border border-red-900/50">
+          <strong>Error:</strong> {errorMessage}
+        </div>
+      ) : newsItems.length === 0 ? (
+        <p class="text-neutral-500 text-xs font-medium px-1">
+          No new local updates found.
+        </p>
+      ) : (
+        newsItems.map((item) => (
+          <article class="border-b border-white/5 pb-3.5 last:border-0 last:pb-0 group">
+            <span class="text-[9px] font-bold text-emerald-400/80 tracking-wider uppercase block mb-1">
+              {item.source}
+            </span>
+            <h3 class="text-xs font-medium text-neutral-200 hover:text-emerald-300 leading-snug">
+              <a href={item.url} target="_blank" rel="noopener noreferrer">
+                {item.title}
+              </a>
+            </h3>
+            <span class="text-[10px] text-neutral-500 block mt-1.5 font-medium">
+              {new Date(item.published).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+          </article>
+        ))
+      )
+    }
+  </div>
+
+  <!-- Mobile Close Action -->
+  <div class="block md:hidden border-t border-white/5">
+    <button
+      id="nf-mobile-close"
+      type="button"
+      class="w-full py-1.5 text-center text-[9px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-200 transition-colors"
+    >
+      Dismiss
+    </button>
+  </div>
+</div>
+
+<script>
+  function initNewsListActions(): void {
+    // Accordion close
+    const closeBtn = document.getElementById("nf-mobile-close");
+    closeBtn?.addEventListener("click", () => {
+      // Logic for dismissing the notification
+      const parent = closeBtn.closest(".fixed");
+      if (parent) (parent as HTMLElement).style.display = "none";
+      document.dispatchEvent(new CustomEvent("collapsenewsaccordion"));
+    });
+
+    // Carousel Logic
+    const carousel = document.getElementById("nf-carousel") as HTMLDivElement;
+    const dots = document.querySelectorAll(".news-dot");
+    if (!carousel || carousel.children.length === 0) return;
+
+    let currentIndex = 0;
+    const totalItems = carousel.children.length;
+    let autoRotateInterval: number;
+
+    function updateDots(index: number) {
+      dots.forEach((dot, i) => {
+        dot.classList.toggle("bg-emerald-400", i === index);
+        dot.classList.toggle("bg-neutral-700", i !== index);
+      });
+    }
+
+    function nextSlide() {
+      currentIndex = (currentIndex + 1) % totalItems;
+      carousel.scrollTo({
+        left: carousel.offsetWidth * currentIndex,
+        behavior: "smooth",
+      });
+      updateDots(currentIndex);
+    }
+
+    function startAutoRotate() {
+      autoRotateInterval = window.setInterval(nextSlide, 5000);
+    }
+
+    function resetAutoRotate() {
+      clearInterval(autoRotateInterval);
+      startAutoRotate();
+    }
+
+    carousel.addEventListener("scroll", () => {
+      const index = Math.round(carousel.scrollLeft / carousel.offsetWidth);
+      if (index !== currentIndex) {
+        currentIndex = index;
+        updateDots(currentIndex);
+        resetAutoRotate();
+      }
+    });
+
+    updateDots(0);
+    startAutoRotate();
+  }
+
+  document.addEventListener("astro:page-load", initNewsListActions);
+  if (document.readyState !== "loading") {
+    initNewsListActions();
+  } else {
+    document.addEventListener("DOMContentLoaded", initNewsListActions);
+  }
+</script>
+
+<style>
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+</style>

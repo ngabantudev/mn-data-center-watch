@@ -1,6 +1,6 @@
 ---
 // src/components/map/MapThemeSelector.astro
-import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from '~/data/mapStyles';
+import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
 ---
 
 <!--
@@ -30,10 +30,28 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from '~/data/mapStyles';
     class="flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-xl bg-white/90 backdrop-blur-sm border border-neutral-200 shadow-lg hover:bg-white text-neutral-700 transition"
   >
     <!-- "Layers" icon: three stacked planes, same visual language as Google Maps' map-type control -->
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 2 2 7l10 5 10-5-10-5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-      <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-      <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 2 2 7l10 5 10-5-10-5Z"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linejoin="round"></path>
+      <path
+        d="M2 12l10 5 10-5"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linejoin="round"></path>
+      <path
+        d="M2 17l10 5 10-5"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linejoin="round"></path>
     </svg>
   </button>
 
@@ -42,74 +60,98 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from '~/data/mapStyles';
     role="menu"
     class="hidden absolute bottom-full right-0 mb-2 w-48 bg-white/95 backdrop-blur-sm border border-neutral-200 shadow-xl rounded-xl p-1.5 flex-col gap-0.5"
   >
-    <span class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1">
+    <span
+      class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1"
+    >
       Map Theme
     </span>
-    {MAP_STYLE_OPTIONS.map((option) => (
-      <button
-        type="button"
-        role="menuitemradio"
-        class="mts-option flex items-center justify-between gap-2 text-left text-[11px] md:text-xs font-semibold text-neutral-700 rounded-lg px-2 py-1.5 hover:bg-neutral-100 transition"
-        data-style-id={option.id}
-        data-style-url={option.url}
-      >
-        <span>{option.label}</span>
-        <svg class="mts-check w-3.5 h-3.5 text-emerald-500 opacity-0 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-    ))}
+    {
+      MAP_STYLE_OPTIONS.map((option) => (
+        <button
+          type="button"
+          role="menuitemradio"
+          class="mts-option flex items-center justify-between gap-2 text-left text-[11px] md:text-xs font-semibold text-neutral-700 rounded-lg px-2 py-1.5 hover:bg-neutral-100 transition"
+          data-style-id={option.id}
+          data-style-url={option.url}
+        >
+          <span>{option.label}</span>
+          <svg
+            class="mts-check w-3.5 h-3.5 text-emerald-500 opacity-0 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 13l4 4L19 7"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      ))
+    }
   </div>
 </div>
 
 <script>
   function initThemeSelector(): void {
-    const root = document.getElementById('map-theme-selector');
+    const root = document.getElementById("map-theme-selector");
     if (!root) return;
 
-    const toggle = document.getElementById('mts-toggle') as HTMLButtonElement | null;
-    const panel = document.getElementById('mts-panel') as HTMLElement | null;
-    const options = Array.from(document.querySelectorAll<HTMLButtonElement>('.mts-option'));
+    const toggle = document.getElementById(
+      "mts-toggle",
+    ) as HTMLButtonElement | null;
+    const panel = document.getElementById("mts-panel") as HTMLElement | null;
+    const options = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".mts-option"),
+    );
 
     let open = false;
-    let currentStyleId = root.dataset.defaultStyle || options[0]?.dataset.styleId || '';
+    let currentStyleId =
+      root.dataset.defaultStyle || options[0]?.dataset.styleId || "";
 
     function syncChecks(): void {
       options.forEach((opt) => {
-        const check = opt.querySelector<SVGElement>('.mts-check');
+        const check = opt.querySelector<SVGElement>(".mts-check");
         const active = opt.dataset.styleId === currentStyleId;
-        if (check) check.style.opacity = active ? '1' : '0';
-        opt.classList.toggle('bg-neutral-100', active);
+        if (check) check.style.opacity = active ? "1" : "0";
+        opt.classList.toggle("bg-neutral-100", active);
       });
     }
 
     function setOpen(next: boolean): void {
       open = next;
-      panel?.classList.toggle('hidden', !open);
-      toggle?.setAttribute('aria-expanded', String(open));
+      panel?.classList.toggle("hidden", !open);
+      toggle?.setAttribute("aria-expanded", String(open));
     }
 
-    toggle?.addEventListener('click', (e) => {
+    toggle?.addEventListener("click", (e) => {
       e.stopPropagation();
       setOpen(!open);
     });
 
-    document.addEventListener('click', (e) => {
+    document.addEventListener("click", (e) => {
       if (open && root && !root.contains(e.target as Node)) setOpen(false);
     });
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') setOpen(false);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") setOpen(false);
     });
 
     options.forEach((opt) => {
-      opt.addEventListener('click', () => {
+      opt.addEventListener("click", () => {
         currentStyleId = opt.dataset.styleId || currentStyleId;
         const url = opt.dataset.styleUrl;
         syncChecks();
         setOpen(false);
         if (url) {
-          document.dispatchEvent(new CustomEvent('mapstylechange', { detail: { url, id: currentStyleId } }));
+          document.dispatchEvent(
+            new CustomEvent("mapstylechange", {
+              detail: { url, id: currentStyleId },
+            }),
+          );
         }
       });
     });
@@ -117,10 +159,10 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from '~/data/mapStyles';
     syncChecks();
   }
 
-  document.addEventListener('astro:page-load', initThemeSelector);
-  if (document.readyState !== 'loading') {
+  document.addEventListener("astro:page-load", initThemeSelector);
+  if (document.readyState !== "loading") {
     initThemeSelector();
   } else {
-    document.addEventListener('DOMContentLoaded', initThemeSelector);
+    document.addEventListener("DOMContentLoaded", initThemeSelector);
   }
 </script>
