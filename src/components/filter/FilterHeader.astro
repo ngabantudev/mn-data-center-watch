@@ -1,40 +1,104 @@
 ---
 import { ChevronDown, SlidersHorizontal } from "lucide-astro";
+import { clientProjects } from "~/data/dataCenters";
 
 interface Props {
   totalCount: number;
 }
 
 const { totalCount } = Astro.props;
+
+// --- CONFIGURATION VALUES (Tweak theme colors and styling here) ---
+const THEME = {
+  accentTextClass: "text-emerald-400",
+  primaryTextClass: "text-neutral-100",
+  labelTargetClass: "text-neutral-400",
+  boxBgClass: "bg-neutral-900",
+  boxBorderClass: "border-white/5",
+  gridSpacingClass: "grid-cols-2 gap-2 px-3 pb-4",
+  boxPaddingClass: "p-4",
+  largeTextSizeClass: "text-xl md:text-2xl"
+};
+
+// --- CALCULATIONS ---
+const validProjects = clientProjects.filter(p => p.status !== 'rejected');
+
+const totalMW = validProjects.reduce((acc, p) => {
+  if (!p.powerCapacityMW) return acc;
+  const match = p.powerCapacityMW.match(/(\d+[\d\s-]*)\s*MW/i);
+  if (!match) return acc;
+  const numbers = match[1].replace(/[^\d-]/g, '').split('-');
+  const val = numbers.length === 2 ? (parseFloat(numbers[0]) + parseFloat(numbers[1])) / 2 : parseFloat(numbers[0]);
+  return acc + (isNaN(val) ? 0 : val);
+}, 0);
+
+const totalCapExBillion = validProjects.reduce((acc, p) => {
+  if (!p.estimatedCost) return acc;
+  const numStr = p.estimatedCost.replace(/[^\d.]/g, '');
+  const val = parseFloat(numStr);
+  if (isNaN(val)) return acc;
+  
+  if (p.estimatedCost.toLowerCase().includes('billion')) {
+    return acc + val;
+  } else if (p.estimatedCost.toLowerCase().includes('million')) {
+    return acc + (val / 1000);
+  }
+  return acc;
+}, 0);
+
+const statusCounts = clientProjects.reduce((acc, p) => {
+  acc[p.status] = (acc[p.status] || 0) + 1;
+  return acc;
+}, {} as Record<string, number>);
+
+const activeCount = statusCounts['active'] || 0;
+
+const totalPermanentJobs = validProjects.reduce((acc, p) => {
+  return acc + (p.economicAsymmetry?.permanentOperationalJobsEstimate || 0);
+}, 0);
 ---
 
-<button
-  id="mf-header-trigger"
-  type="button"
-  aria-expanded="true"
-  aria-controls="mf-content"
-  class="w-full flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-white/10 text-left appearance-none bg-transparent cursor-pointer md:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/50"
->
-  <div
-    class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0"
+<div class="w-full hidden md:flex flex-col border-b border-white/10 bg-neutral-950">
+  <button
+    id="mf-header-trigger"
+    type="button"
+    aria-expanded="true"
+    aria-controls="mf-content"
+    class="w-full flex items-center justify-between px-4 py-4 shrink-0 min-w-0 text-left appearance-none bg-transparent cursor-pointer md:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/50"
   >
-    <SlidersHorizontal size={14} stroke-width={2} class="text-emerald-400" />
+    <div class="flex-1 min-w-0 pr-2 py-1">
+      <span class="block text-xs md:text-sm font-semibold tracking-[0.25em] text-emerald-400 uppercase leading-none mb-2">
+        Data Center Watch
+      </span>
+      <h1 class="text-3xl md:text-4xl font-black tracking-wide text-neutral-100 uppercase leading-none">
+        Minnesota
+      </h1>
+    </div>
+    <ChevronDown
+      size={20}
+      class="md:hidden text-neutral-500 transition-transform duration-200 shrink-0 ml-auto"
+    />
+  </button>
+
+    <div class={`grid ${THEME.gridSpacingClass} border-t border-white/5 bg-transparent`}>
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Total Power</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.accentTextClass}`}>{(totalMW / 1000).toFixed(2)} GW</span>
+    </div>
+
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Total Cost</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.primaryTextClass}`}>${totalCapExBillion.toFixed(1)}B</span>
+    </div>
+
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Active Centers</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.primaryTextClass}`}>{activeCount} <span class="text-neutral-500">/ {totalCount}</span></span>
+    </div>
+
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Permanent Tech Jobs</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.primaryTextClass}`}>~{totalPermanentJobs}</span>
+    </div>
   </div>
-  <div id="mf-header-text" class="min-w-0 flex-1">
-    <h4
-      class="text-[9px] md:text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none whitespace-nowrap"
-    >
-      Facility Filters
-    </h4>
-    <p
-      id="mf-count"
-      class="text-[10.5px] md:text-[11.5px] font-semibold text-neutral-100 mt-1 leading-none whitespace-nowrap"
-    >
-      Showing {totalCount} of {totalCount}
-    </p>
-  </div>
-  <ChevronDown
-    size={14}
-    class="md:hidden text-neutral-500 transition-transform duration-200 shrink-0"
-  />
-</button>
+</div>

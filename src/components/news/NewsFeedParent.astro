@@ -13,7 +13,7 @@ const { newsItems, errorMessage } = Astro.props;
 
 <div
   id="news-feed-panel"
-  class="fixed md:absolute top-3 left-3 right-3 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-neutral-900/90 md:bg-neutral-900 backdrop-blur-xl md:backdrop-blur-md border border-white/10 md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-black/60 md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
+  class="fixed md:absolute top-3 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-neutral-900/90 md:bg-neutral-900 backdrop-blur-xl md:backdrop-blur-md border border-white/10 md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-black/60 md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
 >
   <!-- Desktop Header -->
   <div
@@ -163,6 +163,7 @@ const { newsItems, errorMessage } = Astro.props;
 
 <script>
   const STORAGE_KEY = "newsFeedCollapsed";
+  const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
 
   let isMarkerSelected = false;
   let isNewsCollapsed = false;
@@ -186,6 +187,8 @@ const { newsItems, errorMessage } = Astro.props;
       "nf-mobile-close",
     ) as HTMLButtonElement | null;
 
+    const desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
+
     isMarkerSelected = false;
     try {
       isNewsCollapsed = localStorage.getItem(STORAGE_KEY) === "true";
@@ -194,6 +197,15 @@ const { newsItems, errorMessage } = Astro.props;
     }
 
     function updatePanelDOM(): void {
+      const isDesktop = desktopMql.matches;
+
+      if (!isDesktop) {
+        root!.classList.remove("translate-x-full");
+        root!.classList.add("translate-x-0");
+        toggleBtn?.classList.add("hidden");
+        return;
+      }
+
       if (isMarkerSelected) {
         root!.classList.add("translate-x-full");
         root!.classList.remove("translate-x-0");
@@ -244,6 +256,12 @@ const { newsItems, errorMessage } = Astro.props;
     document.addEventListener("mapmarkerselect", onMarkerSelect);
     newsCleanups.push(() =>
       document.removeEventListener("mapmarkerselect", onMarkerSelect),
+    );
+
+    const onMediaChange = () => updatePanelDOM();
+    desktopMql.addEventListener("change", onMediaChange);
+    newsCleanups.push(() =>
+      desktopMql.removeEventListener("change", onMediaChange),
     );
 
     updatePanelDOM();
