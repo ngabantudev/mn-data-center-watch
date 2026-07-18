@@ -2,40 +2,6 @@
 // src/pages/index.astro
 import Layout from "~/layouts/Layout.astro";
 import MapParent from "~/components/map/MapParent.astro";
-import NewsFeedParent from "~/components/news/NewsFeedParent.astro";
-
-// Fetching logic moved to the page level to populate the component
-const query = encodeURIComponent(
-  '"data center" AND (AI OR "artificial intelligence") AND Minnesota when:7d',
-);
-const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
-
-let newsItems: any[] = [];
-let errorMessage: string | null = null;
-
-try {
-  const response = await fetch(googleNewsUrl);
-  const xmlText = await response.text();
-  const itemMatches = xmlText.match(/<item>([\s\S]*?)<\/item>/g) || [];
-
-  newsItems = itemMatches.map((itemXml) => {
-    const titleMatch = itemXml.match(/<title>([\s\S]*?)<\/title>/);
-    const linkMatch = itemXml.match(/<link>([\s\S]*?)<\/link>/);
-    const pubDateMatch = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-    const sourceMatch = itemXml.match(/<source[^>]*>([\s\S]*?)<\/source>/);
-
-    return {
-      title: titleMatch
-        ? titleMatch[1].replace("<![CDATA[", "").replace("]]>", "")
-        : "Local Update",
-      url: linkMatch ? linkMatch[1] : "#",
-      published: pubDateMatch ? pubDateMatch[1] : new Date().toISOString(),
-      source: sourceMatch ? sourceMatch[1] : "News",
-    };
-  });
-} catch (e) {
-  errorMessage = "Unable to load local news updates.";
-}
 
 const metadata = {
   title: "MN AI Data Center Watch",
@@ -43,26 +9,7 @@ const metadata = {
 ---
 
 <Layout metadata={metadata}>
-  <main class="relative w-full h-dvh bg-[#131314]"></main>
-  {
-    /* Map fills the entire background and holds the Left Sidebar (MapFilterParent) */
-  }
-  <div class="absolute inset-0 z-0 w-full h-full">
+  <main class="relative w-full h-dvh bg-[#131314]">
     <MapParent />
-  </div>
-
-  {/* UI Elements Layer - Right Sidebar (NewsFeedParent) */}
-  <div class="absolute inset-0 z-10 pointer-events-none">
-    {
-      /* 
-        We use absolute positioning to push this wrapper to the bottom on mobile, 
-        and pin it to the top-right on desktop. This frees up the top-left for your filters.
-      */
-    }
-    <div
-      class="absolute bottom-0 left-0 right-0 md:top-0 md:bottom-0 md:left-auto pointer-events-auto w-full md:w-auto"
-    >
-      <NewsFeedParent newsItems={newsItems} errorMessage={errorMessage} />
-    </div>
-  </div>
+  </main>
 </Layout>

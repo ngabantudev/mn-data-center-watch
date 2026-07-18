@@ -1,5 +1,5 @@
 ---
-import { SlidersHorizontal } from 'lucide-astro';
+import { ChevronDown, SlidersHorizontal } from "lucide-astro";
 
 interface Props {
   totalCount: number;
@@ -8,16 +8,33 @@ interface Props {
 const { totalCount } = Astro.props;
 ---
 
-<div id="mf-header-row" class="flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-white/10">
-  <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0">
+<button
+  id="mf-header-trigger"
+  type="button"
+  aria-expanded="true"
+  aria-controls="mf-content"
+  class="w-full flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-white/10 text-left appearance-none bg-transparent cursor-pointer md:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/50"
+>
+  <div
+    class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0"
+  >
     <SlidersHorizontal size={14} stroke-width={2} class="text-emerald-400" />
   </div>
   <div id="mf-header-text" class="min-w-0 flex-1">
-    <h4 class="text-[9px] md:text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none whitespace-nowrap">
+    <h4
+      class="text-[9px] md:text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none whitespace-nowrap"
+    >
       Facility Filters
     </h4>
-    <p id="mf-count" class="text-[10.5px] md:text-[11.5px] font-semibold text-neutral-100 mt-1 leading-none whitespace-nowrap">
+    <p
+      id="mf-count"
+      class="text-[10.5px] md:text-[11.5px] font-semibold text-neutral-100 mt-1 leading-none whitespace-nowrap"
+    >
       Showing {totalCount} of {totalCount}
     </p>
   </div>
-</div>
+  <ChevronDown
+    size={14}
+    class="md:hidden text-neutral-500 transition-transform duration-200 shrink-0"
+  />
+</button>

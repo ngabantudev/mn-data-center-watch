@@ -73,9 +73,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
   data-total={totalCount}
   class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-neutral-900 backdrop-blur-md border border-white/10 md:border-l-0 shadow-2xl shadow-black/60 flex flex-col overflow-hidden md:overflow-visible transition-[width] duration-300 ease-out rounded-2xl md:rounded-none"
 >
-  <div id="mf-header-trigger" class="cursor-pointer">
-    <FilterHeader totalCount={totalCount} />
-  </div>
+  <FilterHeader totalCount={totalCount} />
 
   <div
     id="mf-content"
@@ -126,10 +124,9 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     const checkboxes = Array.from(
       document.querySelectorAll<HTMLInputElement>(".mf-checkbox"),
     );
-    const dots = Array.from(
-      document.querySelectorAll<HTMLButtonElement>(".mf-dot"),
+    const projectLinks = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".mf-project-link"),
     );
-    const projectLinks = document.querySelectorAll(".mf-project-link");
     const mwSlider = document.getElementById(
       "mf-mw-slider",
     ) as HTMLInputElement | null;
@@ -236,16 +233,22 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     function applyCollapsedState(): void {
       // Only apply "hidden" class if we are strictly on mobile
       const isMobile = window.innerWidth < 768;
+      const isHidden = collapsed && isMobile;
 
-      if (collapsed && isMobile) {
+      if (isHidden) {
         content?.classList.add("hidden");
       } else {
         content?.classList.remove("hidden");
       }
+
+      headerTrigger?.setAttribute("aria-expanded", String(!isHidden));
+      headerTrigger
+        ?.querySelector("svg")
+        ?.classList.toggle("-rotate-90", isHidden);
     }
 
     // Toggle logic attached to the header
-    headerTrigger?.addEventListener("click", () => {
+    const onHeaderTriggerClick = () => {
       // Only toggle if on mobile
       if (window.innerWidth < 768) {
         collapsed = !collapsed;
@@ -255,6 +258,96 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
         applyCollapsedState();
         updateControlsOffset();
       }
+    };
+    headerTrigger?.addEventListener("click", onHeaderTriggerClick);
+    filterCleanups.push(() =>
+      headerTrigger?.removeEventListener("click", onHeaderTriggerClick),
+    );
+
+    // --- Filter control wiring: drives the `mapfilterchange` event the map listens for ---
+    function getActiveStatuses(): string[] {
+      return checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+    }
+
+    function dispatchFilterChange(): void {
+      const statuses = getActiveStatuses();
+      const minMW = mwSlider ? Number(mwSlider.value) : 0;
+      const showProtectedLands = protectedToggle
+        ? protectedToggle.checked
+        : false;
+
+      if (countLabel) {
+        const visibleCount = clientProjects.filter((p) => {
+          const status = p.status || "planned";
+          return (
+            statuses.includes(status) && parseMW(p.powerCapacityMW) >= minMW
+          );
+        }).length;
+        countLabel.textContent = `Showing ${visibleCount} of ${totalCount}`;
+      }
+
+      document.dispatchEvent(
+        new CustomEvent("mapfilterchange", {
+          detail: { statuses, minMW, showProtectedLands },
+        }),
+      );
+    }
+
+    checkboxes.forEach((checkbox) => {
+      const onChange = () => dispatchFilterChange();
+      checkbox.addEventListener("change", onChange);
+      filterCleanups.push(() =>
+        checkbox.removeEventListener("change", onChange),
+      );
+    });
+
+    const onSelectAll = () => {
+      checkboxes.forEach((cb) => (cb.checked = true));
+      dispatchFilterChange();
+    };
+    selectAllBtn?.addEventListener("click", onSelectAll);
+    filterCleanups.push(() =>
+      selectAllBtn?.removeEventListener("click", onSelectAll),
+    );
+
+    const onClearAll = () => {
+      checkboxes.forEach((cb) => (cb.checked = false));
+      dispatchFilterChange();
+    };
+    clearAllBtn?.addEventListener("click", onClearAll);
+    filterCleanups.push(() =>
+      clearAllBtn?.removeEventListener("click", onClearAll),
+    );
+
+    const onMwInput = () => {
+      if (mwLabel) mwLabel.textContent = `${mwSlider!.value} MW`;
+      dispatchFilterChange();
+    };
+    mwSlider?.addEventListener("input", onMwInput);
+    filterCleanups.push(() =>
+      mwSlider?.removeEventListener("input", onMwInput),
+    );
+
+    const onProtectedChange = () => dispatchFilterChange();
+    protectedToggle?.addEventListener("change", onProtectedChange);
+    filterCleanups.push(() =>
+      protectedToggle?.removeEventListener("change", onProtectedChange),
+    );
+
+    // --- "Largest Centers" quick-jump buttons: fly the map to the selected project ---
+    projectLinks.forEach((link) => {
+      const onProjectClick = () => {
+        const name = link.dataset.projectName;
+        const project = clientProjects.find((p) => p.name === name);
+        if (!project) return;
+        document.dispatchEvent(
+          new CustomEvent("mapmarkerselect", { detail: { project } }),
+        );
+      };
+      link.addEventListener("click", onProjectClick);
+      filterCleanups.push(() =>
+        link.removeEventListener("click", onProjectClick),
+      );
     });
 
     // Initialize

@@ -3,7 +3,7 @@
 import { fetchLocalNews } from "~/lib/newsFeed";
 import "~/styles/mapPins.css";
 import MapFilterParent from "~/components/map/MapFilterParent.astro";
-import NewsFeedList from "../news/NewsFeedParent.astro";
+import NewsFeedParent from "../news/NewsFeedParent.astro";
 import MapDetailParent from "~/components/map/MapDetailParent.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 
@@ -20,39 +20,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
   <MapDetailParent />
 
-  <div
-    id="news-feed-panel"
-    class="hidden md:flex pointer-events-auto font-sans absolute z-30 top-0 bottom-0 right-0 w-96 bg-neutral-900 backdrop-blur-md border-l border-white/10 shadow-2xl shadow-black/60 flex-col overflow-visible transition-transform duration-300 ease-out translate-x-0"
-  >
-    <NewsFeedList newsItems={newsItems} errorMessage={errorMessage} />
-
-    <button
-      id="nf-toggle"
-      type="button"
-      aria-expanded="true"
-      aria-controls="news-feed-panel"
-      aria-label="Toggle news feed panel"
-      class="hidden md:flex absolute z-40 items-center justify-center bg-neutral-900 border border-white/10 border-r-0 text-neutral-400 hover:text-neutral-100 hover:bg-[#17171d] transition-colors
-             top-1/2 left-0 -translate-x-full -translate-y-1/2 w-8 h-12 rounded-l-xl"
-    >
-      <svg
-        id="nf-toggle-icon"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        class="transition-transform duration-300 ease-out"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M9 6l6 6-6 6"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"></path>
-      </svg>
-    </button>
-  </div>
+  <NewsFeedParent newsItems={newsItems} errorMessage={errorMessage} />
 
   <div class="relative w-full h-full">
     <div id="map" class="absolute inset-0 w-full h-full bg-[#f4f4f5]"></div>
@@ -78,17 +46,11 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   const MOBILE_ZOOM = 6.8;
   const DESKTOP_ZOOM = 6;
   const DEFAULT_ZOOM = window.innerWidth < 768 ? MOBILE_ZOOM : DESKTOP_ZOOM;
-  const STORAGE_KEY = "newsFeedCollapsed";
 
   let isMarkerSelected = false;
-  let isNewsCollapsed = false;
 
   let mapInstance: maplibregl.Map | null = null;
   let mapCleanups: (() => void)[] = [];
-
-  try {
-    isNewsCollapsed = localStorage.getItem(STORAGE_KEY) === "true";
-  } catch {}
 
   const geoJsonData = {
     type: "FeatureCollection",
@@ -113,46 +75,6 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       };
     }),
   };
-
-  function updateNewsPanelDOM(): void {
-    const root = document.getElementById("news-feed-panel");
-    const toggleBtn = document.getElementById("nf-toggle");
-    const toggleIcon = document.getElementById(
-      "nf-toggle-icon",
-    ) as SVGElement | null;
-    if (!root) return;
-
-    if (isMarkerSelected) {
-      root.classList.add("translate-x-full");
-      root.classList.remove("translate-x-0");
-      toggleBtn?.classList.add("hidden");
-    } else {
-      toggleBtn?.classList.remove("hidden");
-      if (isNewsCollapsed) {
-        root.classList.add("translate-x-full");
-        root.classList.remove("translate-x-0");
-        toggleBtn?.setAttribute("aria-expanded", "false");
-        if (toggleIcon) toggleIcon.style.transform = "rotate(180deg)";
-      } else {
-        root.classList.remove("translate-x-full");
-        root.classList.add("translate-x-0");
-        toggleBtn?.setAttribute("aria-expanded", "true");
-        if (toggleIcon) toggleIcon.style.transform = "rotate(0deg)";
-      }
-    }
-  }
-
-  function initNewsFeedToggle(): void {
-    const toggleBtn = document.getElementById("nf-toggle");
-    toggleBtn?.addEventListener("click", () => {
-      isNewsCollapsed = !isNewsCollapsed;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(isNewsCollapsed));
-      } catch {}
-      updateNewsPanelDOM();
-    });
-    updateNewsPanelDOM();
-  }
 
   function initMap(): void {
     const mapElement = document.getElementById("map");
@@ -460,7 +382,6 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           previousView = null;
         }
       }
-      updateNewsPanelDOM();
     };
     document.addEventListener("mapmarkerselect", handleMarkerSelect);
     mapCleanups.push(() =>
@@ -521,15 +442,12 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   }
 
   document.addEventListener("astro:page-load", () => {
-    initNewsFeedToggle();
     initMap();
   });
   if (document.readyState !== "loading") {
-    initNewsFeedToggle();
     initMap();
   } else {
     document.addEventListener("DOMContentLoaded", () => {
-      initNewsFeedToggle();
       initMap();
     });
   }

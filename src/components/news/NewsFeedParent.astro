@@ -11,17 +11,14 @@ interface Props {
 const { newsItems, errorMessage } = Astro.props;
 ---
 
-<!-- 
-  POSITIONING: 
-  Fixed notification on mobile (top), static sidebar panel on desktop.
--->
 <div
-  class="fixed md:static top-3 left-3 right-3 md:left-auto z-50 md:z-auto bg-neutral-900/90 md:bg-neutral-900 backdrop-blur-xl md:backdrop-blur-none border border-white/10 md:border-none rounded-2xl md:rounded-none shadow-2xl md:shadow-none overflow-hidden transition-all duration-300 md:w-72"
+  id="news-feed-panel"
+  class="fixed md:absolute top-3 left-3 right-3 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-neutral-900/90 md:bg-neutral-900 backdrop-blur-xl md:backdrop-blur-md border border-white/10 md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-black/60 md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
 >
   <!-- Desktop Header -->
   <div
     id="nf-header-row"
-    class="hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-white/10"
+    class="hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-white/10 shrink-0"
   >
     <div
       class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0"
@@ -89,7 +86,7 @@ const { newsItems, errorMessage } = Astro.props;
   <!-- Desktop List Content -->
   <div
     id="nf-content-area"
-    class="hidden md:block overflow-y-auto p-4 space-y-4 hide-scrollbar"
+    class="hidden md:block overflow-y-auto p-4 space-y-4 hide-scrollbar flex-1"
   >
     {
       errorMessage ? (
@@ -125,7 +122,7 @@ const { newsItems, errorMessage } = Astro.props;
   </div>
 
   <!-- Mobile Close Action -->
-  <div class="block md:hidden border-t border-white/5">
+  <div class="block md:hidden border-t border-white/5 shrink-0">
     <button
       id="nf-mobile-close"
       type="button"
@@ -134,71 +131,185 @@ const { newsItems, errorMessage } = Astro.props;
       Dismiss
     </button>
   </div>
+
+  <!-- Desktop pull-tab toggle -->
+  <button
+    id="nf-toggle"
+    type="button"
+    aria-expanded="true"
+    aria-controls="news-feed-panel"
+    aria-label="Toggle news feed panel"
+    class="hidden md:flex absolute z-40 items-center justify-center bg-neutral-900 border border-white/10 border-r-0 text-neutral-400 hover:text-neutral-100 hover:bg-[#17171d] transition-colors
+           top-1/2 left-0 -translate-x-full -translate-y-1/2 w-8 h-12 rounded-l-xl"
+  >
+    <svg
+      id="nf-toggle-icon"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      class="transition-transform duration-300 ease-out"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"></path>
+    </svg>
+  </button>
 </div>
 
 <script>
-  function initNewsListActions(): void {
-    // Accordion close
-    const closeBtn = document.getElementById("nf-mobile-close");
-    closeBtn?.addEventListener("click", () => {
-      // Logic for dismissing the notification
-      const parent = closeBtn.closest(".fixed");
-      if (parent) (parent as HTMLElement).style.display = "none";
-      document.dispatchEvent(new CustomEvent("collapsenewsaccordion"));
-    });
+  const STORAGE_KEY = "newsFeedCollapsed";
 
-    // Carousel Logic
-    const carousel = document.getElementById("nf-carousel") as HTMLDivElement;
-    const dots = document.querySelectorAll(".news-dot");
-    if (!carousel || carousel.children.length === 0) return;
+  let isMarkerSelected = false;
+  let isNewsCollapsed = false;
+  let newsCleanups: (() => void)[] = [];
 
-    let currentIndex = 0;
-    const totalItems = carousel.children.length;
-    let autoRotateInterval: number;
+  function initNewsFeed(): void {
+    const root = document.getElementById("news-feed-panel");
+    if (!root) return;
 
-    function updateDots(index: number) {
-      dots.forEach((dot, i) => {
-        dot.classList.toggle("bg-emerald-400", i === index);
-        dot.classList.toggle("bg-neutral-700", i !== index);
+    while (newsCleanups.length > 0) {
+      newsCleanups.pop()?.();
+    }
+
+    const toggleBtn = document.getElementById(
+      "nf-toggle",
+    ) as HTMLButtonElement | null;
+    const toggleIcon = document.getElementById(
+      "nf-toggle-icon",
+    ) as SVGElement | null;
+    const closeBtn = document.getElementById(
+      "nf-mobile-close",
+    ) as HTMLButtonElement | null;
+
+    isMarkerSelected = false;
+    try {
+      isNewsCollapsed = localStorage.getItem(STORAGE_KEY) === "true";
+    } catch {
+      isNewsCollapsed = false;
+    }
+
+    function updatePanelDOM(): void {
+      if (isMarkerSelected) {
+        root!.classList.add("translate-x-full");
+        root!.classList.remove("translate-x-0");
+        toggleBtn?.classList.add("hidden");
+      } else {
+        toggleBtn?.classList.remove("hidden");
+        if (isNewsCollapsed) {
+          root!.classList.add("translate-x-full");
+          root!.classList.remove("translate-x-0");
+          toggleBtn?.setAttribute("aria-expanded", "false");
+          if (toggleIcon) toggleIcon.style.transform = "rotate(180deg)";
+        } else {
+          root!.classList.remove("translate-x-full");
+          root!.classList.add("translate-x-0");
+          toggleBtn?.setAttribute("aria-expanded", "true");
+          if (toggleIcon) toggleIcon.style.transform = "rotate(0deg)";
+        }
+      }
+    }
+
+    function setCollapsed(next: boolean): void {
+      isNewsCollapsed = next;
+      try {
+        localStorage.setItem(STORAGE_KEY, String(isNewsCollapsed));
+      } catch {}
+      updatePanelDOM();
+    }
+
+    const onToggleClick = () => setCollapsed(!isNewsCollapsed);
+    toggleBtn?.addEventListener("click", onToggleClick);
+    newsCleanups.push(() =>
+      toggleBtn?.removeEventListener("click", onToggleClick),
+    );
+
+    const onCloseClick = () => setCollapsed(true);
+    closeBtn?.addEventListener("click", onCloseClick);
+    newsCleanups.push(() =>
+      closeBtn?.removeEventListener("click", onCloseClick),
+    );
+
+    const onMarkerSelect = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ project: unknown } | null>
+      ).detail;
+      isMarkerSelected = !!detail?.project;
+      updatePanelDOM();
+    };
+    document.addEventListener("mapmarkerselect", onMarkerSelect);
+    newsCleanups.push(() =>
+      document.removeEventListener("mapmarkerselect", onMarkerSelect),
+    );
+
+    updatePanelDOM();
+
+    // Mobile carousel
+    const carousel = document.getElementById(
+      "nf-carousel",
+    ) as HTMLDivElement | null;
+    const dots = root.querySelectorAll<HTMLDivElement>(".news-dot");
+
+    if (carousel && carousel.children.length > 0) {
+      let currentIndex = 0;
+      const totalItems = carousel.children.length;
+      let autoRotateInterval: number;
+
+      function updateDots(index: number) {
+        dots.forEach((dot, i) => {
+          dot.classList.toggle("bg-emerald-400", i === index);
+          dot.classList.toggle("bg-neutral-700", i !== index);
+        });
+      }
+
+      function nextSlide() {
+        currentIndex = (currentIndex + 1) % totalItems;
+        carousel!.scrollTo({
+          left: carousel!.offsetWidth * currentIndex,
+          behavior: "smooth",
+        });
+        updateDots(currentIndex);
+      }
+
+      function startAutoRotate() {
+        autoRotateInterval = window.setInterval(nextSlide, 5000);
+      }
+
+      function resetAutoRotate() {
+        clearInterval(autoRotateInterval);
+        startAutoRotate();
+      }
+
+      const onCarouselScroll = () => {
+        const index = Math.round(
+          carousel.scrollLeft / carousel.offsetWidth,
+        );
+        if (index !== currentIndex) {
+          currentIndex = index;
+          updateDots(currentIndex);
+          resetAutoRotate();
+        }
+      };
+      carousel.addEventListener("scroll", onCarouselScroll);
+      newsCleanups.push(() => {
+        carousel.removeEventListener("scroll", onCarouselScroll);
+        clearInterval(autoRotateInterval);
       });
-    }
 
-    function nextSlide() {
-      currentIndex = (currentIndex + 1) % totalItems;
-      carousel.scrollTo({
-        left: carousel.offsetWidth * currentIndex,
-        behavior: "smooth",
-      });
-      updateDots(currentIndex);
-    }
-
-    function startAutoRotate() {
-      autoRotateInterval = window.setInterval(nextSlide, 5000);
-    }
-
-    function resetAutoRotate() {
-      clearInterval(autoRotateInterval);
+      updateDots(0);
       startAutoRotate();
     }
-
-    carousel.addEventListener("scroll", () => {
-      const index = Math.round(carousel.scrollLeft / carousel.offsetWidth);
-      if (index !== currentIndex) {
-        currentIndex = index;
-        updateDots(currentIndex);
-        resetAutoRotate();
-      }
-    });
-
-    updateDots(0);
-    startAutoRotate();
   }
 
-  document.addEventListener("astro:page-load", initNewsListActions);
+  document.addEventListener("astro:page-load", initNewsFeed);
   if (document.readyState !== "loading") {
-    initNewsListActions();
+    initNewsFeed();
   } else {
-    document.addEventListener("DOMContentLoaded", initNewsListActions);
+    document.addEventListener("DOMContentLoaded", initNewsFeed);
   }
 </script>
 
