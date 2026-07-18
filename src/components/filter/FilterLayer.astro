@@ -1,30 +1,91 @@
 ---
+// src/components/map/FilterLayersGroup.astro
 import AccordionSection from "~/components/ui/AccordionSection.astro";
-import { Trees } from "lucide-astro";
+import { Trees, Droplet, Landmark } from "lucide-astro";
+
+// Config matches the IDs and keys your map script is listening for
+const LAYERS = [
+  {
+    id: "mf-toggle-protected",
+    apiKey: "showProtectedLands",
+    label: "Protected Lands",
+    icon: Trees,
+    colorClass: "text-emerald-500 group-hover:text-emerald-400",
+    accentClass: "accent-emerald-400",
+  },
+  {
+    id: "mf-toggle-drinking",
+    apiKey: "showDrinkingWater",
+    label: "Drinking Water Supply",
+    icon: Droplet,
+    colorClass: "text-blue-500 group-hover:text-blue-400",
+    accentClass: "accent-blue-400",
+  },
+  {
+    id: "mf-toggle-cities",
+    apiKey: "showCityBoundaries",
+    label: "City Boundaries",
+    icon: Landmark,
+    colorClass: "text-purple-500 group-hover:text-purple-400",
+    accentClass: "accent-purple-400",
+  },
+];
 ---
 
-<AccordionSection id="layers" title="Climate Impacts">
-  <div
-    class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5"
-  >
-    <label
-      class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-white/5"
-    >
-      <input
-        type="checkbox"
-        id="mf-toggle-protected"
-        class="w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 accent-emerald-400 cursor-pointer"
-      />
-      <span
-        class="text-emerald-500 group-hover:text-emerald-400 transition-colors"
-      >
-        <Trees size={16} stroke-width={2} />
-      </span>
-      <span
-        class="text-xs font-semibold text-neutral-200 group-hover:text-white transition-colors"
-      >
-        Protected Lands
-      </span>
-    </label>
+<AccordionSection id="layers" title="Climate & Regional Impacts">
+  <div class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5">
+    {
+      LAYERS.map((layer) => {
+        const IconComponent = layer.icon;
+        return (
+          <label class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
+            <input
+              type="checkbox"
+              id={layer.id}
+              data-api-key={layer.apiKey}
+              class={`environmental-layer-toggle w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 ${layer.accentClass} cursor-pointer`}
+            />
+            <span class={`transition-colors ${layer.colorClass}`}>
+              <IconComponent size={16} stroke-width={2} />
+            </span>
+            <span class="text-xs font-semibold text-neutral-200 group-hover:text-white transition-colors">
+              {layer.label}
+            </span>
+          </label>
+        );
+      })
+    }
   </div>
 </AccordionSection>
+
+<script>
+  function setupLayerToggles() {
+    const toggles = document.querySelectorAll('.environmental-layer-toggle');
+    
+    toggles.forEach((toggle) => {
+      toggle.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        const apiKey = target.getAttribute('data-api-key');
+        
+        if (!apiKey) return;
+
+        // Dispatch custom event matching MapParent's listener layout exactly
+        const filterEvent = new CustomEvent("mapfilterchange", {
+          detail: {
+            [apiKey]: target.checked
+          }
+        });
+        
+        document.dispatchEvent(filterEvent);
+      });
+    });
+  }
+
+  // Handle standard transitions and Astro lifecycle hooks safely
+  document.addEventListener("astro:page-load", setupLayerToggles);
+  if (document.readyState !== "loading") {
+    setupLayerToggles();
+  } else {
+    document.addEventListener("DOMContentLoaded", setupLayerToggles);
+  }
+</script>

@@ -1,5 +1,5 @@
 ---
-// src/components/map/Map.astro
+// src/components/map/MapParent.astro
 import { fetchLocalNews } from "~/lib/newsFeed";
 import "~/styles/mapPins.css";
 import MapFilterParent from "~/components/map/MapFilterParent.astro";
@@ -118,21 +118,59 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       "rejected",
     ];
     let cachedMinMW: number = 0;
-    let cachedShowProtectedLands: boolean = false;
 
-    // --- PMTILES DYNAMIC CONFIGURATION ---
-    const PROTECTED_SOURCE = "protected-lands";
-    const PROTECTED_LAYER = "protected-lands-layer";
+    // Track state of each environmental toggle independently
+    let cachedLayerVisibility: Record<string, boolean> = {
+      "protected-lands": false,
+      "drinking-water": false,
+      "city-boundaries": false,
+    };
 
-    // Update your Map.astro with your new Cloudflare R2 public URL
-    const PMTILES_URL =
-      "https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev/mn-protected-lands.pmtiles";
+    // --- PMTILES CONFIGURATION ---
+    interface LayerConfig {
+      id: string;
+      fileName: string;
+      fallbackLayerName: string;
+      paint: maplibregl.FillLayerSpecification['paint'];
+    }
 
-    // Create Protocol URL for MapLibre rendering
-    const PMTILES_PROTOCOL_URL = `pmtiles://${PMTILES_URL}`;
+const PMTILES_LAYERS: LayerConfig[] = [
+{
+    id: "protected-lands",
+    fileName: "PADUS4_1Combined_StateMN.pmtiles",
+    // Fix: Lowercase fallback to match standard output configurations
+    fallbackLayerName: "padus4_1combined_statemn", 
+    paint: {
+      "fill-color": "#10b981",
+      "fill-opacity": 0.4,
+      "fill-outline-color": "#047857",
+    }
+  },
+  {
+    id: "drinking-water",
+    // FIX: Use the exact plain-text name containing standard parentheses
+    fileName: "Drinking_Water_Supply_Management_Area_(DWSMA).pmtiles", 
+    fallbackLayerName: "Drinking_Water_Supply_Management_Area__DWSMA_",
+    paint: {
+      "fill-color": "#3b82f6", // Blue
+      "fill-opacity": 0.35,
+      "fill-outline-color": "#1d4ed8",
+    }
+  },
+  {
+    id: "city-boundaries",
+    fileName: "convertedCity_Boundaries_in_Minnesota.pmtiles",
+    fallbackLayerName: "convertedCity_Boundaries_in_Minnesota",
+    paint: {
+      "fill-color": "#a855f7", // Purple
+      "fill-opacity": 0.15,
+      "fill-outline-color": "#7e22ce",
+    }
+  }
+];
 
-    // FIX: Initialize as an empty string to satisfy TypeScript strict mode
-    let discoveredSourceLayerName: string = "";
+    const BUCKET_BASE_URL = "https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev";
+    const discoveredSourceLayers: Record<string, string> = {};
 
     const applyMapFilters = () => {
       const layersToFilter = ["data-centers-circles", "data-centers-labels"];
@@ -148,90 +186,78 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       });
     };
 
-    // Define the expected structure of PMTiles metadata
     interface PMTilesMetadata {
       vector_layers?: Array<{ id: string; [key: string]: any }>;
       [key: string]: any;
     }
 
-    const syncProtectedLandsLayer = async () => {
-      if (!map.isStyleLoaded()) return;
+const syncEnvironmentalLayers = async () => {
+  // Force a safety bail-out if style isn't ready
+  if (!map.isStyleLoaded()) return;
 
-      if (cachedShowProtectedLands) {
-        console.log(`[PMTiles] Toggle ON. Attempting to load: ${PMTILES_URL}`);
+  for (const layer of PMTILES_LAYERS) {
+    const sourceId = `${layer.id}-source`;
+    const layerId = `${layer.id}-layer`;
+    const isVisible = cachedLayerVisibility[layer.id];
 
-        if (!discoveredSourceLayerName) {
-          try {
-            const p = new pmtiles.PMTiles(PMTILES_URL);
-            // Cast the result to our defined interface
-            const meta = (await p.getMetadata()) as PMTilesMetadata;
+    if (isVisible) {
+      const fileUrl = `${BUCKET_BASE_URL}/${layer.fileName}`;
+      const protocolUrl = `pmtiles://${fileUrl}`;
 
-            console.log("[PMTiles] Successfully read file metadata:", meta);
+      // 1. Auto-discover layer name
+      if (!discoveredSourceLayers[layer.id]) {
+        try {
+          const p = new pmtiles.PMTiles(fileUrl);
+          const meta = (await p.getMetadata()) as PMTilesMetadata;
 
-            if (meta && meta.vector_layers && meta.vector_layers.length > 0) {
-              discoveredSourceLayerName = meta.vector_layers[0].id;
-              console.log(
-                `[PMTiles] Auto-discovered internal layer name: "${discoveredSourceLayerName}"`,
-              );
-            } else {
-              console.warn(
-                "[PMTiles] Metadata found but no vector layers defined.",
-              );
-              discoveredSourceLayerName = "mnprotectedlands";
-            }
-          } catch (err) {
-            console.error("[PMTiles ERROR] Could not read metadata.", err);
-            discoveredSourceLayerName = "mnprotectedlands";
+          if (meta && meta.vector_layers && meta.vector_layers.length > 0) {
+            discoveredSourceLayers[layer.id] = meta.vector_layers[0].id;
+          } else {
+            discoveredSourceLayers[layer.id] = layer.fallbackLayerName;
           }
+        } catch (err) {
+          console.error(`[PMTiles ERROR] Metadata failed for ${layer.id}`, err);
+          discoveredSourceLayers[layer.id] = layer.fallbackLayerName;
         }
-
-        // 2. ADD SOURCE
-        if (!map.getSource(PROTECTED_SOURCE)) {
-          map.addSource(PROTECTED_SOURCE, {
-            type: "vector",
-            url: PMTILES_PROTOCOL_URL,
-          });
-          console.log(
-            `[PMTiles] Source added. MapLibre is requesting tiles via Protocol.`,
-          );
-        }
-
-        // 3. ADD LAYER
-        if (!map.getLayer(PROTECTED_LAYER) && map.getSource(PROTECTED_SOURCE)) {
-          try {
-            const beforeId = map.getLayer("data-centers-circles")
-              ? "data-centers-circles"
-              : undefined;
-
-            map.addLayer(
-              {
-                id: PROTECTED_LAYER,
-                type: "fill",
-                source: PROTECTED_SOURCE,
-                "source-layer": discoveredSourceLayerName, // TypeScript is happy now!
-                paint: {
-                  "fill-color": "#10b981",
-                  "fill-opacity": 0.5,
-                  "fill-outline-color": "#047857",
-                },
-              },
-              beforeId,
-            );
-            console.log("[PMTiles] Layer successfully drawn onto the map!");
-          } catch (err) {
-            console.error(
-              "[PMTiles ERROR] Failed to add layer. Usually caused by beforeId strictly missing.",
-              err,
-            );
-          }
-        }
-      } else {
-        // TURN OFF LOGIC
-        if (map.getLayer(PROTECTED_LAYER)) map.removeLayer(PROTECTED_LAYER);
-        if (map.getSource(PROTECTED_SOURCE)) map.removeSource(PROTECTED_SOURCE);
-        console.log("[PMTiles] Layer & Source removed (Toggle OFF).");
       }
-    };
+
+      // Double check that map style hasn't changed or unmounted while waiting for async metadata
+      if (!map.getSource(sourceId)) {
+        map.addSource(sourceId, {
+          type: "vector",
+          url: protocolUrl,
+        });
+      }
+
+      // 3. Add Layer safely above background layers but below data centers
+      if (!map.getLayer(layerId) && map.getSource(sourceId)) {
+        try {
+          // Dynamic beforeId checklist: find the highest layer to sit under
+          const beforeId = map.getLayer("data-centers-circles") 
+            ? "data-centers-circles" 
+            : undefined;
+
+          map.addLayer(
+            {
+              id: layerId,
+              type: "fill",
+              source: sourceId,
+              "source-layer": discoveredSourceLayers[layer.id],
+              paint: layer.paint,
+            },
+            beforeId,
+          );
+        } catch (err) {
+          console.error(`[PMTiles ERROR] Failed to add layer ${layerId}:`, err);
+        }
+      }
+    } else {
+      // Clean up cleanly when toggled off
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
+  }
+};
 
     const addDataLayer = () => {
       if (!map.getSource("data-centers")) {
@@ -287,7 +313,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       }
 
       applyMapFilters();
-      syncProtectedLandsLayer();
+      syncEnvironmentalLayers();
     };
 
     map.on("load", () => {
@@ -315,6 +341,8 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           statuses: string[];
           minMW?: number;
           showProtectedLands?: boolean;
+          showDrinkingWater?: boolean;
+          showCityBoundaries?: boolean;
         }>
       ).detail;
       if (!detail) return;
@@ -322,12 +350,19 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       if (detail.statuses) cachedStatuses = detail.statuses;
       if (typeof detail.minMW === "number") cachedMinMW = detail.minMW;
 
-      applyMapFilters();
-
+      // Map incoming specific toggle signals to our map configuration IDs
       if (typeof detail.showProtectedLands === "boolean") {
-        cachedShowProtectedLands = detail.showProtectedLands;
-        syncProtectedLandsLayer();
+        cachedLayerVisibility["protected-lands"] = detail.showProtectedLands;
       }
+      if (typeof detail.showDrinkingWater === "boolean") {
+        cachedLayerVisibility["drinking-water"] = detail.showDrinkingWater;
+      }
+      if (typeof detail.showCityBoundaries === "boolean") {
+        cachedLayerVisibility["city-boundaries"] = detail.showCityBoundaries;
+      }
+
+      applyMapFilters();
+      syncEnvironmentalLayers();
     };
     document.addEventListener("mapfilterchange", handleFilterChange);
     mapCleanups.push(() =>
