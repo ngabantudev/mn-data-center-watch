@@ -6,13 +6,22 @@ import { Newspaper } from "lucide-astro";
 interface Props {
   newsItems: NewsItem[];
   errorMessage: string | null;
+  initialDays?: number;
 }
 
-const { newsItems, errorMessage } = Astro.props;
+const { newsItems, errorMessage, initialDays = 7 } = Astro.props;
+
+const RANGE_OPTIONS = [
+  { label: "24H", days: 1 },
+  { label: "7D", days: 7 },
+  { label: "30D", days: 30 },
+  { label: "1Y", days: 365 },
+];
 ---
 
 <div
   id="news-feed-panel"
+  data-initial-days={initialDays}
   class="fixed md:absolute top-3 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-neutral-900/90 md:bg-neutral-900 backdrop-blur-xl md:backdrop-blur-md border border-white/10 md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-black/60 md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
 >
   <!-- Desktop Header -->
@@ -27,18 +36,40 @@ const { newsItems, errorMessage } = Astro.props;
     </div>
     <div class="min-w-0 flex-1">
       <h4
-        class="text-[10px] font-bold text-neutral-500 uppercase tracking-wider leading-none"
+        class="text-[10px] font-bold text-neutral-100 mt-1 uppercase tracking-wider leading-none"
       >
-        Local Coverage
+        Related MN Coverage
       </h4>
-      <p class="text-[11.5px] font-semibold text-neutral-100 mt-1 truncate">
-        Minnesota Data Centers
-      </p>
     </div>
   </div>
 
+  <!-- Date Range Selector -->
+  <div
+    id="nf-range-group"
+    role="group"
+    aria-label="News date range"
+    class="flex items-center gap-1.5 px-4 py-2.5 border-b border-white/10 shrink-0"
+  >
+    {
+      RANGE_OPTIONS.map((opt) => (
+        <button
+          type="button"
+          class="nf-range-btn text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors text-neutral-500 border-white/10 hover:text-neutral-200"
+          data-days={opt.days}
+          aria-pressed={opt.days === initialDays ? "true" : "false"}
+        >
+          {opt.label}
+        </button>
+      ))
+    }
+    <span
+      id="nf-range-status"
+      class="text-[9px] text-neutral-600 ml-auto uppercase tracking-wider"
+    />
+  </div>
+
   <!-- Mobile Notification (Carousel) -->
-  <div class="md:hidden relative w-full flex flex-col">
+  <div id="nf-mobile-wrap" class="md:hidden relative w-full flex flex-col">
     <div
       id="nf-carousel"
       class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"
@@ -71,7 +102,7 @@ const { newsItems, errorMessage } = Astro.props;
 
     {
       newsItems.length > 0 && !errorMessage && (
-        <div class="flex justify-center gap-1.5 pb-2">
+        <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
           {newsItems.map((_, i) => (
             <div
               class="news-dot w-1 h-1 rounded-full bg-neutral-700 transition-colors"
@@ -162,12 +193,172 @@ const { newsItems, errorMessage } = Astro.props;
 </div>
 
 <script>
+  import type { NewsItem } from "~/lib/newsFeed";
+
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
 
   let isMarkerSelected = false;
   let isNewsCollapsed = false;
   let newsCleanups: (() => void)[] = [];
+  let currentDays = 7;
+  let carouselCleanup: (() => void) | null = null;
+
+  function escapeHtml(value: string): string {
+    const div = document.createElement("div");
+    div.textContent = value;
+    return div.innerHTML;
+  }
+
+  function formatDate(published: string): string {
+    return new Date(published).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  function desktopItemHTML(item: NewsItem): string {
+    return `
+      <article class="border-b border-white/5 pb-3.5 last:border-0 last:pb-0 group">
+        <span class="text-[9px] font-bold text-emerald-400/80 tracking-wider uppercase block mb-1">${escapeHtml(item.source)}</span>
+        <h3 class="text-xs font-medium text-neutral-200 hover:text-emerald-300 leading-snug">
+          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
+        </h3>
+        <span class="text-[10px] text-neutral-500 block mt-1.5 font-medium">${formatDate(item.published)}</span>
+      </article>`;
+  }
+
+  function mobileItemHTML(item: NewsItem): string {
+    return `
+      <article class="w-full shrink-0 snap-center p-3 flex flex-col justify-center">
+        <span class="text-[9px] font-bold text-emerald-400 tracking-wider uppercase block mb-0.5">Breaking News</span>
+        <h3 class="text-xs font-medium text-neutral-200 leading-snug line-clamp-2">
+          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
+        </h3>
+      </article>`;
+  }
+
+  function renderNews(newsItems: NewsItem[], errorMessage: string | null): void {
+    const desktopArea = document.getElementById("nf-content-area");
+    const mobileWrap = document.getElementById("nf-mobile-wrap");
+    if (!desktopArea || !mobileWrap) return;
+
+    if (errorMessage) {
+      desktopArea.innerHTML = `<div class="p-3 bg-red-950/30 text-red-400 rounded-lg text-xs border border-red-900/50"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`;
+      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><div class="p-4 text-red-400 text-xs w-full text-center">${escapeHtml(errorMessage)}</div></div>`;
+      return;
+    }
+
+    if (newsItems.length === 0) {
+      desktopArea.innerHTML = `<p class="text-neutral-500 text-xs font-medium px-1">No new local updates found.</p>`;
+      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><p class="text-neutral-500 text-xs w-full text-center p-4">No updates found.</p></div>`;
+      return;
+    }
+
+    desktopArea.innerHTML = newsItems.map(desktopItemHTML).join("");
+    mobileWrap.innerHTML = `
+      <div id="nf-carousel" class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full">
+        ${newsItems.map(mobileItemHTML).join("")}
+      </div>
+      <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
+        ${newsItems.map((_, i) => `<div class="news-dot w-1 h-1 rounded-full bg-neutral-700 transition-colors" data-index="${i}"></div>`).join("")}
+      </div>`;
+
+    initCarousel();
+  }
+
+  function initCarousel(): void {
+    carouselCleanup?.();
+    carouselCleanup = null;
+
+    const carousel = document.getElementById("nf-carousel") as HTMLDivElement | null;
+    const dots = document.querySelectorAll<HTMLDivElement>(".news-dot");
+    if (!carousel || carousel.children.length === 0) return;
+
+    let currentIndex = 0;
+    const totalItems = carousel.children.length;
+    let autoRotateInterval: number;
+
+    function updateDots(index: number) {
+      dots.forEach((dot, i) => {
+        dot.classList.toggle("bg-emerald-400", i === index);
+        dot.classList.toggle("bg-neutral-700", i !== index);
+      });
+    }
+
+    function nextSlide() {
+      currentIndex = (currentIndex + 1) % totalItems;
+      carousel!.scrollTo({ left: carousel!.offsetWidth * currentIndex, behavior: "smooth" });
+      updateDots(currentIndex);
+    }
+
+    function startAutoRotate() {
+      autoRotateInterval = window.setInterval(nextSlide, 5000);
+    }
+
+    function resetAutoRotate() {
+      clearInterval(autoRotateInterval);
+      startAutoRotate();
+    }
+
+    const onCarouselScroll = () => {
+      const index = Math.round(carousel.scrollLeft / carousel.offsetWidth);
+      if (index !== currentIndex) {
+        currentIndex = index;
+        updateDots(currentIndex);
+        resetAutoRotate();
+      }
+    };
+    carousel.addEventListener("scroll", onCarouselScroll);
+
+    updateDots(0);
+    startAutoRotate();
+
+    carouselCleanup = () => {
+      carousel.removeEventListener("scroll", onCarouselScroll);
+      clearInterval(autoRotateInterval);
+    };
+  }
+
+  function updateRangeButtons(root: HTMLElement): void {
+    const buttons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
+    buttons.forEach((btn) => {
+      const isActive = Number(btn.dataset.days) === currentDays;
+      btn.setAttribute("aria-pressed", String(isActive));
+      btn.classList.toggle("text-emerald-300", isActive);
+      btn.classList.toggle("border-emerald-400/30", isActive);
+      btn.classList.toggle("bg-emerald-400/10", isActive);
+      btn.classList.toggle("text-neutral-500", !isActive);
+      btn.classList.toggle("border-white/10", !isActive);
+    });
+  }
+
+  async function fetchAndRender(root: HTMLElement, days: number): Promise<void> {
+    currentDays = days;
+    updateRangeButtons(root);
+
+    const status = document.getElementById("nf-range-status");
+    if (status) status.textContent = "Loading…";
+
+    const buttons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
+    buttons.forEach((btn) => (btn.disabled = true));
+
+    try {
+      const res = await fetch(`/api/news?days=${days}`);
+      if (!res.ok) throw new Error("Request failed");
+      const data = (await res.json()) as {
+        newsItems: NewsItem[];
+        errorMessage: string | null;
+      };
+      renderNews(data.newsItems ?? [], data.errorMessage ?? null);
+    } catch {
+      renderNews([], "Couldn't load news for that range.");
+    } finally {
+      buttons.forEach((btn) => (btn.disabled = false));
+      if (status) status.textContent = "";
+    }
+  }
 
   function initNewsFeed(): void {
     const root = document.getElementById("news-feed-panel");
@@ -176,6 +367,9 @@ const { newsItems, errorMessage } = Astro.props;
     while (newsCleanups.length > 0) {
       newsCleanups.pop()?.();
     }
+
+    const parsedInitialDays = Number(root.dataset.initialDays);
+    currentDays = Number.isNaN(parsedInitialDays) ? 7 : parsedInitialDays;
 
     const toggleBtn = document.getElementById(
       "nf-toggle",
@@ -186,6 +380,19 @@ const { newsItems, errorMessage } = Astro.props;
     const closeBtn = document.getElementById(
       "nf-mobile-close",
     ) as HTMLButtonElement | null;
+
+    const rangeButtons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
+    rangeButtons.forEach((btn) => {
+      const onClick = () => {
+        const days = Number(btn.dataset.days);
+        if (!Number.isNaN(days) && days !== currentDays) {
+          fetchAndRender(root, days);
+        }
+      };
+      btn.addEventListener("click", onClick);
+      newsCleanups.push(() => btn.removeEventListener("click", onClick));
+    });
+    updateRangeButtons(root);
 
     const desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
 
@@ -266,61 +473,9 @@ const { newsItems, errorMessage } = Astro.props;
 
     updatePanelDOM();
 
-    // Mobile carousel
-    const carousel = document.getElementById(
-      "nf-carousel",
-    ) as HTMLDivElement | null;
-    const dots = root.querySelectorAll<HTMLDivElement>(".news-dot");
-
-    if (carousel && carousel.children.length > 0) {
-      let currentIndex = 0;
-      const totalItems = carousel.children.length;
-      let autoRotateInterval: number;
-
-      function updateDots(index: number) {
-        dots.forEach((dot, i) => {
-          dot.classList.toggle("bg-emerald-400", i === index);
-          dot.classList.toggle("bg-neutral-700", i !== index);
-        });
-      }
-
-      function nextSlide() {
-        currentIndex = (currentIndex + 1) % totalItems;
-        carousel!.scrollTo({
-          left: carousel!.offsetWidth * currentIndex,
-          behavior: "smooth",
-        });
-        updateDots(currentIndex);
-      }
-
-      function startAutoRotate() {
-        autoRotateInterval = window.setInterval(nextSlide, 5000);
-      }
-
-      function resetAutoRotate() {
-        clearInterval(autoRotateInterval);
-        startAutoRotate();
-      }
-
-      const onCarouselScroll = () => {
-        const index = Math.round(
-          carousel.scrollLeft / carousel.offsetWidth,
-        );
-        if (index !== currentIndex) {
-          currentIndex = index;
-          updateDots(currentIndex);
-          resetAutoRotate();
-        }
-      };
-      carousel.addEventListener("scroll", onCarouselScroll);
-      newsCleanups.push(() => {
-        carousel.removeEventListener("scroll", onCarouselScroll);
-        clearInterval(autoRotateInterval);
-      });
-
-      updateDots(0);
-      startAutoRotate();
-    }
+    // Mobile carousel (server-rendered items on first mount, re-run after range changes)
+    initCarousel();
+    newsCleanups.push(() => carouselCleanup?.());
   }
 
   document.addEventListener("astro:page-load", initNewsFeed);
