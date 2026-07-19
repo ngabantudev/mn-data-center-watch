@@ -47,20 +47,6 @@ const MINNESOTA_TERMS = [
   "faribault",
 ];
 
-// Soft signal only — used for sort ranking, not filtering. Add/remove freely.
-const CONTEXT_TERMS = [
-  "impact",
-  "community",
-  "grid",
-  "water",
-  "rate",
-  "moratorium",
-  "fresh energy",
-  "pushback",
-  "opposition",
-  "hearing",
-];
-
 function buildDateQuery(windowDays: number): string {
   // when: is documented and reliable up to 1y; anything longer uses
   // after:/before: date ranges instead, since when: beyond ~1y is
@@ -136,16 +122,8 @@ export async function fetchLocalNews(
         const hasMinnesota = MINNESOTA_TERMS.some((t) => item.haystack.includes(t));
         return hasDataCenter && hasMinnesota;
       })
-      .map((item) => ({
-        ...item,
-        contextScore: CONTEXT_TERMS.filter((t) => item.haystack.includes(t)).length,
-      }))
-      // Higher context relevance first, then most recent within the same score
-      .sort((a, b) => {
-        if (b.contextScore !== a.contextScore) return b.contextScore - a.contextScore;
-        return new Date(b.published).getTime() - new Date(a.published).getTime();
-      })
-      .map(({ haystack, contextScore, ...item }) => item);
+      .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime())
+      .map(({ haystack, ...item }) => item);
 
     return { newsItems, errorMessage: null };
 

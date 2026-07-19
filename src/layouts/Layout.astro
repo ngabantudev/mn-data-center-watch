@@ -15,10 +15,23 @@ const { metadata = {} } = Astro.props;
 
 const siteTitle = "MN Data Center Watch";
 const siteDescription =
-  "An interactive dark-themed map resume showcasing AI data centers across Minnesota.";
+  "Community-driven, open-source tracking of proposed and operating AI data centers across Minnesota — capacity, cost, water use, and local news in one map.";
 
-const displayTitle = metadata.title || siteTitle;
+const displayTitle = metadata.title
+  ? metadata.ignoreTitleTemplate
+    ? metadata.title
+    : `${metadata.title} | ${siteTitle}`
+  : siteTitle;
 const displayDescription = metadata.description || siteDescription;
+
+// Minimal favicon matching the map's own marker style: a colored circle
+// with a white ring on a dark square, so the browser tab echoes the map.
+const faviconSvg =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
+  '<rect width="32" height="32" rx="8" fill="#131314"/>' +
+  '<circle cx="16" cy="16" r="9" fill="#10b981" stroke="#ffffff" stroke-width="2"/>' +
+  "</svg>";
+const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
 ---
 
 <!doctype html>
@@ -26,8 +39,35 @@ const displayDescription = metadata.description || siteDescription;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#131314" />
+    <link rel="icon" href={faviconHref} type="image/svg+xml" />
     <title>{displayTitle}</title>
     <meta name="description" content={displayDescription} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={displayTitle} />
+    <meta property="og:description" content={displayDescription} />
+    {metadata.ogImage && <meta property="og:image" content={metadata.ogImage} />}
+
+    <meta
+      name="twitter:card"
+      content={metadata.ogImage ? "summary_large_image" : "summary"}
+    />
+    <meta name="twitter:title" content={displayTitle} />
+    <meta name="twitter:description" content={displayDescription} />
+    {metadata.ogImage && <meta name="twitter:image" content={metadata.ogImage} />}
+
+    <!--
+      Warm up the connections the map needs on first paint: the basemap
+      tile server (used immediately) and the R2 bucket serving the
+      PMTiles environmental layers (used as soon as a layer toggle fires).
+    -->
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link
+      rel="preconnect"
+      href="https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev"
+      crossorigin
+    />
 
     <!--
     MapLibre's CSS is imported directly in Map.astro's script

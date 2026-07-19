@@ -3,14 +3,10 @@
 import Layout from "~/layouts/Layout.astro";
 import MapParent from "~/components/map/MapParent.astro";
 export const prerender = true;
-
-const metadata = {
-  title: "MN Data Center Watch",
-};
 ---
 
-<Layout metadata={metadata}>
-  <main class="relative w-full h-dvh bg-[#131314]">
+<Layout>
+  <div class="relative w-full h-dvh bg-[#131314]">
     <MapParent />
-  </main>
+  </div>
 </Layout>

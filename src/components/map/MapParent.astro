@@ -35,6 +35,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   import { getDefaultMapStyleUrl } from "~/data/mapStyles";
   import { STATUS_HEX } from "~/data/mapStatusMeta";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
+  import { parseMW } from "~/lib/projectMetrics";
 
   // Register PMTiles protocol globally
   try {
@@ -55,10 +56,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   const geoJsonData = {
     type: "FeatureCollection",
     features: clientProjects.map((project, index) => {
-      const mwMatch = project.powerCapacityMW
-        ? project.powerCapacityMW.replace(/,/g, "").match(/\d+(\.\d+)?/)
-        : null;
-      const mw = mwMatch ? parseFloat(mwMatch[0]) : 5;
+      const mw = parseMW(project.powerCapacityMW) || 5;
 
       return {
         type: "Feature",
@@ -190,8 +188,55 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     };
 
     interface PMTilesMetadata {
-      vector_layers?: Array<{ id: string; [key: string]: any }>;
+      vector_layers?: Array<{
+        id: string;
+        fields?: Record<string, string>;
+        [key: string]: any;
+      }>;
       [key: string]: any;
+    }
+
+    // Common attribute names for a human-readable label, in priority order.
+    // Matched case-insensitively against whatever fields each archive
+    // actually contains, since PAD-US/DWSMA/city-boundary exports don't
+    // agree on naming (Unit_Nm vs GNIS_NAME vs CTU_NAME, etc).
+    const LABEL_FIELD_CANDIDATES = [
+      "name",
+      "unit_nm",
+      "loc_nm",
+      "gnis_name",
+      "ctu_name",
+      "city_name",
+      "wb_name",
+      "label",
+    ];
+
+    function pickLabelField(fields?: Record<string, string>): string | null {
+      if (!fields) return null;
+      const keys = Object.keys(fields);
+      const exactMatch = keys.find((k) =>
+        LABEL_FIELD_CANDIDATES.includes(k.toLowerCase()),
+      );
+      if (exactMatch) return exactMatch;
+      // Fallback: first string-typed field — better than nothing if none
+      // of the known candidates are present.
+      return keys.find((k) => fields[k]?.toLowerCase() === "string") ?? null;
+    }
+
+    const discoveredLabelFields: Record<string, string | null> = {};
+
+    function getEnvLabel(
+      configLayerId: string,
+      feature: maplibregl.MapGeoJSONFeature,
+    ): string {
+      const field = discoveredLabelFields[configLayerId];
+      const props = feature.properties || {};
+      if (field && props[field]) return String(props[field]);
+      // Last resort: first non-empty string property on the feature.
+      const fallback = Object.entries(props).find(
+        ([, v]) => typeof v === "string" && v.trim().length > 0,
+      );
+      return fallback ? String(fallback[1]) : "Unnamed area";
     }
 
     const syncEnvironmentalLayers = async () => {
@@ -204,18 +249,26 @@ const { newsItems, errorMessage } = await fetchLocalNews();
             const meta = (await p.getMetadata()) as PMTilesMetadata;
 
             if (meta && meta.vector_layers && meta.vector_layers.length > 0) {
-              discoveredSourceLayers[layer.id] = meta.vector_layers[0].id;
+              const vectorLayerMeta = meta.vector_layers[0];
+              discoveredSourceLayers[layer.id] = vectorLayerMeta.id;
+              discoveredLabelFields[layer.id] = pickLabelField(
+                vectorLayerMeta.fields,
+              );
             } else {
               discoveredSourceLayers[layer.id] = layer.fallbackLayerName;
+              discoveredLabelFields[layer.id] = null;
             }
           } catch (err) {
             console.error(`[PMTiles ERROR] Metadata failed for ${layer.id}`, err);
             discoveredSourceLayers[layer.id] = layer.fallbackLayerName;
+            discoveredLabelFields[layer.id] = null;
           }
-          console.log(
-            `[PMTiles] "${layer.id}" → source-layer: "${discoveredSourceLayers[layer.id]}"`,
-            `url: ${fileUrl}`,
-          );
+          if (import.meta.env.DEV) {
+            console.log(
+              `[PMTiles] "${layer.id}" → source-layer: "${discoveredSourceLayers[layer.id]}", label field: "${discoveredLabelFields[layer.id] ?? "(none found)"}"`,
+              `url: ${fileUrl}`,
+            );
+          }
         }
       }
 
@@ -490,6 +543,86 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       document.dispatchEvent(
         new CustomEvent("mapmarkerselect", { detail: { project } }),
       );
+    });
+
+    // --- Environmental layer hover/tap labels ---
+    // Layers are added/removed dynamically as their toggles flip, so this
+    // recomputes which ones actually exist on the map right now rather
+    // than assuming all three are present.
+    let envPopup: maplibregl.Popup | null = null;
+
+    const getVisibleEnvLayerIds = (): string[] =>
+      PMTILES_LAYERS.map((l) => `${l.id}-layer`).filter((id) =>
+        map.getLayer(id),
+      );
+
+    map.on("mousemove", (e) => {
+      const layerIds = getVisibleEnvLayerIds();
+      if (layerIds.length === 0) return;
+
+      // Yield to the data-center marker's own hover handler if a marker
+      // is directly under the cursor, so the two popups don't compete.
+      const markerHit = map.queryRenderedFeatures(e.point, {
+        layers: ["data-centers-circles"],
+      });
+      if (markerHit.length > 0) return;
+
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: layerIds,
+      });
+
+      if (features.length === 0) {
+        if (envPopup) {
+          envPopup.remove();
+          envPopup = null;
+        }
+        map.getCanvas().style.cursor = "";
+        return;
+      }
+
+      map.getCanvas().style.cursor = "pointer";
+
+      // Topmost feature under the cursor if layers overlap.
+      const feature = features[0];
+      const configLayerId = feature.layer.id.replace(/-layer$/, "");
+      const label = getEnvLabel(configLayerId, feature);
+
+      if (window.innerWidth >= 768) {
+        if (!envPopup) {
+          envPopup = new maplibregl.Popup({
+            closeButton: false,
+            closeOnClick: false,
+          });
+        }
+        envPopup
+          .setLngLat(e.lngLat)
+          .setHTML(`<strong>${label}</strong>`)
+          .addTo(map);
+      }
+    });
+
+    map.on("click", (e) => {
+      const layerIds = getVisibleEnvLayerIds();
+      if (layerIds.length === 0) return;
+
+      const markerHit = map.queryRenderedFeatures(e.point, {
+        layers: ["data-centers-circles"],
+      });
+      if (markerHit.length > 0) return; // marker click handler owns this tap
+
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: layerIds,
+      });
+      if (features.length === 0) return;
+
+      const feature = features[0];
+      const configLayerId = feature.layer.id.replace(/-layer$/, "");
+      const label = getEnvLabel(configLayerId, feature);
+
+      new maplibregl.Popup({ closeButton: true })
+        .setLngLat(e.lngLat)
+        .setHTML(`<strong>${label}</strong>`)
+        .addTo(map);
     });
   }
 
