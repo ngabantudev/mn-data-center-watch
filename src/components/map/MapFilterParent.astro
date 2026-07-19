@@ -149,9 +149,11 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     ) as HTMLElement | null;
     const selectAllBtn = document.getElementById("mf-select-all");
     const clearAllBtn = document.getElementById("mf-clear-all");
-    const checkboxes = Array.from(
-      document.querySelectorAll<HTMLInputElement>(".mf-checkbox"),
+    
+    const statusCheckboxes = Array.from(
+      document.querySelectorAll<HTMLInputElement>(".mf-status-checkbox, .mf-checkbox"),
     );
+
     const projectLinks = Array.from(
       document.querySelectorAll<HTMLButtonElement>(".mf-project-link"),
     );
@@ -159,9 +161,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
       "mf-mw-slider",
     ) as HTMLInputElement | null;
     const mwLabel = document.getElementById("mf-mw-val");
-    const protectedToggle = document.getElementById(
-      "mf-toggle-protected",
-    ) as HTMLInputElement | null;
     const toggleBtn = document.getElementById("mf-toggle") as HTMLButtonElement | null;
     const toggleIcon = document.getElementById("mf-toggle-icon") as SVGElement | null;
 
@@ -313,9 +312,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     function dispatchFilterChange(): void {
       const statuses = getActiveStatuses();
       const minMW = mwSlider ? Number(mwSlider.value) : 0;
-      const showProtectedLands = protectedToggle
-        ? protectedToggle.checked
-        : false;
 
       if (countLabel) {
         const visibleCount = clientProjects.filter((p) => {
@@ -329,16 +325,17 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 
       document.dispatchEvent(
         new CustomEvent("mapfilterchange", {
-          detail: { statuses, minMW, showProtectedLands },
+          detail: { statuses, minMW },
         }),
       );
     }
 
     function getActiveStatuses(): string[] {
-      return checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+      return statusCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
     }
 
-    checkboxes.forEach((checkbox) => {
+    // Status filter listeners
+    statusCheckboxes.forEach((checkbox) => {
       const onChange = () => dispatchFilterChange();
       checkbox.addEventListener("change", onChange);
       filterCleanups.push(() =>
@@ -347,7 +344,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     });
 
     const onSelectAll = () => {
-      checkboxes.forEach((cb) => (cb.checked = true));
+      statusCheckboxes.forEach((cb) => (cb.checked = true));
       dispatchFilterChange();
     };
     selectAllBtn?.addEventListener("click", onSelectAll);
@@ -356,7 +353,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     );
 
     const onClearAll = () => {
-      checkboxes.forEach((cb) => (cb.checked = false));
+      statusCheckboxes.forEach((cb) => (cb.checked = false));
       dispatchFilterChange();
     };
     clearAllBtn?.addEventListener("click", onClearAll);
@@ -371,12 +368,6 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     mwSlider?.addEventListener("input", onMwInput);
     filterCleanups.push(() =>
       mwSlider?.removeEventListener("input", onMwInput),
-    );
-
-    const onProtectedChange = () => dispatchFilterChange();
-    protectedToggle?.addEventListener("change", onProtectedChange);
-    filterCleanups.push(() =>
-      protectedToggle?.removeEventListener("change", onProtectedChange),
     );
 
     projectLinks.forEach((link) => {
