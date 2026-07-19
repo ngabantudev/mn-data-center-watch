@@ -1,9 +1,10 @@
 ---
 import AccordionSection from "~/components/ui/AccordionSection.astro";
 import { ChevronRight } from "lucide-astro";
+import type { Project } from "~/data/dataCenters";
 
 interface Props {
-  largestProjects: any[];
+  largestProjects: Project[];
   openByDefault?: boolean;
 }
 

@@ -1,11 +1,12 @@
 ---
 import AccordionSection from "~/components/ui/AccordionSection.astro";
 import type { ProjectStatus } from "~/data/dataCenters";
+import type { StatusMeta } from "~/data/mapStatusMeta";
 import type { Zap } from "lucide-astro";
 
 interface Props {
   maxMW: number;
-  STATUS_META: any[];
+  STATUS_META: StatusMeta[];
   countsByStatus: Record<ProjectStatus, number>;
   STATUS_ICONS: Record<ProjectStatus, typeof Zap>;
   openByDefault?: boolean;
