@@ -192,17 +192,70 @@ const RANGE_OPTIONS = [
   </button>
 </div>
 
+<script
+  type="application/json"
+  id="nf-initial-data"
+  set:html={JSON.stringify({ newsItems, errorMessage }).replace(/</g, "\\u003c")}
+/>
+
 <script>
   import type { NewsItem } from "~/lib/newsFeed";
 
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
+  const DAY_MS = 24 * 60 * 60 * 1000;
 
   let isMarkerSelected = false;
   let isNewsCollapsed = false;
   let newsCleanups: (() => void)[] = [];
   let currentDays = 7;
   let carouselCleanup: (() => void) | null = null;
+
+  // Every article ever fetched this session, keyed by url (dedupes across
+  // overlapping windows). Each range button's list is a client-side filter
+  // of this shared pool rather than a fresh live query — Google News RSS
+  // doesn't guarantee that two independent searches for different windows
+  // agree with each other (relevance ranking + its own ~100-item cap can
+  // drop something a narrower query just showed), so re-querying per
+  // button was the actual source of a "24H" article vanishing under "7D".
+  // Filtering one accumulated pool instead guarantees a narrower window's
+  // results are always a subset of a wider one's, by construction.
+  let articleCache = new Map<string, NewsItem>();
+  // Windows (in days) we've successfully fetched from the server so far.
+  let fetchedWindows: number[] = [];
+  let lastFetchError: string | null = null;
+
+  function mergeItems(items: NewsItem[]): void {
+    for (const item of items) articleCache.set(item.url, item);
+  }
+
+  function itemsWithinWindow(days: number): NewsItem[] {
+    const cutoff = Date.now() - days * DAY_MS;
+    return Array.from(articleCache.values())
+      .filter((item) => new Date(item.published).getTime() >= cutoff)
+      .sort(
+        (a, b) => new Date(b.published).getTime() - new Date(a.published).getTime(),
+      );
+  }
+
+  // True once we've fetched a window wide enough that filtering it down to
+  // `days` is guaranteed complete, so no new network request is needed.
+  function hasCoverage(days: number): boolean {
+    return fetchedWindows.some((w) => w >= days);
+  }
+
+  function readInitialPayload(): {
+    newsItems: NewsItem[];
+    errorMessage: string | null;
+  } {
+    const el = document.getElementById("nf-initial-data");
+    if (!el?.textContent) return { newsItems: [], errorMessage: null };
+    try {
+      return JSON.parse(el.textContent);
+    } catch {
+      return { newsItems: [], errorMessage: null };
+    }
+  }
 
   function escapeHtml(value: string): string {
     const div = document.createElement("div");
@@ -334,9 +387,18 @@ const RANGE_OPTIONS = [
     });
   }
 
-  async function fetchAndRender(root: HTMLElement, days: number): Promise<void> {
+  async function showRange(root: HTMLElement, days: number): Promise<void> {
     currentDays = days;
     updateRangeButtons(root);
+
+    // Already have a fetched window wide enough to cover this range —
+    // pure client-side filter, no network round trip, no flash of
+    // "Loading…", and guaranteed consistent with whatever a narrower
+    // range already showed.
+    if (hasCoverage(days)) {
+      renderNews(itemsWithinWindow(days), null);
+      return;
+    }
 
     const status = document.getElementById("nf-range-status");
     if (status) status.textContent = "Loading…";
@@ -351,9 +413,27 @@ const RANGE_OPTIONS = [
         newsItems: NewsItem[];
         errorMessage: string | null;
       };
-      renderNews(data.newsItems ?? [], data.errorMessage ?? null);
+      if (data.errorMessage) {
+        lastFetchError = data.errorMessage;
+      } else {
+        mergeItems(data.newsItems ?? []);
+        fetchedWindows.push(days);
+        lastFetchError = null;
+      }
+      // Best-effort: if we still have relevant cached items (from a prior
+      // successful fetch of a different window) show those rather than
+      // blanking the panel over one failed range's error.
+      if (articleCache.size > 0) {
+        renderNews(itemsWithinWindow(days), null);
+      } else {
+        renderNews([], lastFetchError ?? "No updates found.");
+      }
     } catch {
-      renderNews([], "Couldn't load news for that range.");
+      if (articleCache.size > 0) {
+        renderNews(itemsWithinWindow(days), null);
+      } else {
+        renderNews([], "Couldn't load news for that range.");
+      }
     } finally {
       buttons.forEach((btn) => (btn.disabled = false));
       if (status) status.textContent = "";
@@ -371,6 +451,20 @@ const RANGE_OPTIONS = [
     const parsedInitialDays = Number(root.dataset.initialDays);
     currentDays = Number.isNaN(parsedInitialDays) ? 7 : parsedInitialDays;
 
+    // Seed the shared pool with whatever the server already fetched, so
+    // the first range switch (e.g. clicking "24H" right after landing on
+    // the "7D" default) can be served from cache instead of a new query.
+    articleCache = new Map();
+    fetchedWindows = [];
+    lastFetchError = null;
+    const initialPayload = readInitialPayload();
+    if (initialPayload.errorMessage) {
+      lastFetchError = initialPayload.errorMessage;
+    } else {
+      mergeItems(initialPayload.newsItems);
+      fetchedWindows.push(currentDays);
+    }
+
     const toggleBtn = document.getElementById(
       "nf-toggle",
     ) as HTMLButtonElement | null;
@@ -386,7 +480,7 @@ const RANGE_OPTIONS = [
       const onClick = () => {
         const days = Number(btn.dataset.days);
         if (!Number.isNaN(days) && days !== currentDays) {
-          fetchAndRender(root, days);
+          showRange(root, days);
         }
       };
       btn.addEventListener("click", onClick);
