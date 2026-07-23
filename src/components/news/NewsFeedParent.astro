@@ -211,22 +211,36 @@ const RANGE_OPTIONS = [
   let currentDays = 7;
   let carouselCleanup: (() => void) | null = null;
 
-  // Every article ever fetched this session, keyed by url (dedupes across
-  // overlapping windows). Each range button's list is a client-side filter
-  // of this shared pool rather than a fresh live query — Google News RSS
-  // doesn't guarantee that two independent searches for different windows
-  // agree with each other (relevance ranking + its own ~100-item cap can
-  // drop something a narrower query just showed), so re-querying per
-  // button was the actual source of a "24H" article vanishing under "7D".
-  // Filtering one accumulated pool instead guarantees a narrower window's
-  // results are always a subset of a wider one's, by construction.
+  // Every article ever fetched this session, keyed by normalized
+  // title+source (see dedupeKey below) — not by url. Google News RSS
+  // doesn't return consistent results across *differently scoped* queries
+  // for the same underlying story: a `when:1d` query and a `when:7d`
+  // query can report the same headline under two different Google
+  // redirect URLs and two different published dates, and one is not
+  // reliably a superset of the other in either direction. That means
+  // every range still has to hit the network for itself (there is no way
+  // to safely derive a narrower window's results by filtering a wider
+  // window's cached response, or vice versa — an earlier version of this
+  // file tried exactly that and silently dropped today's freshest article
+  // from "24H" because the cached "7D" fetch never contained it), and
+  // deduping by url would show that same story twice. What accumulating
+  // fetched results into one title-keyed pool *does* still buy us: once
+  // an article has been seen under any window, switching to a wider
+  // window won't lose it or duplicate it just because that window's own
+  // live query returned a different URL/date for the identical headline.
   let articleCache = new Map<string, NewsItem>();
-  // Windows (in days) we've successfully fetched from the server so far.
-  let fetchedWindows: number[] = [];
   let lastFetchError: string | null = null;
 
+  // Google's per-query redirect URLs aren't a stable identity for "the
+  // same story" (see note above), but a title from the same outlet is —
+  // two truly distinct stories that happen to share a headline but come
+  // from different outlets are still treated as separate entries.
+  function dedupeKey(item: NewsItem): string {
+    return `${item.title.trim().toLowerCase()}::${item.source.trim().toLowerCase()}`;
+  }
+
   function mergeItems(items: NewsItem[]): void {
-    for (const item of items) articleCache.set(item.url, item);
+    for (const item of items) articleCache.set(dedupeKey(item), item);
   }
 
   function itemsWithinWindow(days: number): NewsItem[] {
@@ -236,12 +250,6 @@ const RANGE_OPTIONS = [
       .sort(
         (a, b) => new Date(b.published).getTime() - new Date(a.published).getTime(),
       );
-  }
-
-  // True once we've fetched a window wide enough that filtering it down to
-  // `days` is guaranteed complete, so no new network request is needed.
-  function hasCoverage(days: number): boolean {
-    return fetchedWindows.some((w) => w >= days);
   }
 
   function readInitialPayload(): {
@@ -391,15 +399,9 @@ const RANGE_OPTIONS = [
     currentDays = days;
     updateRangeButtons(root);
 
-    // Already have a fetched window wide enough to cover this range —
-    // pure client-side filter, no network round trip, no flash of
-    // "Loading…", and guaranteed consistent with whatever a narrower
-    // range already showed.
-    if (hasCoverage(days)) {
-      renderNews(itemsWithinWindow(days), null);
-      return;
-    }
-
+    // Always fetch this window's own live results — a wider window's
+    // cached response can't be trusted to contain everything a direct
+    // query for `days` would (see the note on articleCache above).
     const status = document.getElementById("nf-range-status");
     if (status) status.textContent = "Loading…";
 
@@ -417,7 +419,6 @@ const RANGE_OPTIONS = [
         lastFetchError = data.errorMessage;
       } else {
         mergeItems(data.newsItems ?? []);
-        fetchedWindows.push(days);
         lastFetchError = null;
       }
       // Best-effort: if we still have relevant cached items (from a prior
@@ -451,18 +452,16 @@ const RANGE_OPTIONS = [
     const parsedInitialDays = Number(root.dataset.initialDays);
     currentDays = Number.isNaN(parsedInitialDays) ? 7 : parsedInitialDays;
 
-    // Seed the shared pool with whatever the server already fetched, so
-    // the first range switch (e.g. clicking "24H" right after landing on
-    // the "7D" default) can be served from cache instead of a new query.
+    // Seed the shared pool with whatever the server already fetched for
+    // the initial (default) range, so it's not lost if the user switches
+    // away and back.
     articleCache = new Map();
-    fetchedWindows = [];
     lastFetchError = null;
     const initialPayload = readInitialPayload();
     if (initialPayload.errorMessage) {
       lastFetchError = initialPayload.errorMessage;
     } else {
       mergeItems(initialPayload.newsItems);
-      fetchedWindows.push(currentDays);
     }
 
     const toggleBtn = document.getElementById(
