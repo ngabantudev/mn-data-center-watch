@@ -76,15 +76,26 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   // Marker size scales with sqrt(MW) so *area* tracks capacity. Defined once
   // and reused by the legal-hold ring and its ripples, which must stay locked
   // to the marker they surround at every zoom level.
-  const radiusExpr = (padding: number): unknown[] => [
+  //
+  // `scale` is a multiplier, not a fixed pixel padding. A constant padding
+  // makes the same ring read as two different effects across the dataset's
+  // 5–1900 MW range: +6px around the 6px-radius Oppidan dot is a 2.0x halo,
+  // while +6px around the 24px Pine Island dot is a thin 1.25x outline.
+  // Scaling keeps the halo visually identical at every site size.
+  const MARKER_MIN_R = 6;
+  const MARKER_MAX_R = 24;
+  const radiusExpr = (scale: number): unknown[] => [
     "interpolate",
     ["linear"],
     ["sqrt", ["get", "parsedMW"]],
     Math.sqrt(5),
-    6 + padding,
+    MARKER_MIN_R * scale,
     Math.sqrt(1900),
-    24 + padding,
+    MARKER_MAX_R * scale,
   ];
+
+  /** Static warning ring, as a multiple of the marker radius. */
+  const RING_SCALE = 1.45;
 
   // --- Legal-hold ripple tuning ---
   const RIPPLE_LAYER_IDS = [
@@ -92,7 +103,8 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     "data-centers-legal-ripple-b",
   ];
   const RIPPLE_PERIOD_MS = 2600;
-  const RIPPLE_SPREAD_PX = 16;
+  /** Ripple travels from the marker edge out to this multiple of its radius. */
+  const RIPPLE_MAX_SCALE = 2.2;
   const RIPPLE_PEAK_OPACITY = 0.55;
   // 30fps is indistinguishable for a 2.6s expansion and halves the number of
   // canvas repaints we ask MapLibre for.
@@ -277,9 +289,11 @@ const { newsItems, errorMessage } = await fetchLocalNews();
         // Ease-out expansion with a linear fade — the wave slows as it
         // dissolves, which reads as energy dissipating outward.
         const eased = 1 - (1 - t) * (1 - t);
-        map.setPaintProperty(id, "circle-radius", radiusExpr(
-          eased * RIPPLE_SPREAD_PX,
-        ) as any);
+        map.setPaintProperty(
+          id,
+          "circle-radius",
+          radiusExpr(1 + eased * (RIPPLE_MAX_SCALE - 1)) as any,
+        );
         map.setPaintProperty(
           id,
           "circle-stroke-opacity",
@@ -478,7 +492,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           source: "data-centers",
           paint: {
             "circle-color": "rgba(0,0,0,0)",
-            "circle-radius": radiusExpr(0) as any,
+            "circle-radius": radiusExpr(1) as any,
             "circle-stroke-width": 2,
             "circle-stroke-color": LEGAL_RING_COLOR as any,
             "circle-stroke-opacity": 0,
@@ -494,7 +508,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           source: "data-centers",
           paint: {
             "circle-color": "rgba(0,0,0,0)",
-            "circle-radius": radiusExpr(6) as any,
+            "circle-radius": radiusExpr(RING_SCALE) as any,
             "circle-stroke-width": 2.5,
             "circle-stroke-color": LEGAL_RING_COLOR as any,
             "circle-stroke-opacity": 0.9,
@@ -509,7 +523,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           source: "data-centers",
           paint: {
             "circle-color": ["get", "color"],
-            "circle-radius": radiusExpr(0) as any,
+            "circle-radius": radiusExpr(1) as any,
             "circle-stroke-width": 2,
             "circle-stroke-color": "#ffffff",
             "circle-opacity": [

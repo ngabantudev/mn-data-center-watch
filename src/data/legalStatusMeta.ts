@@ -33,7 +33,13 @@ export const LEGAL_STATUS_META: LegalStatusMeta[] = [
   },
   {
     legalStatus: 'eaw_challenged',
-    hex: '#eab308',
+    // Mid-tone gold, not a bright yellow. Bright yellow scored 1.74:1 against
+    // the light "positron" basemap (floor for UI graphics is 3.0:1) — it was
+    // effectively invisible on one of the four themes. This clears both
+    // extremes: 4.48:1 on light, 3.54:1 on dark. Chosen over the equally
+    // compliant #b45309, which is a burnt orange easily confused with the
+    // red court_paused ring at marker scale.
+    hex: '#a16207',
     label: 'EAW Challenged',
     popupLabel: 'Environmental Assessment Worksheet Contested',
     description: 'Citizen petition or contested EAW in progress',
