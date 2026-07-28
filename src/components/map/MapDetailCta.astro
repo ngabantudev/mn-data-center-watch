@@ -1,0 +1,162 @@
+---
+// src/components/map/MapDetailCta.astro
+//
+// The campaign action block pinned to the bottom of the facility detail drawer
+// (MapDetailParent.astro). Static markup rather than part of buildDetailHtml()
+// so its listeners survive the innerHTML swap on every marker click — the form
+// state is deliberately *not* reset between facilities, so someone who fills it
+// in while browsing site A can still submit after clicking through to site B.
+//
+// Which facility they were looking at rides along as `sourceProject`, read from
+// the panel's data-project attribute at submit time.
+import { Megaphone } from 'lucide-astro';
+---
+
+<div class="shrink-0 border-t border-hair-strong bg-panel-2 px-3 py-3">
+  <div class="flex items-start gap-2 mb-2">
+    <div class="flex items-center justify-center w-6 h-6 rounded-md bg-accent-soft shrink-0 mt-0.5">
+      <Megaphone size={13} stroke-width={2.25} class="text-accent" />
+    </div>
+    <div class="min-w-0">
+      <h4 class="text-[12px] font-bold text-ink leading-tight wrap-break-word">
+        Stop Corporate Tech Sprawl: Join the Statewide Data Center Campaign.
+      </h4>
+      <p class="text-[10.5px] text-ink-3 leading-snug mt-1">
+        Sign up for organizing alerts and we'll route you to the working group closest to you.
+      </p>
+    </div>
+  </div>
+
+  <form id="mcta-form" novalidate class="flex flex-col gap-1.5">
+    <label class="sr-only" for="mcta-name">Full name</label>
+    <input
+      id="mcta-name"
+      name="name"
+      type="text"
+      autocomplete="name"
+      required
+      maxlength="120"
+      placeholder="Full name"
+      class="w-full rounded-md border border-hair bg-panel px-2 py-1.5 text-[11px] text-ink placeholder:text-ink-4 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:border-accent"
+    />
+
+    <div class="flex gap-1.5">
+      <div class="w-24 shrink-0">
+        <label class="sr-only" for="mcta-zip">ZIP code</label>
+        <input
+          id="mcta-zip"
+          name="zip"
+          type="text"
+          inputmode="numeric"
+          autocomplete="postal-code"
+          required
+          maxlength="5"
+          pattern="\d{5}"
+          placeholder="ZIP"
+          class="w-full rounded-md border border-hair bg-panel px-2 py-1.5 text-[11px] text-ink placeholder:text-ink-4 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:border-accent"
+        />
+      </div>
+      <div class="flex-1 min-w-0">
+        <label class="sr-only" for="mcta-email">Email address</label>
+        <input
+          id="mcta-email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          required
+          maxlength="254"
+          placeholder="Email address"
+          class="w-full rounded-md border border-hair bg-panel px-2 py-1.5 text-[11px] text-ink placeholder:text-ink-4 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:border-accent"
+        />
+      </div>
+    </div>
+
+    <button
+      id="mcta-submit"
+      type="submit"
+      class="inline-flex items-center justify-center w-full text-center text-[11px] bg-positive text-on-positive py-2 px-3 rounded-lg hover:bg-positive-hover transition font-semibold tracking-wide shadow-sm disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+    >
+      Join the Campaign
+    </button>
+  </form>
+
+  <!-- aria-live so the routed-chapter result and validation errors are announced
+       rather than only appearing visually below the button. -->
+  <p id="mcta-status" role="status" aria-live="polite" class="hidden mt-1.5 text-[10.5px] leading-snug"></p>
+</div>
+
+<script>
+  function initCampaignCta(): void {
+    const form = document.getElementById('mcta-form') as HTMLFormElement | null;
+    const status = document.getElementById('mcta-status');
+    const submit = document.getElementById('mcta-submit') as HTMLButtonElement | null;
+    if (!form || !status || !submit) return;
+
+    const field = (id: string) => document.getElementById(id) as HTMLInputElement | null;
+
+    function say(message: string, tone: 'error' | 'success'): void {
+      status!.textContent = message;
+      status!.className = `mt-1.5 text-[10.5px] leading-snug font-medium ${
+        tone === 'error' ? 'text-ink-2' : 'text-accent'
+      }`;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = field('mcta-name')?.value.trim() ?? '';
+      const zip = field('mcta-zip')?.value.trim() ?? '';
+      const email = field('mcta-email')?.value.trim() ?? '';
+
+      // Mirrored client-side so the common typo doesn't cost a round trip; the
+      // server in ~/pages/api/join.ts remains the authority.
+      if (!name) return say('Please enter your name.', 'error');
+      if (!/^\d{5}$/.test(zip)) return say('Please enter a 5-digit ZIP code.', 'error');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return say('Please enter a valid email address.', 'error');
+      }
+
+      const sourceProject =
+        document.getElementById('map-detail-panel')?.dataset.project ?? '';
+
+      submit!.disabled = true;
+      submit!.textContent = 'Signing you up…';
+
+      try {
+        const res = await fetch('/api/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, zip, email, sourceProject }),
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          message?: string;
+          chapter?: { name: string; focus: string };
+        };
+
+        if (!res.ok || !data.ok) {
+          say(data.message ?? 'Something went wrong. Please try again.', 'error');
+          return;
+        }
+
+        form.reset();
+        say(
+          `You're in — routed to the ${data.chapter?.name}. ${data.chapter?.focus ?? ''}`.trim(),
+          'success',
+        );
+      } catch {
+        say('Could not reach the campaign server. Please try again.', 'error');
+      } finally {
+        submit!.disabled = false;
+        submit!.textContent = 'Join the Campaign';
+      }
+    });
+  }
+
+  document.addEventListener('astro:page-load', initCampaignCta);
+  if (document.readyState !== 'loading') {
+    initCampaignCta();
+  } else {
+    document.addEventListener('DOMContentLoaded', initCampaignCta);
+  }
+</script>

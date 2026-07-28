@@ -11,6 +11,7 @@
 // Mobile: a bottom sheet that overlays MapFilterParent.astro while open —
 // tapping outside, hitting Escape, or clicking empty map all close it.
 import { Building2 } from 'lucide-astro';
+import MapDetailCta from './MapDetailCta.astro';
 ---
 
 <div
@@ -47,6 +48,10 @@ import { Building2 } from 'lucide-astro';
   </div>
 
   <div id="mdp-content" class="flex-1 overflow-y-auto p-3"></div>
+
+  <!-- Pinned below the scroll area so the campaign ask is visible without
+       scrolling past the facility's metrics. -->
+  <MapDetailCta />
 </div>
 
 <script>
@@ -63,6 +68,9 @@ import { Building2 } from 'lucide-astro';
     function open(project: Project): void {
       content!.innerHTML = buildDetailHtml(project);
       if (titleEl) titleEl.textContent = project.name;
+      // Read back by MapDetailCta.astro so a signup records which facility
+      // prompted it.
+      panel!.dataset.project = project.name;
       panel!.classList.remove('hidden');
       content!.scrollTop = 0;
       // Next frame so the transition actually animates in from the hidden state.
