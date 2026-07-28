@@ -1,0 +1,225 @@
+---
+// src/components/map/MapDetailCta.astro
+//
+// The campaign action block. Lives on the *map*, in a MapLibre popup anchored
+// above the selected facility's marker — not in the detail sidebar. It appears
+// only after a marker is selected (no hover required) and is torn down on
+// deselect. MapParent.astro owns that lifecycle.
+//
+// This component renders the block once into a hidden host and does nothing
+// else; MapParent.astro hands the *same DOM node* to `popup.setDOMContent()`
+// on each selection and returns it here on close. That node-move is what makes
+// a form in a popup viable at all: MapLibre's usual `setHTML()` would rebuild
+// the markup on every selection, dropping the listeners bound below and
+// wiping anything half-typed. Moving one live node preserves both, so a
+// visitor who starts filling this in at one site can click through to another
+// and still submit.
+//
+// Styling is fixed dark-on-white rather than themed, because
+// `.maplibregl-popup-content` is deliberately white in both themes (see
+// global.css) — same reasoning buildPreviewHtml() follows in mapMarkers.ts.
+import { Megaphone } from 'lucide-astro';
+
+/**
+ * Signups are OFF until the campaign's real regional chapters and a durable
+ * store are both in place. Right now `/api/join` persists nothing (no KV/D1
+ * binding) and routes to placeholder chapter names, so a live form would
+ * promise a follow-up nobody can deliver — the form stays visible but inert
+ * rather than collecting addresses into a void.
+ *
+ * Flipping this to `true` re-enables the whole path: the fieldset below and
+ * the submit handler in the client script both read it. Do that only once
+ * `src/data/organizingChapters.ts` holds real nodes and join.ts's
+ * TODO(persistence) is resolved.
+ */
+const SIGNUP_ENABLED = false;
+---
+
+<!-- Parked here at render time; MapParent.astro moves #mcta-block in and out
+     of the popup. `hidden` keeps it out of the page while it's parked. -->
+<div id="mcta-host" hidden>
+  <div
+    id="mcta-block"
+    data-signup-enabled={String(SIGNUP_ENABLED)}
+    class="font-sans w-71.5 max-w-full select-text text-neutral-900"
+  >
+    <div class="flex items-start gap-2 mb-2">
+      <div class="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50 border border-emerald-200 shrink-0 mt-0.5">
+        <Megaphone size={13} stroke-width={2.25} class="text-emerald-700" />
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-start justify-between gap-2">
+          <h4 class="text-[12px] font-bold text-neutral-900 leading-tight wrap-break-word">
+            Stop Corporate Tech Sprawl: Join the Statewide Data Center Campaign.
+          </h4>
+          {!SIGNUP_ENABLED && (
+            <span class="shrink-0 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider text-amber-800 whitespace-nowrap">
+              Coming Soon
+            </span>
+          )}
+        </div>
+        <p id="mcta-context" class="text-[10.5px] text-neutral-500 leading-snug mt-1"></p>
+      </div>
+    </div>
+
+    <form id="mcta-form" novalidate>
+      <!-- One `disabled` on the fieldset makes every control inside inert —
+           unfocusable, untypeable, and excluded from submission — and the
+           :disabled styling below cascades to them from it. Disabling each
+           input individually would be four attributes to keep in sync. -->
+      <fieldset id="mcta-fields" disabled={!SIGNUP_ENABLED} class="flex flex-col gap-1.5 border-0 p-0 m-0 min-w-0">
+        <label class="sr-only" for="mcta-name">Full name</label>
+        <input
+          id="mcta-name"
+          name="name"
+          type="text"
+          autocomplete="name"
+          required
+          maxlength="120"
+          placeholder="Full name"
+          class="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-neutral-200 disabled:cursor-not-allowed disabled:placeholder:text-neutral-300"
+        />
+
+        <div class="flex gap-1.5">
+          <div class="w-20 shrink-0">
+            <label class="sr-only" for="mcta-zip">ZIP code</label>
+            <input
+              id="mcta-zip"
+              name="zip"
+              type="text"
+              inputmode="numeric"
+              autocomplete="postal-code"
+              required
+              maxlength="5"
+              placeholder="ZIP"
+              class="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-neutral-200 disabled:cursor-not-allowed disabled:placeholder:text-neutral-300"
+            />
+          </div>
+          <div class="flex-1 min-w-0">
+            <label class="sr-only" for="mcta-email">Email address</label>
+            <input
+              id="mcta-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+              maxlength="254"
+              placeholder="Email address"
+              class="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-neutral-200 disabled:cursor-not-allowed disabled:placeholder:text-neutral-300"
+            />
+          </div>
+        </div>
+
+        <button
+          id="mcta-submit"
+          type="submit"
+          class="inline-flex items-center justify-center w-full text-center text-[11px] bg-emerald-600 text-white py-2 px-3 rounded-lg hover:bg-emerald-700 transition font-semibold tracking-wide shadow-sm disabled:bg-neutral-300 disabled:text-neutral-500 disabled:shadow-none disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1"
+        >
+          {SIGNUP_ENABLED ? 'Join the Campaign' : 'Signups Opening Soon'}
+        </button>
+      </fieldset>
+    </form>
+
+    {!SIGNUP_ENABLED && (
+      <p class="mt-1.5 text-[10px] text-neutral-500 leading-snug">
+        We're finalizing regional organizing nodes. Check back shortly to sign up —
+        in the meantime, the map and project records stay open to everyone.
+      </p>
+    )}
+
+    <!-- aria-live so the routed-chapter result and validation errors are
+         announced rather than only appearing visually below the button. -->
+    <p id="mcta-status" role="status" aria-live="polite" class="hidden mt-1.5 text-[10.5px] leading-snug"></p>
+  </div>
+</div>
+
+<script>
+  function initCampaignCta(): void {
+    const form = document.getElementById('mcta-form') as HTMLFormElement | null;
+    const status = document.getElementById('mcta-status');
+    const submit = document.getElementById('mcta-submit') as HTMLButtonElement | null;
+    const block = document.getElementById('mcta-block');
+    if (!form || !status || !submit || !block) return;
+
+    const field = (id: string) => document.getElementById(id) as HTMLInputElement | null;
+
+    function say(message: string, tone: 'error' | 'success'): void {
+      status!.textContent = message;
+      status!.className = `mt-1.5 text-[10.5px] leading-snug font-medium ${
+        tone === 'error' ? 'text-red-600' : 'text-emerald-700'
+      }`;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      // A disabled fieldset already blocks this, but the flag is re-checked
+      // here so the network call can't be reached by re-enabling the controls
+      // in devtools — the UI is a placeholder, not a gate.
+      if (block!.dataset.signupEnabled !== 'true') {
+        return say("Signups aren't open yet — check back shortly.", 'error');
+      }
+
+      const name = field('mcta-name')?.value.trim() ?? '';
+      const zip = field('mcta-zip')?.value.trim() ?? '';
+      const email = field('mcta-email')?.value.trim() ?? '';
+
+      // Mirrored client-side so the common typo doesn't cost a round trip; the
+      // server in ~/pages/api/join.ts remains the authority.
+      if (!name) return say('Please enter your name.', 'error');
+      if (!/^\d{5}$/.test(zip)) return say('Please enter a 5-digit ZIP code.', 'error');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return say('Please enter a valid email address.', 'error');
+      }
+
+      // Set by MapParent.astro when it opens the popup, so organizers know
+      // which site drew the volunteer in.
+      const sourceProject = block!.dataset.project ?? '';
+
+      submit!.disabled = true;
+      submit!.textContent = 'Signing you up…';
+
+      try {
+        const res = await fetch('/api/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, zip, email, sourceProject }),
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          message?: string;
+          chapter?: { name: string; focus: string };
+        };
+
+        if (!res.ok || !data.ok) {
+          say(data.message ?? 'Something went wrong. Please try again.', 'error');
+          return;
+        }
+
+        form.reset();
+        say(
+          `You're in — routed to the ${data.chapter?.name}. ${data.chapter?.focus ?? ''}`.trim(),
+          'success',
+        );
+      } catch {
+        say('Could not reach the campaign server. Please try again.', 'error');
+      } finally {
+        submit!.disabled = false;
+        submit!.textContent = 'Join the Campaign';
+      }
+    });
+
+    // A click inside the popup must not reach the map — MapLibre would read it
+    // as a click on empty basemap and deselect the marker, closing this popup
+    // out from under the person typing in it.
+    block.addEventListener('click', (e) => e.stopPropagation());
+    block.addEventListener('mousedown', (e) => e.stopPropagation());
+  }
+
+  document.addEventListener('astro:page-load', initCampaignCta);
+  if (document.readyState !== 'loading') {
+    initCampaignCta();
+  } else {
+    document.addEventListener('DOMContentLoaded', initCampaignCta);
+  }
+</script>
