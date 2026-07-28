@@ -5,6 +5,7 @@ import "~/styles/mapPins.css";
 import MapFilterParent from "~/components/map/MapFilterParent.astro";
 import NewsFeedParent from "../news/NewsFeedParent.astro";
 import MapDetailParent from "~/components/map/MapDetailParent.astro";
+import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 
 const { newsItems, errorMessage } = await fetchLocalNews();
@@ -19,6 +20,10 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   <MapFilterParent newsItems={newsItems} errorMessage={errorMessage} />
 
   <MapDetailParent />
+
+  <!-- Renders the campaign block into a hidden host; the map script below
+       moves that node into a popup over the selected marker. -->
+  <MapDetailCta />
 
   <NewsFeedParent newsItems={newsItems} errorMessage={errorMessage} />
 
@@ -167,6 +172,107 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     let previousView: { center: maplibregl.LngLat; zoom: number } | null = null;
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
+
+    // --- Campaign action popup ---
+    //
+    // The "join the campaign" ask, anchored over the selected marker. Distinct
+    // from `activePopup` (the hover preview) in both trigger and lifetime: it
+    // opens on *selection*, needs no hover, and stays put until the marker is
+    // deselected. Its DOM comes from MapDetailCta.astro and is *moved*, never
+    // rebuilt — see that file for why a form in a popup depends on it.
+    let campaignPopup: maplibregl.Popup | null = null;
+    let selectedProjectIndex: number | null = null;
+
+    const getCampaignBlock = (): HTMLElement | null =>
+      document.getElementById("mcta-block");
+
+    /**
+     * Marker radius in px for a given capacity — the same interpolation
+     * `radiusExpr()` hands MapLibre, evaluated in JS so the popup can clear
+     * the marker it belongs to. Capacity here is fixed per feature and the
+     * expression doesn't interpolate on zoom, so one value holds at every
+     * zoom level.
+     */
+    const markerRadiusPx = (parsedMW: number): number => {
+      const lo = Math.sqrt(5);
+      const hi = Math.sqrt(1900);
+      const t = Math.min(Math.max((Math.sqrt(parsedMW) - lo) / (hi - lo), 0), 1);
+      return MARKER_MIN_R + t * (MARKER_MAX_R - MARKER_MIN_R);
+    };
+
+    /** Parks the block back in its hidden host so its listeners and any
+     *  half-typed input survive the popup being torn down. */
+    const closeCampaignPopup = (): void => {
+      const popup = campaignPopup;
+      if (!popup) return;
+      // Nulled *before* remove(), because remove() fires MapLibre's own
+      // "close" event — the handler below reads this to tell a programmatic
+      // close (already mid-deselect) from the user hitting the X (which still
+      // has to trigger one).
+      campaignPopup = null;
+      popup.remove();
+      const block = getCampaignBlock();
+      if (block) document.getElementById("mcta-host")?.appendChild(block);
+    };
+
+    const openCampaignPopup = (
+      project: (typeof clientProjects)[number],
+      coords: [number, number],
+    ): void => {
+      const block = getCampaignBlock();
+      if (!block) return;
+
+      closeCampaignPopup();
+      block.dataset.project = project.name;
+
+      const context = document.getElementById("mcta-context");
+      if (context) {
+        // While signups are off, this must not promise a routing that can't
+        // happen yet — MapDetailCta.astro's SIGNUP_ENABLED flag is the source
+        // of truth, surfaced here via the data attribute it renders.
+        context.textContent =
+          block.dataset.signupEnabled === "true"
+            ? `Organizing near ${project.name}. Enter your ZIP and we'll route you to the closest working group.`
+            : `Organizing near ${project.name}.`;
+      }
+
+      // Clear the marker *and* its legal-hold ring, which is the widest thing
+      // drawn at this point — a fixed offset would tuck the popup's tail
+      // inside the 24px-radius sites while floating it well clear of the 6px
+      // ones. `+ 14` leaves room for the popup's own tip.
+      const parsedMW = toFeatureProps(project).parsedMW;
+      const offset = markerRadiusPx(parsedMW) * RING_SCALE + 14;
+
+      campaignPopup = new maplibregl.Popup({
+        closeButton: true,
+        // The map's own click handler drives deselection; letting MapLibre
+        // also close on click would tear the form down on the first click
+        // inside it.
+        closeOnClick: false,
+        anchor: "bottom",
+        offset: [0, -offset],
+        maxWidth: "320px",
+        className: "campaign-popup",
+      })
+        .setLngLat(coords)
+        .setDOMContent(block)
+        .addTo(map);
+
+      // The popup's own X closes the whole selection, so the sidebar and the
+      // map's camera don't drift out of sync with what's on screen.
+      campaignPopup.on("close", () => {
+        // Only reached on a user-initiated close; closeCampaignPopup() clears
+        // the reference first precisely so this doesn't re-enter deselection.
+        if (!campaignPopup) return;
+        campaignPopup = null;
+        document.getElementById("mcta-host")?.appendChild(block);
+        document.dispatchEvent(
+          new CustomEvent("mapmarkerselect", { detail: null }),
+        );
+      });
+    };
+
+    mapCleanups.push(closeCampaignPopup);
 
     let criteria: FilterCriteria = { ...DEFAULT_CRITERIA };
 
@@ -644,12 +750,16 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           previousView = { center: map.getCenter(), zoom: map.getZoom() };
 
         isMarkerSelected = true;
+        selectedProjectIndex = clientProjects.indexOf(project);
         map.flyTo({
           center: coords,
           zoom: Math.max(map.getZoom(), 11),
           essential: true,
         });
+        openCampaignPopup(project, coords);
       } else {
+        closeCampaignPopup();
+        selectedProjectIndex = null;
         if (isMarkerSelected) {
           isMarkerSelected = false;
           const target = previousView ?? {
@@ -684,9 +794,15 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           { hover: true },
         );
 
-        if (window.innerWidth >= 768) {
+        const feature = e.features[0];
+        // The selected marker already carries the campaign popup at this exact
+        // spot — stacking the hover preview on top would cover it the moment
+        // the cursor crossed the marker on its way to the form.
+        const isSelected =
+          feature.properties.projectIndex === selectedProjectIndex;
+
+        if (window.innerWidth >= 768 && !isSelected) {
           if (activePopup) activePopup.remove();
-          const feature = e.features[0];
           const project = clientProjects[feature.properties.projectIndex];
           activePopup = new maplibregl.Popup({
             closeButton: false,

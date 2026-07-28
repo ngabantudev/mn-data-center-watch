@@ -279,6 +279,62 @@ html, body {
   }
 }
 
+/* --- Campaign action popup ---
+   The signup block anchored over a selected marker (MapDetailCta.astro). It
+   opts back out of two rules the hover preview relies on: the close button is
+   hidden globally because a preview that follows the cursor doesn't need one,
+   but this popup persists until dismissed, so it does. And the whole popup is
+   pointer-events:none above, with only .maplibregl-popup-content re-enabled —
+   which leaves the tip and close button inert, fine for a preview and wrong
+   for a form people have to dismiss. */
+.campaign-popup {
+  pointer-events: auto;
+  /* Above the preview popup, so a stray hover can't paint over the form. */
+  z-index: 51 !important;
+}
+
+.campaign-popup .maplibregl-popup-close-button {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  font-size: 17px;
+  line-height: 1;
+  color: #737373;
+  background: transparent;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.campaign-popup .maplibregl-popup-close-button:hover {
+  background: #f5f5f5;
+  color: #171717;
+}
+
+.campaign-popup .maplibregl-popup-close-button:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 1px;
+}
+
+/* The block sets its own width; the default 14/16 padding plus a 286px child
+   would otherwise push past the mobile viewport cap. */
+.campaign-popup .maplibregl-popup-content {
+  padding: 12px 13px !important;
+}
+
+/* On short viewports the rule above turns every popup into a 220px scroller.
+   That's right for a read-only preview and wrong here — a form that scrolls
+   inside a 220px box hides its own submit button. */
+@media (max-height: 500px) {
+  .campaign-popup .maplibregl-popup-content {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+}
+
 /* --- Universal Interactive Pin Scaling --- */
 .maplibregl-marker {
   cursor: pointer;
