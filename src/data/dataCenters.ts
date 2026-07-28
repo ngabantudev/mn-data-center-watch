@@ -5,6 +5,22 @@ export type LatLngTuple = [number, number];
 
 export type ProjectStatus = 'active' | 'construction' | 'planned' | 'paused' | 'rejected';
 
+/**
+ * Where a site sits in Minnesota's environmental-review / litigation pipeline.
+ * Deliberately orthogonal to `status`: a site can be under active construction
+ * *and* facing an EAW challenge, or paused for reasons that are purely
+ * commercial. Organizers need the two axes separately to know where legal
+ * support actually moves the needle.
+ *
+ * - `compliant`       — no known state-level review challenge or active suit
+ * - `eaw_challenged`  — citizen petition / contested Environmental Assessment Worksheet
+ * - `eis_ordered`     — agency ordered a full Environmental Impact Statement
+ * - `court_paused`    — restraining order, stay, or appellate ruling halting work
+ *
+ * Omitted on a project means `compliant` — see `getLegalStatus()`.
+ */
+export type LegalStatus = 'compliant' | 'eaw_challenged' | 'eis_ordered' | 'court_paused';
+
 export interface PublicRecord {
   title: string;
   url: string;
@@ -23,6 +39,10 @@ export interface Project {
   url: string;
   businessImpact: string;
   status: ProjectStatus;
+  /** Environmental-review / litigation posture. Defaults to 'compliant' when absent. */
+  legalStatus?: LegalStatus;
+  /** One line on *what* the review or suit is, shown on the legal-hold badge. */
+  legalNote?: string;
   // Enhanced public accountability metrics
   developer?: string; // Developer / operating company behind the project, where publicly known
   estimatedCost?: string;
@@ -259,6 +279,8 @@ export const clientProjects: Project[] = [
     url: "https://monticellodatacenterjobs.com/monticello-mn-data-center-construction-timeline/",
     businessImpact: "🟢 <strong>Rezoning Approved</strong> | 400+ MW ultimate site load footprint layout unanimously greenlit by City Council.",
     status: "planned",
+    legalStatus: "eaw_challenged",
+    legalNote: "Rezoning cleared, but the liquid-to-chip cooling footprint is still working through EAW processing.",
     estimatedCost: "$5.0 Billion",
     powerCapacityMW: "400 MW",
     waterFootprint: "Liquid-to-chip integrated systems pending Environmental Assessment Worksheet (EAW) processing.",
@@ -322,6 +344,8 @@ export const clientProjects: Project[] = [
     url: "https://hermantownmn.com/community/community-highlights/google-announces-plans-for-hermantown-data-center/",
     businessImpact: "🟡 <strong>Environmental Review Testing</strong> | Faced intense local citizen organization pushback over transparency, NDAs, and grid load.",
     status: "planned",
+    legalStatus: "eaw_challenged",
+    legalNote: "Environmental review contested by organized local opposition over transparency, NDAs, and grid load.",
     estimatedCost: "$2.0 Billion",
     powerCapacityMW: "180 MW",
     waterFootprint: "Isolated closed-loop chilled water loops designed to insulate local northern water tables.",
@@ -380,6 +404,8 @@ export const clientProjects: Project[] = [
     url: "https://pineislandskyway.com/",
     businessImpact: "🔴 <strong>Legal Restraining Order</strong> | Halted by Goodhue County District Court on May 26, 2026, pending environmental assessment adequacy.",
     status: "paused",
+    legalStatus: "court_paused",
+    legalNote: "Goodhue County District Court restraining order (May 26, 2026) pending a ruling on environmental assessment adequacy.",
     estimatedCost: "$1.0 Billion",
     powerCapacityMW: "1,900 MW",
     waterFootprint: "Designed to connect to municipal systems using zero operational water via advanced air-cooling variant configurations.",
@@ -401,6 +427,8 @@ export const clientProjects: Project[] = [
     url: "https://www.faribaultmn.gov/815/Archer-Datacenters",
     businessImpact: "🔴 <strong>Court Action Pause</strong> | Faribault City Council directed a supplemental EAW extension to March 31, 2027, following a Court of Appeals ruling.",
     status: "paused",
+    legalStatus: "court_paused",
+    legalNote: "Court of Appeals ruling forced a supplemental EAW; review window extended to March 31, 2027.",
     estimatedCost: "$350 Million",
     powerCapacityMW: "120 MW",
     waterFootprint: "Supplemental review tracking detailed project-specific water consumption metrics.",
@@ -422,6 +450,8 @@ export const clientProjects: Project[] = [
     url: "https://blandinonbroadband.org/2026/07/01/inver-grove-heights-city-council-approves-one-year-moratorium-on-data-centers-dakota-county/",
     businessImpact: "🔴 <strong>Development Paused</strong> | Stalled after City Council voted 3-2 to enact a one-year data center moratorium.",
     status: "paused",
+    legalStatus: "eaw_challenged",
+    legalNote: "Citizen petition filed for an Environmental Assessment Worksheet, alongside a one-year municipal moratorium.",
     estimatedCost: "$90 Million",
     powerCapacityMW: "5 MW",
     waterFootprint: "Subject to a citizen petition for an Environmental Assessment Worksheet (EAW).",

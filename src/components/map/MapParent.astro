@@ -34,8 +34,15 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   import { clientProjects } from "~/data/dataCenters";
   import { getDefaultMapStyleUrl } from "~/data/mapStyles";
   import { STATUS_HEX } from "~/data/mapStatusMeta";
+  import { LEGAL_STATUS_META } from "~/data/legalStatusMeta";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
-  import { parseMW } from "~/lib/projectMetrics";
+  import {
+    DEFAULT_CRITERIA,
+    matchesProject,
+    toFeatureProps,
+    toMapLibreFilter,
+    type FilterCriteria,
+  } from "~/lib/projectFilters";
 
   // Register PMTiles protocol globally
   try {
@@ -53,25 +60,58 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   let mapInstance: maplibregl.Map | null = null;
   let mapCleanups: (() => void)[] = [];
 
+  // Legal-hold ring colour is resolved once into a MapLibre `match`
+  // expression instead of being baked per-feature, so the ring restyles
+  // on the GPU and the registry stays the only place hexes are defined.
+  const LEGAL_RING_COLOR: unknown[] = [
+    "match",
+    ["get", "legalStatus"],
+    ...LEGAL_STATUS_META.filter((m) => m.isHold).flatMap((m) => [
+      m.legalStatus,
+      m.hex,
+    ]),
+    "transparent",
+  ];
+
+  // Marker size scales with sqrt(MW) so *area* tracks capacity. Defined once
+  // and reused by the legal-hold ring and its ripples, which must stay locked
+  // to the marker they surround at every zoom level.
+  const radiusExpr = (padding: number): unknown[] => [
+    "interpolate",
+    ["linear"],
+    ["sqrt", ["get", "parsedMW"]],
+    Math.sqrt(5),
+    6 + padding,
+    Math.sqrt(1900),
+    24 + padding,
+  ];
+
+  // --- Legal-hold ripple tuning ---
+  const RIPPLE_LAYER_IDS = [
+    "data-centers-legal-ripple-a",
+    "data-centers-legal-ripple-b",
+  ];
+  const RIPPLE_PERIOD_MS = 2600;
+  const RIPPLE_SPREAD_PX = 16;
+  const RIPPLE_PEAK_OPACITY = 0.55;
+  // 30fps is indistinguishable for a 2.6s expansion and halves the number of
+  // canvas repaints we ask MapLibre for.
+  const RIPPLE_FRAME_MS = 1000 / 30;
+
   const geoJsonData = {
     type: "FeatureCollection",
-    features: clientProjects.map((project, index) => {
-      const mw = parseMW(project.powerCapacityMW) || 5;
-
-      return {
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [project.coordinates[1], project.coordinates[0]],
-        },
-        properties: {
-          projectIndex: index,
-          status: project.status || "planned",
-          parsedMW: mw,
-          color: STATUS_HEX[project.status || "planned"],
-        },
-      };
-    }),
+    features: clientProjects.map((project, index) => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [project.coordinates[1], project.coordinates[0]],
+      },
+      properties: {
+        projectIndex: index,
+        color: STATUS_HEX[project.status],
+        ...toFeatureProps(project),
+      },
+    })),
   };
 
   function initMap(): void {
@@ -113,14 +153,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
 
-    let cachedStatuses: string[] = [
-      "active",
-      "construction",
-      "planned",
-      "paused",
-      "rejected",
-    ];
-    let cachedMinMW: number = 0;
+    let criteria: FilterCriteria = { ...DEFAULT_CRITERIA };
 
     // Track state of each environmental toggle independently
     let cachedLayerVisibility: Record<string, boolean> = {
@@ -173,19 +206,113 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     const BUCKET_BASE_URL = "https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev";
     const discoveredSourceLayers: Record<string, string> = {};
 
+    // Every project layer shares one filter expression built from the same
+    // criteria the sidebar counts with. The legal-hold ring additionally
+    // restricts to flagged sites so it never paints under a compliant marker.
+    const FILTERED_LAYERS = [
+      ...RIPPLE_LAYER_IDS,
+      "data-centers-legal-ring",
+      "data-centers-circles",
+      "data-centers-labels",
+    ];
+
     const applyMapFilters = () => {
-      const layersToFilter = ["data-centers-circles", "data-centers-labels"];
-      const filterExpression = [
-        "all",
-        ["in", ["get", "status"], ["literal", cachedStatuses]],
-        [">=", ["get", "parsedMW"], cachedMinMW],
-      ];
-      layersToFilter.forEach((layerId) => {
-        if (map.getLayer(layerId)) {
-          map.setFilter(layerId, filterExpression as any);
+      const base = toMapLibreFilter(criteria);
+      for (const layerId of FILTERED_LAYERS) {
+        if (!map.getLayer(layerId)) continue;
+        const expr = layerId.startsWith("data-centers-legal")
+          ? ["all", base, ["==", ["get", "underLegalHold"], true]]
+          : base;
+        map.setFilter(layerId, expr as any);
+      }
+      // A filter change can hide every flagged site — stop burning frames.
+      syncRipple();
+    };
+
+    // --- Legal-hold ripple animation ---
+    //
+    // Animating a MapLibre layer means asking for a canvas repaint every
+    // frame, so this is gated hard: it runs only while flagged sites are
+    // actually visible, only while the tab is in the foreground, and never
+    // for users who asked for reduced motion. Two staggered stroke-only
+    // circle layers on the *existing* source — no new geometry, no DOM
+    // markers (which would reproject on the main thread every frame), and
+    // no per-frame GeoJSON re-upload. Each frame updates two paint
+    // properties per layer; MapLibre treats that as a uniform change.
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    );
+
+    let rippleFrame: number | null = null;
+    let rippleStart = 0;
+    let lastRippleTick = 0;
+
+    const hasVisibleHolds = (): boolean =>
+      clientProjects.some((p) =>
+        matchesProject(p, { ...criteria, legalHoldOnly: true }),
+      );
+
+    const setRippleOpacity = (value: number): void => {
+      for (const id of RIPPLE_LAYER_IDS) {
+        if (map.getLayer(id)) {
+          map.setPaintProperty(id, "circle-stroke-opacity", value);
         }
+      }
+    };
+
+    const stepRipple = (now: number): void => {
+      rippleFrame = requestAnimationFrame(stepRipple);
+      if (now - lastRippleTick < RIPPLE_FRAME_MS) return;
+      lastRippleTick = now;
+
+      if (!rippleStart) rippleStart = now;
+      const elapsed = now - rippleStart;
+
+      RIPPLE_LAYER_IDS.forEach((id, i) => {
+        if (!map.getLayer(id)) return;
+        // Stagger the two waves half a period apart so the effect reads as
+        // continuous rather than as a single blinking ring.
+        const phase = i / RIPPLE_LAYER_IDS.length;
+        const t = ((elapsed / RIPPLE_PERIOD_MS + phase) % 1 + 1) % 1;
+        // Ease-out expansion with a linear fade — the wave slows as it
+        // dissolves, which reads as energy dissipating outward.
+        const eased = 1 - (1 - t) * (1 - t);
+        map.setPaintProperty(id, "circle-radius", radiusExpr(
+          eased * RIPPLE_SPREAD_PX,
+        ) as any);
+        map.setPaintProperty(
+          id,
+          "circle-stroke-opacity",
+          (1 - t) * RIPPLE_PEAK_OPACITY,
+        );
       });
     };
+
+    function syncRipple(): void {
+      const shouldRun =
+        !reduceMotion.matches &&
+        document.visibilityState === "visible" &&
+        hasVisibleHolds();
+
+      if (shouldRun && rippleFrame === null) {
+        rippleStart = 0;
+        lastRippleTick = 0;
+        rippleFrame = requestAnimationFrame(stepRipple);
+      } else if (!shouldRun && rippleFrame !== null) {
+        cancelAnimationFrame(rippleFrame);
+        rippleFrame = null;
+        setRippleOpacity(0);
+      }
+    }
+
+    reduceMotion.addEventListener("change", syncRipple);
+    document.addEventListener("visibilitychange", syncRipple);
+    mapCleanups.push(() => {
+      if (rippleFrame !== null) cancelAnimationFrame(rippleFrame);
+      rippleFrame = null;
+      reduceMotion.removeEventListener("change", syncRipple);
+      document.removeEventListener("visibilitychange", syncRipple);
+    });
 
     interface PMTilesMetadata {
       vector_layers?: Array<{
@@ -305,9 +432,11 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
           if (!map.getLayer(layerId) && map.getSource(sourceId)) {
             try {
-              const beforeId = map.getLayer("data-centers-circles") 
-                ? "data-centers-circles" 
-                : undefined;
+              // Insert beneath the lowest project layer (the legal-hold
+              // ring, when present) so environmental fills never paint
+              // over a marker or its warning halo.
+              const beforeId =
+                FILTERED_LAYERS.find((id) => map.getLayer(id)) ?? undefined;
 
               map.addLayer(
                 {
@@ -339,6 +468,40 @@ const { newsItems, errorMessage } = await fetchLocalNews();
         });
       }
 
+      // Ripples sit at the very bottom so they wash out from under the
+      // marker rather than over it.
+      for (const rippleId of RIPPLE_LAYER_IDS) {
+        if (map.getLayer(rippleId)) continue;
+        map.addLayer({
+          id: rippleId,
+          type: "circle",
+          source: "data-centers",
+          paint: {
+            "circle-color": "rgba(0,0,0,0)",
+            "circle-radius": radiusExpr(0) as any,
+            "circle-stroke-width": 2,
+            "circle-stroke-color": LEGAL_RING_COLOR as any,
+            "circle-stroke-opacity": 0,
+          },
+        } as maplibregl.CircleLayerSpecification);
+      }
+
+      // Warning ring sits *below* the marker so only the halo shows.
+      if (!map.getLayer("data-centers-legal-ring")) {
+        map.addLayer({
+          id: "data-centers-legal-ring",
+          type: "circle",
+          source: "data-centers",
+          paint: {
+            "circle-color": "rgba(0,0,0,0)",
+            "circle-radius": radiusExpr(6) as any,
+            "circle-stroke-width": 2.5,
+            "circle-stroke-color": LEGAL_RING_COLOR as any,
+            "circle-stroke-opacity": 0.9,
+          },
+        } as maplibregl.CircleLayerSpecification);
+      }
+
       if (!map.getLayer("data-centers-circles")) {
         map.addLayer({
           id: "data-centers-circles",
@@ -346,15 +509,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           source: "data-centers",
           paint: {
             "circle-color": ["get", "color"],
-            "circle-radius": [
-              "interpolate",
-              ["linear"],
-              ["sqrt", ["get", "parsedMW"]],
-              Math.sqrt(5),
-              6,
-              Math.sqrt(1900),
-              24,
-            ],
+            "circle-radius": radiusExpr(0) as any,
             "circle-stroke-width": 2,
             "circle-stroke-color": "#ffffff",
             "circle-opacity": [
@@ -408,18 +563,23 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
     const handleFilterChange = (event: Event) => {
       const detail = (
-        event as CustomEvent<{
-          statuses: string[];
-          minMW?: number;
-          showProtectedLands?: boolean;
-          showDrinkingWater?: boolean;
-          showCityBoundaries?: boolean;
-        }>
+        event as CustomEvent<
+          Partial<FilterCriteria> & {
+            showProtectedLands?: boolean;
+            showDrinkingWater?: boolean;
+            showCityBoundaries?: boolean;
+          }
+        >
       ).detail;
       if (!detail) return;
 
-      if (detail.statuses) cachedStatuses = detail.statuses;
-      if (typeof detail.minMW === "number") cachedMinMW = detail.minMW;
+      // The event is a partial patch: the sidebar sends the full criteria,
+      // the environmental-layer toggles send only their own key.
+      if (detail.statuses) criteria.statuses = detail.statuses;
+      if (detail.sizeTiers) criteria.sizeTiers = detail.sizeTiers;
+      if (typeof detail.legalHoldOnly === "boolean") {
+        criteria.legalHoldOnly = detail.legalHoldOnly;
+      }
 
       if (typeof detail.showProtectedLands === "boolean") {
         cachedLayerVisibility["protected-lands"] = detail.showProtectedLands;
