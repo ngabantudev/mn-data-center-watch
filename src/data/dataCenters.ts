@@ -45,6 +45,18 @@ export interface Project {
   legalNote?: string;
   // Enhanced public accountability metrics
   developer?: string; // Developer / operating company behind the project, where publicly known
+  /**
+   * `UtilityMeta.id` of the electric utility that serves this site — the
+   * co-op, municipal, or investor-owned system whose ratepayers absorb the
+   * grid work this facility triggers. Drives the ratepayer-impact widget.
+   *
+   * Set ONLY where a public record names the serving utility. Minnesota
+   * service territory does not follow city limits, so inferring it from the
+   * address would attribute a project to a co-op with no connection to it.
+   * Absent means "not sourced yet" and renders as an explicit gap with a
+   * link to report it — see the sourcing rule in ~/data/utilities.ts.
+   */
+  servingUtilityId?: string;
   estimatedCost?: string;
   powerCapacityMW?: string;
   waterFootprint?: string;
@@ -362,6 +374,10 @@ export const clientProjects: Project[] = [
   {
     name: "Elk River Data Center (IronGate)",
     developer: "IronGate",
+    // Sourced: the planning-commission record has the site taking service from
+    // the city's municipal utility under a custom industrial rate — which is
+    // why the rate decision and the permit decision sit with the same council.
+    servingUtilityId: "elk-river-municipal",
     description: "Proposed 60,000 sq. ft., 33 MW mid-scale facility generating local energy traction.",
     coordinates: [45.3288, -93.5704],
     url: "https://elkriverdatacenter.com/research-analysis/meetings/2026-06-23-planning-commission/", // Fact-Checked
@@ -399,6 +415,9 @@ export const clientProjects: Project[] = [
   {
     name: "Pine Island: Project Skyway (Google)",
     developer: "Google (in partnership with Xcel Energy)",
+    // Sourced: the project is a stated Google/Xcel partnership, per the
+    // community portal linked in `publicRecord` below.
+    servingUtilityId: "xcel-mn",
     description: "A 400+ acre regional infrastructure technology campus in partnership with Google and Xcel Energy.",
     coordinates: [44.2215, -92.6410],
     url: "https://pineislandskyway.com/",

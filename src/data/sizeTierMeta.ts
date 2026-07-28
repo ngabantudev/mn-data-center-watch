@@ -27,6 +27,12 @@ export interface SizeTierMeta {
   rangeLabel: string;
   /** Who you end up organizing against at this scale */
   description: string;
+  /**
+   * What the grid build-out at this scale means for the people already on the
+   * system — the ratepayer half of the same threshold. Consumed by the
+   * ratepayer widget so it doesn't invent a second set of capacity bands.
+   */
+  ratepayerExposure: string;
   hex: string;
   /** Relative dot size in the legend, px */
   dotSize: number;
@@ -40,6 +46,8 @@ export const SIZE_TIER_META: SizeTierMeta[] = [
     label: 'Small',
     rangeLabel: '< 100 MW',
     description: 'Fits municipal grid — local zoning fight',
+    ratepayerExposure:
+      'Absorbed by existing distribution capacity. Upgrade costs, if any, are local and usually surface as a developer contribution rather than a rate change.',
     hex: '#38bdf8',
     dotSize: 6,
   },
@@ -50,6 +58,8 @@ export const SIZE_TIER_META: SizeTierMeta[] = [
     label: 'Medium',
     rangeLabel: '100–299 MW',
     description: 'Needs substation upgrades — county + utility',
+    ratepayerExposure:
+      'Triggers substation and feeder work. Who pays is decided in the interconnection agreement — costs socialised there land on every account on the system, including yours.',
     hex: '#818cf8',
     dotSize: 10,
   },
@@ -60,6 +70,8 @@ export const SIZE_TIER_META: SizeTierMeta[] = [
     label: 'Large',
     rangeLabel: '300+ MW',
     description: 'Hyperscale — state PUC & transmission proceedings',
+    ratepayerExposure:
+      'Requires new transmission and generation. Cost allocation runs through a PUC docket, where a single large customer\u2019s discounted rate is made up by the residential class unless intervenors contest it.',
     hex: '#e879f9',
     dotSize: 15,
   },

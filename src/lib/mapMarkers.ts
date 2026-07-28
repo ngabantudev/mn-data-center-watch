@@ -2,6 +2,8 @@
 import type { Project } from '~/data/dataCenters';
 import { STATUS_HEX, STATUS_POPUP_LABEL } from '~/data/mapStatusMeta';
 import { LEGAL_META_BY_STATUS, getLegalStatus, isUnderLegalHold } from '~/data/legalStatusMeta';
+import { impactForProject } from './ratepayerImpact';
+import { buildRatepayerWidgetHtml } from './ratepayerWidget';
 
 /**
  * The environmental-review / legal-hold badge. One builder for both the
@@ -62,6 +64,18 @@ export function buildPreviewHtml(project: Project): string {
     ` : ''}
   `;
 
+  // The single most legible line from the ratepayer calculator, previewed at
+  // its default utilization. The interactive version lives in the detail
+  // drawer — a hover popup that disappears on mouseout is the wrong place for
+  // a slider, but the headline translation is what makes someone click.
+  const impact = impactForProject(project);
+  const householdsHtml = `
+    <div class="mb-1.5 flex items-baseline justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-1">
+      <span class="text-[9px] font-bold uppercase tracking-wider text-amber-700">Powers like</span>
+      <span class="text-[10px] font-bold text-amber-900">${new Intl.NumberFormat('en-US').format(impact.households)} MN homes</span>
+    </div>
+  `;
+
   return `
     <div class="p-0.5 text-neutral-900 font-sans w-64 select-text">
       <div class="flex items-center gap-2 mb-1">
@@ -71,6 +85,7 @@ export function buildPreviewHtml(project: Project): string {
       <h3 class="font-bold text-[13px] text-neutral-900 leading-snug mb-1 wrap-break-word">${project.name}</h3>
       <p class="text-[11px] text-neutral-600 leading-snug mb-2 line-clamp-2 wrap-break-word">${project.description}</p>
       ${buildLegalBadgeHtml(project, 'preview')}
+      ${householdsHtml}
       <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] bg-neutral-50 border border-neutral-100 rounded-md p-1.5 mb-1.5">
         ${statsHtml}
       </div>
@@ -153,6 +168,8 @@ export function buildDetailHtml(project: Project): string {
         ${metricsHtml}
         ${asymmetryHtml}
       </div>
+
+      ${buildRatepayerWidgetHtml(project)}
 
       ${publicRecordHtml}
 

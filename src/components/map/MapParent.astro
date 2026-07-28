@@ -40,6 +40,12 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   import { getInitialMapStyleId, getMapStyleUrlById } from "~/data/mapStyles";
   import { STATUS_HEX } from "~/data/mapStatusMeta";
   import { LEGAL_STATUS_META } from "~/data/legalStatusMeta";
+  import {
+    LAYER_UNAVAILABLE_EVENT,
+    MAP_LAYER_META,
+    layerIdFor,
+    sourceIdFor,
+  } from "~/data/mapLayers";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
   import {
     DEFAULT_CRITERIA,
@@ -276,56 +282,32 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
     let criteria: FilterCriteria = { ...DEFAULT_CRITERIA };
 
-    // Track state of each environmental toggle independently
-    let cachedLayerVisibility: Record<string, boolean> = {
-      "protected-lands": false,
-      "drinking-water": false,
-      "city-boundaries": false,
-    };
+    // Track state of each environmental toggle independently. Seeded from the
+    // shared registry so a new overlay never needs a matching edit here.
+    let cachedLayerVisibility: Record<string, boolean> = Object.fromEntries(
+      MAP_LAYER_META.map((l) => [l.id, false]),
+    );
 
-    // --- PMTILES CONFIGURATION ---
-    interface LayerConfig {
-      id: string;
-      fileName: string;
-      fallbackLayerName: string;
-      paint: maplibregl.FillLayerSpecification['paint'];
-    }
-
-    const PMTILES_LAYERS: LayerConfig[] = [
-      {
-        id: "protected-lands",
-        fileName: "PADUS4_1Combined_StateMN.pmtiles",
-        fallbackLayerName: "padus4_1combined_statemn", 
-        paint: {
-          "fill-color": "#10b981",
-          "fill-opacity": 0.4,
-          "fill-outline-color": "#047857",
-        }
-      },
-      {
-        id: "drinking-water",
-        fileName: "Drinking_Water_Supply_Management_Area_(DWSMA).pmtiles", 
-        fallbackLayerName: "Drinking_Water_Supply_Management_Area__DWSMA_",
-        paint: {
-          "fill-color": "#3b82f6", // Blue
-          "fill-opacity": 0.35,
-          "fill-outline-color": "#1d4ed8",
-        }
-      },
-      {
-        id: "city-boundaries",
-        fileName: "convertedCity_Boundaries_in_Minnesota.pmtiles",
-        fallbackLayerName: "convertedCity_Boundaries_in_Minnesota",
-        paint: {
-          "fill-color": "#a855f7", // Purple
-          "fill-opacity": 0.15,
-          "fill-outline-color": "#7e22ce",
-        }
-      }
-    ];
+    /** Registry hexes → the fill paint MapLibre wants. One conversion, not a second config. */
+    const paintFor = (
+      layer: (typeof MAP_LAYER_META)[number],
+    ): maplibregl.FillLayerSpecification["paint"] => ({
+      "fill-color": layer.hex,
+      "fill-opacity": layer.fillOpacity,
+      "fill-outline-color": layer.outlineHex,
+    });
 
     const BUCKET_BASE_URL = "https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev";
     const discoveredSourceLayers: Record<string, string> = {};
+    /**
+     * Layers whose PMTiles archive couldn't be read at all — not yet uploaded,
+     * or unreachable. Previously a metadata failure fell through to
+     * `fallbackLayerName` and added a layer against a source that renders
+     * nothing, so the toggle looked on and the map looked empty with no
+     * explanation. Now the failure is recorded once and announced, and the
+     * sidebar disables the toggle with a reason.
+     */
+    const unavailableLayers = new Set<string>();
 
     // Every project layer shares one filter expression built from the same
     // criteria the sidebar counts with. The legal-hold ring additionally
@@ -490,9 +472,13 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     }
 
     const syncEnvironmentalLayers = async () => {
-      for (const layer of PMTILES_LAYERS) {
+      for (const layer of MAP_LAYER_META) {
         const isVisible = cachedLayerVisibility[layer.id];
-        if (isVisible && !discoveredSourceLayers[layer.id]) {
+        if (
+          isVisible &&
+          !discoveredSourceLayers[layer.id] &&
+          !unavailableLayers.has(layer.id)
+        ) {
           const fileUrl = `${BUCKET_BASE_URL}/${layer.fileName}`;
           try {
             const p = new pmtiles.PMTiles(fileUrl);
@@ -505,13 +491,23 @@ const { newsItems, errorMessage } = await fetchLocalNews();
                 vectorLayerMeta.fields,
               );
             } else {
+              // Archive is readable but doesn't declare its vector layers —
+              // the fallback name is the documented shape for that case.
               discoveredSourceLayers[layer.id] = layer.fallbackLayerName;
               discoveredLabelFields[layer.id] = null;
             }
           } catch (err) {
+            // The archive itself is missing or unreadable. There is no name to
+            // fall back to, so stop trying and say so.
             console.error(`[PMTiles ERROR] Metadata failed for ${layer.id}`, err);
-            discoveredSourceLayers[layer.id] = layer.fallbackLayerName;
-            discoveredLabelFields[layer.id] = null;
+            unavailableLayers.add(layer.id);
+            cachedLayerVisibility[layer.id] = false;
+            document.dispatchEvent(
+              new CustomEvent(LAYER_UNAVAILABLE_EVENT, {
+                detail: { id: layer.id },
+              }),
+            );
+            continue;
           }
           if (import.meta.env.DEV) {
             console.log(
@@ -534,9 +530,9 @@ const { newsItems, errorMessage } = await fetchLocalNews();
         await new Promise<void>((resolve) => map.once("idle", () => resolve()));
       }
 
-      for (const layer of PMTILES_LAYERS) {
-        const sourceId = `${layer.id}-source`;
-        const layerId = `${layer.id}-layer`;
+      for (const layer of MAP_LAYER_META) {
+        const sourceId = sourceIdFor(layer.id);
+        const layerId = layerIdFor(layer.id);
         const isVisible = cachedLayerVisibility[layer.id];
 
         if (isVisible) {
@@ -567,7 +563,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
                   type: "fill",
                   source: sourceId,
                   "source-layer": sourceLayerName,
-                  paint: layer.paint,
+                  paint: paintFor(layer),
                 },
                 beforeId,
               );
@@ -685,14 +681,10 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     );
 
     const handleFilterChange = (event: Event) => {
+      // The overlay half of the payload is keyed by each layer's `apiKey`, so
+      // it's read through the registry rather than by name.
       const detail = (
-        event as CustomEvent<
-          Partial<FilterCriteria> & {
-            showProtectedLands?: boolean;
-            showDrinkingWater?: boolean;
-            showCityBoundaries?: boolean;
-          }
-        >
+        event as CustomEvent<Partial<FilterCriteria> & Record<string, unknown>>
       ).detail;
       if (!detail) return;
 
@@ -704,14 +696,11 @@ const { newsItems, errorMessage } = await fetchLocalNews();
         criteria.legalHoldOnly = detail.legalHoldOnly;
       }
 
-      if (typeof detail.showProtectedLands === "boolean") {
-        cachedLayerVisibility["protected-lands"] = detail.showProtectedLands;
-      }
-      if (typeof detail.showDrinkingWater === "boolean") {
-        cachedLayerVisibility["drinking-water"] = detail.showDrinkingWater;
-      }
-      if (typeof detail.showCityBoundaries === "boolean") {
-        cachedLayerVisibility["city-boundaries"] = detail.showCityBoundaries;
+      for (const layer of MAP_LAYER_META) {
+        const value = detail[layer.apiKey];
+        if (typeof value === "boolean") {
+          cachedLayerVisibility[layer.id] = value;
+        }
       }
 
       applyMapFilters();
@@ -845,7 +834,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     let envPopup: maplibregl.Popup | null = null;
 
     const getVisibleEnvLayerIds = (): string[] =>
-      PMTILES_LAYERS.map((l) => `${l.id}-layer`).filter((id) =>
+      MAP_LAYER_META.map((l) => layerIdFor(l.id)).filter((id) =>
         map.getLayer(id),
       );
 

@@ -51,6 +51,7 @@ import { Building2 } from 'lucide-astro';
 
 <script>
   import { buildDetailHtml } from '~/lib/mapMarkers';
+  import { hydrateRatepayerWidget } from '~/lib/ratepayerWidget';
   import type { Project } from '~/data/dataCenters';
 
   function initDetailPanel(): void {
@@ -62,6 +63,11 @@ import { Building2 } from 'lucide-astro';
 
     function open(project: Project): void {
       content!.innerHTML = buildDetailHtml(project);
+      // The ratepayer widget's utilization slider is the only interactive
+      // control in this markup. Rewiring it per open is deliberate: the
+      // previous node — and its listener — is discarded by the innerHTML
+      // assignment above, so there is nothing to clean up.
+      hydrateRatepayerWidget(content!);
       if (titleEl) titleEl.textContent = project.name;
       panel!.classList.remove('hidden');
       content!.scrollTop = 0;

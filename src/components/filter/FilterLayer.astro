@@ -1,69 +1,106 @@
 ---
 // src/components/filter/FilterLayer.astro
 import AccordionSection from "~/components/ui/AccordionSection.astro";
-import { Trees, Droplet, Landmark } from "lucide-astro";
+import { MAP_LAYER_META } from "~/data/mapLayers";
+import { Trees, Droplet, Landmark, Zap } from "lucide-astro";
 
-// Config matches the IDs and keys your map script is listening for.
+interface Props {
+  openByDefault?: boolean;
+}
+
+const { openByDefault = false } = Astro.props;
+
+// Ids, labels, event keys, file names, and fill hexes all come from
+// ~/data/mapLayers.ts — the same registry MapParent.astro builds the layers
+// from, so a toggle can no longer point at a layer that doesn't exist.
 //
-// These hues are layer *identity*, not chrome, so they stay fixed rather
-// than going through the theme tokens — each one matches the fill its layer
-// paints on the map (see MapParent.astro's environmental layer paint specs),
-// and that pairing has to hold in both themes.
+// What stays here, keyed by that registry's id:
 //
-// Both themes put these on a dark panel (navy #003865 in light, near-black
-// in dark), so both need the brighter end of each ramp. The light theme sits
-// a step brighter still: on that navy, blue-500 lands at 3.3:1 and
-// purple-500 at 3.0:1, i.e. under AA — the 400s clear it. The dark theme
-// keeps the 500/400 pair it has always used.
-const LAYERS = [
-  {
-    id: "mf-toggle-protected",
-    apiKey: "showProtectedLands",
-    label: "Protected Lands",
+//   * the icon, because lucide-astro exports Astro components and importing
+//     those into a plain .ts data module is the wrong direction;
+//   * the Tailwind swatch classes, which have to be written out as literal
+//     strings in a template for the class scanner to see them, and which
+//     deliberately differ per theme.
+//
+// These hues are layer *identity*, not chrome, so they stay fixed rather than
+// going through the theme tokens — each one matches the fill its layer paints
+// on the map, and that pairing has to hold in both themes.
+//
+// Both themes put these on a dark panel (navy #003865 in light, near-black in
+// dark), so both need the brighter end of each ramp. The light theme sits a
+// step brighter still: on that navy, blue-500 lands at 3.3:1 and purple-500 at
+// 3.0:1, i.e. under AA — the 400s clear it. The dark theme keeps the 500/400
+// pair it has always used.
+const SWATCHES: Record<
+  string,
+  { icon: typeof Trees; colorClass: string; accentClass: string }
+> = {
+  "protected-lands": {
     icon: Trees,
     colorClass:
       "text-emerald-400 group-hover:text-emerald-300 dark:text-emerald-500 dark:group-hover:text-emerald-400",
     accentClass: "accent-emerald-400",
   },
-  {
-    id: "mf-toggle-drinking",
-    apiKey: "showDrinkingWater",
-    label: "Drinking Water Supply",
+  "drinking-water": {
     icon: Droplet,
     colorClass:
       "text-blue-400 group-hover:text-blue-300 dark:text-blue-500 dark:group-hover:text-blue-400",
     accentClass: "accent-blue-400",
   },
-  {
-    id: "mf-toggle-cities",
-    apiKey: "showCityBoundaries",
-    label: "City Boundaries",
+  "city-boundaries": {
     icon: Landmark,
     colorClass:
       "text-purple-400 group-hover:text-purple-300 dark:text-purple-500 dark:group-hover:text-purple-400",
     accentClass: "accent-purple-400",
   },
-];
+  "coop-territories": {
+    icon: Zap,
+    colorClass:
+      "text-amber-400 group-hover:text-amber-300 dark:text-amber-500 dark:group-hover:text-amber-400",
+    accentClass: "accent-amber-400",
+  },
+};
 ---
 
-<AccordionSection id="layers" title="Climate & Regional Impacts">
-  <div class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair">
+<AccordionSection
+  id="layers"
+  title="Climate & Regional Impacts"
+  openByDefault={openByDefault}
+>
+  <div
+    class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair"
+  >
     {
-      LAYERS.map((layer) => {
-        const IconComponent = layer.icon;
+      MAP_LAYER_META.map((layer) => {
+        const swatch = SWATCHES[layer.id];
+        const IconComponent = swatch.icon;
         return (
-          <label class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover">
+          <label
+            id={`${layer.toggleId}-row`}
+            class="flex items-start gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover has-disabled:cursor-not-allowed has-disabled:opacity-55 has-disabled:hover:bg-transparent"
+          >
             <input
               type="checkbox"
-              id={layer.id}
+              id={layer.toggleId}
               data-api-key={layer.apiKey}
-              class={`environmental-layer-toggle w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 ${layer.accentClass} cursor-pointer`}
+              data-layer-id={layer.id}
+              class={`environmental-layer-toggle mt-0.5 w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 ${swatch.accentClass} cursor-pointer disabled:cursor-not-allowed`}
             />
-            <span class={`transition-colors ${layer.colorClass}`}>
+            <span class={`mt-0.5 shrink-0 transition-colors ${swatch.colorClass}`}>
               <IconComponent size={16} stroke-width={2} />
             </span>
-            <span class="text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors">
-              {layer.label}
+            <span class="min-w-0 flex-1">
+              <span class="block text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors">
+                {layer.label}
+              </span>
+              <span class="block text-[10px] leading-snug text-ink-4 mt-0.5">
+                {layer.description}
+              </span>
+              {/* Filled in only if the map reports the archive missing. */}
+              <span
+                class="hidden mt-1 text-[10px] font-semibold leading-snug text-ink-3"
+                data-layer-status
+              />
             </span>
           </label>
         );
@@ -73,27 +110,56 @@ const LAYERS = [
 </AccordionSection>
 
 <script>
+  import { LAYER_UNAVAILABLE_EVENT, type LayerUnavailableDetail } from "~/data/mapLayers";
+
   function setupLayerToggles() {
-    const toggles = document.querySelectorAll('.environmental-layer-toggle');
-    
+    const toggles = document.querySelectorAll<HTMLInputElement>(
+      ".environmental-layer-toggle",
+    );
+
     toggles.forEach((toggle) => {
-      toggle.addEventListener('change', (e) => {
-        const target = e.target as HTMLInputElement;
-        const apiKey = target.getAttribute('data-api-key');
-        
+      toggle.addEventListener("change", () => {
+        const apiKey = toggle.dataset.apiKey;
         if (!apiKey) return;
 
         // Dispatch custom event matching MapParent's listener layout exactly
-        const filterEvent = new CustomEvent("mapfilterchange", {
-          detail: {
-            [apiKey]: target.checked
-          }
-        });
-        
-        document.dispatchEvent(filterEvent);
+        document.dispatchEvent(
+          new CustomEvent("mapfilterchange", {
+            detail: { [apiKey]: toggle.checked },
+          }),
+        );
       });
     });
+
   }
+
+  // An overlay whose tile archive isn't published (or is unreachable) would
+  // otherwise sit checked over an empty map with no explanation. The map tells
+  // us once, and the row says so and stops offering the toggle.
+  //
+  // Registered at module scope rather than inside setupLayerToggles(): that
+  // function re-runs on every `astro:page-load`, and this listener is on
+  // `document`, which survives the navigation — re-registering would stack a
+  // fresh copy per page view. It resolves the toggle by query at fire time, so
+  // it stays correct across re-renders without being re-bound.
+  document.addEventListener(LAYER_UNAVAILABLE_EVENT, (event) => {
+    const { id } = (event as CustomEvent<LayerUnavailableDetail>).detail;
+    const toggle = document.querySelector<HTMLInputElement>(
+      `.environmental-layer-toggle[data-layer-id="${id}"]`,
+    );
+    if (!toggle) return;
+
+    toggle.checked = false;
+    toggle.disabled = true;
+
+    const status = toggle
+      .closest("label")
+      ?.querySelector<HTMLElement>("[data-layer-status]");
+    if (status) {
+      status.textContent = "Dataset not published yet.";
+      status.classList.remove("hidden");
+    }
+  });
 
   // Handle standard transitions and Astro lifecycle hooks safely
   document.addEventListener("astro:page-load", setupLayerToggles);
