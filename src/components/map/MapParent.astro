@@ -167,7 +167,18 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       center: MINNESOTA_CENTER,
       zoom: DEFAULT_ZOOM,
       scrollZoom: true,
-      attributionControl: false,
+      // Credit is a license condition, not a courtesy — OpenStreetMap data is
+      // ODbL. `compact` keeps it to a single ⓘ button until clicked, so the
+      // obligation is met without spending map on a phone. Overlay credits
+      // ride on their own sources (see syncEnvironmentalLayers) and so appear
+      // only while that layer is switched on.
+      attributionControl: {
+        compact: true,
+        customAttribution: [
+          '<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>',
+          '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+        ],
+      },
       cooperativeGestures: window.innerWidth < 768,
     });
     mapInstance = map;
@@ -240,13 +251,10 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
       const context = document.getElementById("mcta-context");
       if (context) {
-        // While signups are off, this must not promise a routing that can't
-        // happen yet — MapDetailCta.astro's SIGNUP_ENABLED flag is the source
-        // of truth, surfaced here via the data attribute it renders.
-        context.textContent =
-          block.dataset.signupEnabled === "true"
-            ? `Organizing near ${project.name}. Enter your ZIP and we'll route you to the closest working group.`
-            : `Organizing near ${project.name}.`;
+        // Names the site so the actions below read as being about *this*
+        // facility. Nothing here promises a follow-up from us — the block is
+        // links out to public processes, by design (see MapDetailCta.astro).
+        context.textContent = `Organizing near ${project.name}.`;
       }
 
       // Clear the marker *and* its legal-hold ring, which is the widest thing
@@ -550,9 +558,17 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           const protocolUrl = `pmtiles://${fileUrl}`;
 
           if (!map.getSource(sourceId)) {
+            if (import.meta.env.DEV && !layer.attribution) {
+              console.warn(
+                `[attribution] Layer "${layer.id}" has no attribution set. Add one in ~/data/mapLayers.ts before shipping it — these datasets carry credit requirements.`,
+              );
+            }
             map.addSource(sourceId, {
               type: "vector",
               url: protocolUrl,
+              // Carried by the source, not the control, so MapLibre lists the
+              // credit only while this layer is actually on the map.
+              attribution: layer.attribution,
             });
           }
 

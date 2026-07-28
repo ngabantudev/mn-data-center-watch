@@ -29,6 +29,13 @@ export interface MapLayerMeta {
   hex: string;
   fillOpacity: number;
   outlineHex: string;
+  /**
+   * Credit line for this dataset, shown in the map's attribution control
+   * while the layer is switched on. Optional only so a layer can be wired
+   * before its archive exists — shipping one without a credit is not an
+   * option, and `syncEnvironmentalLayers` warns in dev when it's missing.
+   */
+  attribution?: string;
 }
 
 export const MAP_LAYER_META: MapLayerMeta[] = [
@@ -43,6 +50,8 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
     hex: '#10b981',
     fillOpacity: 0.4,
     outlineHex: '#047857',
+    attribution:
+      'Protected areas: <a href="https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-overview" target="_blank" rel="noopener">USGS PAD-US 4.1</a>',
   },
   {
     id: 'drinking-water',
@@ -55,6 +64,8 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
     hex: '#3b82f6',
     fillOpacity: 0.35,
     outlineHex: '#1d4ed8',
+    attribution:
+      'Drinking Water Supply Management Areas: <a href="https://gisdata.mn.gov/" target="_blank" rel="noopener">Minnesota Geospatial Commons</a>',
   },
   {
     id: 'city-boundaries',
@@ -67,6 +78,8 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
     hex: '#a855f7',
     fillOpacity: 0.15,
     outlineHex: '#7e22ce',
+    attribution:
+      'City boundaries: <a href="https://gisdata.mn.gov/" target="_blank" rel="noopener">Minnesota Geospatial Commons</a>',
   },
   {
     // Amber, matching the co-op chip in the ratepayer widget — a member
@@ -89,6 +102,11 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
     hex: '#f59e0b',
     fillOpacity: 0.22,
     outlineHex: '#b45309',
+    // Deliberately unset: the archive doesn't exist yet, so there is no
+    // publisher to credit. Crediting a source we haven't actually used would
+    // be the same failure as inventing a utility attribution. Set this from
+    // the real dataset's terms at the same time the file is uploaded — the
+    // dev warning in syncEnvironmentalLayers is there to catch a miss.
   },
 ];
 
