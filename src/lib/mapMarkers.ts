@@ -2,6 +2,8 @@
 import type { Project } from '~/data/dataCenters';
 import { STATUS_HEX, STATUS_POPUP_LABEL } from '~/data/mapStatusMeta';
 import { LEGAL_META_BY_STATUS, getLegalStatus, isUnderLegalHold } from '~/data/legalStatusMeta';
+import { impactForProject } from './ratepayerImpact';
+import { buildRatepayerWidgetHtml } from './ratepayerWidget';
 
 /**
  * The environmental-review / legal-hold badge. One builder for both the
@@ -26,6 +28,21 @@ function buildLegalBadgeHtml(project: Project, variant: 'preview' | 'detail'): s
         <span aria-hidden="true">⚖</span> ${label}
       </span>
       ${note}
+    </div>
+  `;
+}
+
+/**
+ * A titled block in the detail panel. The heading markup was repeated
+ * verbatim at each section, which is how the panel's sections drifted into
+ * three slightly different spacings; now the rhythm is defined once and
+ * reordering sections is a matter of moving one call.
+ */
+function section(title: string, body: string): string {
+  return `
+    <div class="mt-2.5 pt-2.5 border-t border-hair">
+      <span class="block text-[9px] text-ink-4 font-bold uppercase tracking-wider mb-1.5">${title}</span>
+      ${body}
     </div>
   `;
 }
@@ -62,6 +79,18 @@ export function buildPreviewHtml(project: Project): string {
     ` : ''}
   `;
 
+  // The single most legible line from the ratepayer calculator, previewed at
+  // its default utilization. The interactive version lives in the detail
+  // drawer — a hover popup that disappears on mouseout is the wrong place for
+  // a slider, but the headline translation is what makes someone click.
+  const impact = impactForProject(project);
+  const householdsHtml = `
+    <div class="mb-1.5 flex items-baseline justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-1">
+      <span class="text-[9px] font-bold uppercase tracking-wider text-amber-700">Est. Power Usage</span>
+      <span class="text-[10px] font-bold text-amber-900">≈ ${new Intl.NumberFormat('en-US').format(impact.households)} MN homes</span>
+    </div>
+  `;
+
   return `
     <div class="p-0.5 text-neutral-900 font-sans w-64 select-text">
       <div class="flex items-center gap-2 mb-1">
@@ -71,6 +100,7 @@ export function buildPreviewHtml(project: Project): string {
       <h3 class="font-bold text-[13px] text-neutral-900 leading-snug mb-1 wrap-break-word">${project.name}</h3>
       <p class="text-[11px] text-neutral-600 leading-snug mb-2 line-clamp-2 wrap-break-word">${project.description}</p>
       ${buildLegalBadgeHtml(project, 'preview')}
+      ${householdsHtml}
       <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] bg-neutral-50 border border-neutral-100 rounded-md p-1.5 mb-1.5">
         ${statsHtml}
       </div>
@@ -86,35 +116,35 @@ export function buildDetailHtml(project: Project): string {
 
   const metricsHtml = `
     ${project.developer ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1">
+      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
         <span class="text-ink-4 font-medium">Developer:</span>
         <span class="font-bold text-ink">${project.developer}</span>
       </div>
     ` : ''}
     ${project.estimatedCost ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1">
+      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
         <span class="text-ink-4 font-medium">Est. Cost:</span>
         <span class="font-bold text-ink">${project.estimatedCost}</span>
       </div>
     ` : ''}
     ${project.powerCapacityMW ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1">
+      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
         <span class="text-ink-4 font-medium">Power Grid Draw:</span>
         <span class="font-bold text-ink">${project.powerCapacityMW}</span>
       </div>
     ` : ''}
     ${project.waterFootprint ? `
-      <div class="flex flex-col text-[11px] border-b border-hair pb-1 mb-1">
+      <div class="flex flex-col text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
         <span class="text-ink-4 font-medium">Water System Footprint:</span>
         <span class="font-semibold text-ink-2 mt-0.5 leading-tight">${project.waterFootprint}</span>
       </div>
     ` : ''}
   `;
 
-  const asymmetryHtml = project.economicAsymmetry ? `
-    <div class="mt-2 pt-2 border-t border-hair text-[11px] leading-tight text-ink-3">
-      <span class="block text-[9px] text-ink-4 font-bold uppercase tracking-wider mb-1">Economic Footprint</span>
-      <p class="font-medium text-ink-2 mb-1.5">${project.economicAsymmetry.metricRatioText}</p>
+  const asymmetryHtml = project.economicAsymmetry ? section(
+    'Jobs vs. Capital',
+    `
+      <p class="text-[11px] font-medium leading-snug text-ink-2 mb-1.5">${project.economicAsymmetry.metricRatioText}</p>
       <div class="grid grid-cols-2 gap-1 text-[10px] bg-hover p-1.5 rounded">
         <div>
           <span class="block text-ink-4 font-medium">Est. Construction:</span>
@@ -125,34 +155,50 @@ export function buildDetailHtml(project: Project): string {
           <span class="font-bold text-ink">${project.economicAsymmetry.permanentOperationalJobsEstimate ?? 'N/A'} jobs</span>
         </div>
       </div>
-    </div>
-  ` : '';
+    `,
+  ) : '';
 
-  const publicRecordHtml = project.publicRecord ? `
-    <div class="mt-2 pt-2 border-t border-dashed border-hair">
-      <span class="block text-[9px] text-ink-4 font-bold uppercase tracking-wider mb-1">Official Registry</span>
+  const publicRecordHtml = project.publicRecord ? section(
+    'Official Registry',
+    `
       <a href="${project.publicRecord.url}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-accent hover:text-accent-hover hover:underline inline-flex items-center gap-1">
         📄 ${project.publicRecord.title} &rarr;
       </a>
-    </div>
-  ` : '';
+    `,
+  ) : '';
 
+  // Ordered for a resident, not for a filing cabinet. What a neighbour opens
+  // this for is, in order: is it being built, what does it do to my utility,
+  // what is it, and only then the developer's paperwork. The status and any
+  // court order lead because "Halted by Court Order" changes whether there is
+  // anything to organize against this month.
   return `
     <div class="p-0.5 text-ink font-sans select-text">
-      <div class="flex items-center gap-2 mb-1">
-        <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${color}"></span>
-        <span class="text-[9px] font-bold text-ink-4 uppercase tracking-wider">${statusText}</span>
+      <!-- 1. Standing. The single most consequential line in the panel. -->
+      <div class="flex flex-wrap items-center gap-1.5 mb-2">
+        <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+              style="background-color: ${color}1f; color: ${color}">
+          <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></span>
+          ${statusText}
+        </span>
       </div>
-      <h3 class="font-bold text-base text-ink border-b border-hair pb-1 mb-2 leading-snug wrap-break-word">${project.name}</h3>
-      <p class="text-xs text-ink-3 leading-relaxed mb-3 wrap-break-word">${project.description}</p>
       ${buildLegalBadgeHtml(project, 'detail')}
 
-      <div class="bg-hover border border-hair p-2 rounded-lg mb-2">
-        <span class="block text-[9px] text-ink-4 font-bold uppercase tracking-wider mb-1">Impact & Status</span>
-        <p class="text-xs text-ink-2 leading-normal font-medium mb-2 wrap-break-word">${project.businessImpact}</p>
-        ${metricsHtml}
-        ${asymmetryHtml}
-      </div>
+      <h3 class="font-bold text-base text-ink pb-1 mb-1.5 leading-snug wrap-break-word">${project.name}</h3>
+      <p class="text-xs text-ink-2 leading-normal font-medium mb-1 wrap-break-word">${project.businessImpact}</p>
+
+      <!-- 2. What it costs the people already on the grid. -->
+      ${buildRatepayerWidgetHtml(project)}
+
+      <!-- 3. What the thing actually is. -->
+      ${section('What Is Proposed', `
+        <p class="text-xs text-ink-3 leading-relaxed wrap-break-word">${project.description}</p>
+      `)}
+
+      <!-- 4. The developer's own numbers. -->
+      ${section('Facility Record', metricsHtml)}
+
+      ${asymmetryHtml}
 
       ${publicRecordHtml}
 

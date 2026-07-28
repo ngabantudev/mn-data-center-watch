@@ -13,6 +13,13 @@
 import { Building2 } from 'lucide-astro';
 ---
 
+<!--
+  Starts `hidden`; `open()` swaps that for `flex` (see the script below).
+  The panel being a flex column is load-bearing, not decoration — laid out as
+  `display: block` the `flex-1` on `#mdp-content` resolves against nothing, so
+  the panel's own `overflow-hidden` *clips* a long facility record instead of
+  letting it scroll. Worst on desktop, where `top-0 bottom-0` pins the height.
+-->
 <div
   id="map-detail-panel"
   class="hidden pointer-events-auto font-sans absolute z-40
@@ -51,6 +58,7 @@ import { Building2 } from 'lucide-astro';
 
 <script>
   import { buildDetailHtml } from '~/lib/mapMarkers';
+  import { hydrateRatepayerWidget } from '~/lib/ratepayerWidget';
   import type { Project } from '~/data/dataCenters';
 
   function initDetailPanel(): void {
@@ -62,8 +70,17 @@ import { Building2 } from 'lucide-astro';
 
     function open(project: Project): void {
       content!.innerHTML = buildDetailHtml(project);
+      // The ratepayer widget's utilization slider is the only interactive
+      // control in this markup. Rewiring it per open is deliberate: the
+      // previous node — and its listener — is discarded by the innerHTML
+      // assignment above, so there is nothing to clean up.
+      hydrateRatepayerWidget(content!);
       if (titleEl) titleEl.textContent = project.name;
       panel!.classList.remove('hidden');
+      panel!.classList.add('flex');
+      // Every open starts at the top — the status and power figures are the
+      // point, and a retained scroll position from the last facility would
+      // drop the reader mid-record.
       content!.scrollTop = 0;
       // Next frame so the transition actually animates in from the hidden state.
       requestAnimationFrame(() => {
@@ -73,7 +90,10 @@ import { Building2 } from 'lucide-astro';
 
     function close(): void {
       panel!.classList.add('translate-y-full', 'md:translate-x-full');
-      window.setTimeout(() => panel!.classList.add('hidden'), 300);
+      window.setTimeout(() => {
+        panel!.classList.add('hidden');
+        panel!.classList.remove('flex');
+      }, 300);
       if (titleEl) titleEl.textContent = '\u00A0';
     }
 
