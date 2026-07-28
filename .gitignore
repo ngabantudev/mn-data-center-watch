@@ -26,3 +26,7 @@ pnpm-debug.log*
 .wrangler
 
 public/data/mn-protected-lands.json
+
+# Cloudflare local secrets (wrangler / astro dev platform proxy)
+.dev.vars
+.dev.vars.*

@@ -7,6 +7,7 @@ import NewsFeedParent from "../news/NewsFeedParent.astro";
 import MapDetailParent from "~/components/map/MapDetailParent.astro";
 import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
+import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
 
 const { newsItems, errorMessage } = await fetchLocalNews();
 ---
@@ -26,6 +27,12 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   <MapDetailCta />
 
   <NewsFeedParent newsItems={newsItems} errorMessage={errorMessage} />
+
+  <!-- Statewide legislative demands. Page-level and independent of marker
+       selection, unlike MapDetailCta above — the two answer different
+       questions ("what are we fighting for" vs "what do I do about this
+       site"), so they stay separate surfaces. -->
+  <CampaignBanner />
 
   <div class="relative w-full h-full">
     <div id="map" class="absolute inset-0 w-full h-full bg-canvas"></div>
