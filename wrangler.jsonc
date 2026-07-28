@@ -1,30 +1,36 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"compatibility_date": "2026-07-19",
-	"compatibility_flags": ["global_fetch_strictly_public"],
+	"compatibility_flags": [
+		"global_fetch_strictly_public"
+	],
 	"name": "mn-data-center-watch",
 	"main": "@astrojs/cloudflare/entrypoints/server",
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS"
 	},
-	// Kept on: these logs are how a broken upstream (Open States, the tile
-	// bucket) gets diagnosed, and nothing in this Worker writes personal data
-	// to them any more — the one thing that did, /api/join, has been removed
-	// along with the form that fed it.
+	// OFF, deliberately — this is the no-PII posture applied to our own logs.
 	//
-	// What config CANNOT do: request logs still carry client IP addresses,
-	// which are personal data in most frameworks even though this site has no
-	// forms and no accounts. There is no wrangler flag that strips them. The
-	// only real control is the log RETENTION setting in the Cloudflare
-	// dashboard (Workers & Pages -> the Worker -> Observability), which has to
-	// be set there and is not captured in this file. Same caveat applies on
-	// any other host — Vercel's function logs behave the same way.
+	// Worker request logs carry client IP addresses. An IP is personal data in
+	// most frameworks even on a site like this one, which has no forms, no
+	// accounts, and asks for nothing about anybody. No wrangler flag strips
+	// them, and retention alone still means holding them for a window; the
+	// only way not to hold them is not to collect them. So we don't.
 	//
-	// `head_sampling_rate` reduces how many requests are logged at all, which
-	// is the one lever here that does reduce IP exposure. Left unset so error
-	// diagnosis stays complete; turn it down if log volume ever matters more.
+	// The cost is real and worth stating: with this off there are no
+	// server-side error logs, so a broken upstream (Open States, the tile
+	// bucket) surfaces as degraded UI rather than as a log line. Both routes
+	// are built to fail visibly for exactly that reason — /api/legislation
+	// returns `source: "degraded"` when every lookup comes back empty, and the
+	// banner explains itself rather than showing a wall of "status unknown".
+	//
+	// To debug a production incident, turn this on, reproduce, and turn it
+	// back off — rather than leaving it on for the day you might need it.
+	// `head_sampling_rate` is the middle setting if that trade ever needs to
+	// be reopened. Same caveat applies on any other host: Vercel's function
+	// logs behave the same way.
 	"observability": {
-		"enabled": true
+		"enabled": false
 	}
 }
