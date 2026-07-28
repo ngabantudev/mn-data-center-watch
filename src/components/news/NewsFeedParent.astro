@@ -22,21 +22,21 @@ const RANGE_OPTIONS = [
 <div
   id="news-feed-panel"
   data-initial-days={initialDays}
-  class="fixed md:absolute top-3 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-neutral-900/90 md:bg-neutral-900 backdrop-blur-xl md:backdrop-blur-md border border-white/10 md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-black/60 md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
+  class="fixed md:absolute top-3 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-panel/90 md:bg-panel backdrop-blur-xl md:backdrop-blur-md border border-hair md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-[color:var(--shadow-panel)] md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
 >
   <!-- Desktop Header -->
   <div
     id="nf-header-row"
-    class="hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-white/10 shrink-0"
+    class="hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-hair shrink-0"
   >
     <div
-      class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 shrink-0"
+      class="flex items-center justify-center w-7 h-7 rounded-lg bg-hover shrink-0"
     >
-      <Newspaper size={14} stroke-width={2} class="text-emerald-400" />
+      <Newspaper size={14} stroke-width={2} class="text-accent" />
     </div>
     <div class="min-w-0 flex-1">
       <h4
-        class="text-[10px] font-bold text-neutral-100 mt-1 uppercase tracking-wider leading-none"
+        class="text-[10px] font-bold text-ink mt-1 uppercase tracking-wider leading-none"
       >
         Related MN Coverage
       </h4>
@@ -48,13 +48,13 @@ const RANGE_OPTIONS = [
     id="nf-range-group"
     role="group"
     aria-label="News date range"
-    class="flex items-center gap-1.5 px-4 py-2.5 border-b border-white/10 shrink-0"
+    class="flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
   >
     {
       RANGE_OPTIONS.map((opt) => (
         <button
           type="button"
-          class="nf-range-btn text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors text-neutral-500 border-white/10 hover:text-neutral-200"
+          class="nf-range-btn text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors text-ink-4 border-hair hover:text-ink"
           data-days={opt.days}
           aria-pressed={opt.days === initialDays ? "true" : "false"}
         >
@@ -64,7 +64,7 @@ const RANGE_OPTIONS = [
     }
     <span
       id="nf-range-status"
-      class="text-[9px] text-neutral-600 ml-auto uppercase tracking-wider"
+      class="text-[9px] text-ink-4 ml-auto uppercase tracking-wider"
     />
   </div>
 
@@ -76,20 +76,20 @@ const RANGE_OPTIONS = [
     >
       {
         errorMessage ? (
-          <div class="p-4 text-red-400 text-xs w-full text-center">
+          <div class="p-4 text-red-300 text-xs w-full text-center">
             {errorMessage}
           </div>
         ) : newsItems.length === 0 ? (
-          <p class="text-neutral-500 text-xs w-full text-center p-4">
+          <p class="text-ink-4 text-xs w-full text-center p-4">
             No updates found.
           </p>
         ) : (
           newsItems.map((item) => (
             <article class="w-full shrink-0 snap-center p-3 flex flex-col justify-center">
-              <span class="text-[9px] font-bold text-emerald-400 tracking-wider uppercase block mb-0.5">
+              <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-0.5">
                 Breaking News
               </span>
-              <h3 class="text-xs font-medium text-neutral-200 leading-snug line-clamp-2">
+              <h3 class="text-xs font-medium text-ink-2 leading-snug line-clamp-2">
                 <a href={item.url} target="_blank" rel="noopener noreferrer">
                   {item.title}
                 </a>
@@ -105,7 +105,7 @@ const RANGE_OPTIONS = [
         <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
           {newsItems.map((_, i) => (
             <div
-              class="news-dot w-1 h-1 rounded-full bg-neutral-700 transition-colors"
+              class="news-dot w-1 h-1 rounded-full bg-ink-4 transition-colors"
               data-index={i}
             />
           ))}
@@ -121,25 +121,25 @@ const RANGE_OPTIONS = [
   >
     {
       errorMessage ? (
-        <div class="p-3 bg-red-950/30 text-red-400 rounded-lg text-xs border border-red-900/50">
+        <div class="p-3 bg-red-500/10 text-red-300 rounded-lg text-xs border border-red-400/40">
           <strong>Error:</strong> {errorMessage}
         </div>
       ) : newsItems.length === 0 ? (
-        <p class="text-neutral-500 text-xs font-medium px-1">
+        <p class="text-ink-4 text-xs font-medium px-1">
           No new local updates found.
         </p>
       ) : (
         newsItems.map((item) => (
-          <article class="border-b border-white/5 pb-3.5 last:border-0 last:pb-0 group">
-            <span class="text-[9px] font-bold text-emerald-400/80 tracking-wider uppercase block mb-1">
+          <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
+            <span class="text-[9px] font-bold text-accent/80 tracking-wider uppercase block mb-1">
               {item.source}
             </span>
-            <h3 class="text-xs font-medium text-neutral-200 hover:text-emerald-300 leading-snug">
+            <h3 class="text-xs font-medium text-ink-2 hover:text-accent-hover leading-snug">
               <a href={item.url} target="_blank" rel="noopener noreferrer">
                 {item.title}
               </a>
             </h3>
-            <span class="text-[10px] text-neutral-500 block mt-1.5 font-medium">
+            <span class="text-[10px] text-ink-4 block mt-1.5 font-medium">
               {new Date(item.published).toLocaleDateString(undefined, {
                 month: "short",
                 day: "numeric",
@@ -153,11 +153,11 @@ const RANGE_OPTIONS = [
   </div>
 
   <!-- Mobile Close Action -->
-  <div class="block md:hidden border-t border-white/5 shrink-0">
+  <div class="block md:hidden border-t border-hair shrink-0">
     <button
       id="nf-mobile-close"
       type="button"
-      class="w-full py-1.5 text-center text-[9px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-200 transition-colors"
+      class="w-full py-1.5 text-center text-[9px] font-bold uppercase tracking-wider text-ink-4 hover:text-ink transition-colors"
     >
       Dismiss
     </button>
@@ -170,7 +170,7 @@ const RANGE_OPTIONS = [
     aria-expanded="true"
     aria-controls="news-feed-panel"
     aria-label="Toggle news feed panel"
-    class="hidden md:flex absolute z-40 items-center justify-center bg-neutral-900 border border-white/10 border-r-0 text-neutral-400 hover:text-neutral-100 hover:bg-[#17171d] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/50
+    class="hidden md:flex absolute z-40 items-center justify-center bg-panel border border-hair border-r-0 text-ink-3 hover:text-ink hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50
            top-1/2 left-0 -translate-x-full -translate-y-1/2 w-8 h-12 rounded-l-xl"
   >
     <svg
@@ -281,20 +281,20 @@ const RANGE_OPTIONS = [
 
   function desktopItemHTML(item: NewsItem): string {
     return `
-      <article class="border-b border-white/5 pb-3.5 last:border-0 last:pb-0 group">
-        <span class="text-[9px] font-bold text-emerald-400/80 tracking-wider uppercase block mb-1">${escapeHtml(item.source)}</span>
-        <h3 class="text-xs font-medium text-neutral-200 hover:text-emerald-300 leading-snug">
+      <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
+        <span class="text-[9px] font-bold text-accent/80 tracking-wider uppercase block mb-1">${escapeHtml(item.source)}</span>
+        <h3 class="text-xs font-medium text-ink-2 hover:text-accent-hover leading-snug">
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
         </h3>
-        <span class="text-[10px] text-neutral-500 block mt-1.5 font-medium">${formatDate(item.published)}</span>
+        <span class="text-[10px] text-ink-4 block mt-1.5 font-medium">${formatDate(item.published)}</span>
       </article>`;
   }
 
   function mobileItemHTML(item: NewsItem): string {
     return `
       <article class="w-full shrink-0 snap-center p-3 flex flex-col justify-center">
-        <span class="text-[9px] font-bold text-emerald-400 tracking-wider uppercase block mb-0.5">Breaking News</span>
-        <h3 class="text-xs font-medium text-neutral-200 leading-snug line-clamp-2">
+        <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-0.5">Breaking News</span>
+        <h3 class="text-xs font-medium text-ink-2 leading-snug line-clamp-2">
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
         </h3>
       </article>`;
@@ -306,14 +306,14 @@ const RANGE_OPTIONS = [
     if (!desktopArea || !mobileWrap) return;
 
     if (errorMessage) {
-      desktopArea.innerHTML = `<div class="p-3 bg-red-950/30 text-red-400 rounded-lg text-xs border border-red-900/50"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`;
-      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><div class="p-4 text-red-400 text-xs w-full text-center">${escapeHtml(errorMessage)}</div></div>`;
+      desktopArea.innerHTML = `<div class="p-3 bg-red-500/10 text-red-300 rounded-lg text-xs border border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`;
+      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><div class="p-4 text-red-300 text-xs w-full text-center">${escapeHtml(errorMessage)}</div></div>`;
       return;
     }
 
     if (newsItems.length === 0) {
-      desktopArea.innerHTML = `<p class="text-neutral-500 text-xs font-medium px-1">No new local updates found.</p>`;
-      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><p class="text-neutral-500 text-xs w-full text-center p-4">No updates found.</p></div>`;
+      desktopArea.innerHTML = `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`;
+      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><p class="text-ink-4 text-xs w-full text-center p-4">No updates found.</p></div>`;
       return;
     }
 
@@ -323,7 +323,7 @@ const RANGE_OPTIONS = [
         ${newsItems.map(mobileItemHTML).join("")}
       </div>
       <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
-        ${newsItems.map((_, i) => `<div class="news-dot w-1 h-1 rounded-full bg-neutral-700 transition-colors" data-index="${i}"></div>`).join("")}
+        ${newsItems.map((_, i) => `<div class="news-dot w-1 h-1 rounded-full bg-ink-4 transition-colors" data-index="${i}"></div>`).join("")}
       </div>`;
 
     initCarousel();
@@ -343,8 +343,8 @@ const RANGE_OPTIONS = [
 
     function updateDots(index: number) {
       dots.forEach((dot, i) => {
-        dot.classList.toggle("bg-emerald-400", i === index);
-        dot.classList.toggle("bg-neutral-700", i !== index);
+        dot.classList.toggle("bg-accent", i === index);
+        dot.classList.toggle("bg-ink-4", i !== index);
       });
     }
 
@@ -387,11 +387,11 @@ const RANGE_OPTIONS = [
     buttons.forEach((btn) => {
       const isActive = Number(btn.dataset.days) === currentDays;
       btn.setAttribute("aria-pressed", String(isActive));
-      btn.classList.toggle("text-emerald-300", isActive);
-      btn.classList.toggle("border-emerald-400/30", isActive);
-      btn.classList.toggle("bg-emerald-400/10", isActive);
-      btn.classList.toggle("text-neutral-500", !isActive);
-      btn.classList.toggle("border-white/10", !isActive);
+      btn.classList.toggle("text-accent", isActive);
+      btn.classList.toggle("border-accent/30", isActive);
+      btn.classList.toggle("bg-accent/10", isActive);
+      btn.classList.toggle("text-ink-4", !isActive);
+      btn.classList.toggle("border-hair", !isActive);
     });
   }
 

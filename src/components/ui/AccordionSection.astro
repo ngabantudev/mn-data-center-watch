@@ -11,22 +11,28 @@ const { id, title, openByDefault = false } = Astro.props;
 ---
 
 <div
-  class="mf-accordion-section border-b border-white/10"
+  class="mf-accordion-section border-b border-hair"
   data-accordion-id={id}
 >
+  <!--
+    `group` + the group-hover ink lifts aren't decoration: hover raises this
+    row to --hover, a lighter blue in the light theme, where the muted ink
+    tokens would otherwise fall below 4.5:1. Lifting them a step on hover
+    keeps the contrast and reads as normal hover emphasis.
+  -->
   <button
     type="button"
-    class="mf-accordion-trigger w-full flex items-center justify-between px-3.5 md:px-4 py-3 hover:bg-white/5 text-left transition-colors"
+    class="mf-accordion-trigger group w-full flex items-center justify-between px-3.5 md:px-4 py-3 hover:bg-hover text-left transition-colors"
     aria-expanded={openByDefault ? "true" : "false"}
   >
     <span
-      class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider"
+      class="text-[10px] font-bold text-ink-3 group-hover:text-ink uppercase tracking-wider"
       >{title}</span
     >
     <ChevronDown
       size={14}
       class:list={[
-        "text-neutral-500 transition-transform duration-200",
+        "text-ink-4 group-hover:text-ink-2 transition-transform duration-200",
         { "-rotate-90": !openByDefault },
       ]}
     />

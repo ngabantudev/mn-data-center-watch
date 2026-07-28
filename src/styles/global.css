@@ -2,6 +2,191 @@
 @import "tailwindcss";
 
 /*
+  Theming is a two-layer system, and both layers live in this file.
+
+  Layer 1 — raw palette values, defined twice: once on :root (the light
+  "civic" theme, whose palette follows the State of Minnesota / USWDS
+  government-site conventions) and once on .dark (the original dark
+  theme, unchanged in appearance). `<html>` carries exactly one of these,
+  set by the no-flash script in Layout.astro.
+
+  Layer 2 — the @theme inline block, which maps each raw value onto a
+  Tailwind color token. That's what lets components write `bg-panel` /
+  `text-ink` / `border-hair` once and have both themes resolve correctly,
+  instead of every component carrying a `dark:` twin for each color.
+
+  Adding a color means adding it in all three places: :root, .dark, and
+  @theme inline. Only add a token if both themes have a sensible answer
+  for it — status/data hexes (see mapStatusMeta.ts) are deliberately NOT
+  tokenized, since they encode meaning and must stay stable across themes.
+*/
+:root {
+  /*
+    Light — the State of Minnesota portal palette, taken from mn.gov's own
+    core.css rather than approximated. The values and their roles there:
+
+      #003865  the portal's navy — `header`, `#header-search`, and
+               `.main-landing-content.branded` all sit on it
+      #00649e  second-level nav, and the hover state for the level above it
+      #9bcbeb  the hairline mn.gov rules its navy header with, and the light
+               blue it uses for de-emphasised type on navy
+      #78be21  brand green (#86d425 on hover), reserved for primary CTAs
+
+    The three panel tokens are deliberately all the same navy. mn.gov's
+    chrome reads as one continuous field of #003865, so nesting is expressed
+    with #9bcbeb hairlines rather than by shading surfaces against each
+    other. They stay as separate tokens only because the dark theme does
+    still shade them — don't "fix" the duplication by collapsing them.
+
+    That makes --panel a *dark* surface in this theme despite it being the
+    "light" theme, which is why the ink ramp below runs white→light-blue
+    rather than black→grey. Anything sitting on --canvas instead of a panel
+    (i.e. over the map, not in the chrome) uses --ink-canvas, the one token
+    that stays dark here. Don't reach for --ink out there; it will vanish.
+  */
+  --canvas: #f0f0f0;
+  --panel: #003865;
+  --panel-2: #003865;
+  --panel-3: #003865;
+
+  --ink: #ffffff;
+  --ink-2: #e6f0f7;
+  --ink-3: #b9d9ec;
+  --ink-4: #9bcbeb;
+  --ink-canvas: #1b1b1b;
+
+  /* #9bcbeb is the rule mn.gov draws under its navy header; softened here
+     because we use far more internal dividers than the portal does. */
+  --hair: rgba(155, 203, 235, 0.3);
+  --hair-strong: rgba(155, 203, 235, 0.55);
+  --hover: #00649e;
+
+  --accent: #9bcbeb;
+  --accent-hover: #b3dcff;
+  --accent-soft: rgba(155, 203, 235, 0.16);
+  --on-accent: #003865;
+
+  --positive: #78be21;
+  --positive-hover: #86d425;
+  --on-positive: #003865;
+
+  --header-bg: #003865;
+  --header-ink: #ffffff;
+  --header-eyebrow: #9bcbeb;
+
+  --shadow-panel: rgba(0, 32, 56, 0.35);
+
+  /* Recessed well for the stat tiles — see .stat-well below. #002a4b is
+     mn.gov's own darker blue (it edges .btn-primary in their core.css). */
+  --well: #002a4b;
+  --well-hair: rgba(155, 203, 235, 0.22);
+  --well-shadow:
+    inset 0 1px 3px rgba(0, 16, 30, 0.5), 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dark {
+  /* Dark — the original theme, preserved verbatim */
+  --canvas: #131314;
+  --panel: #18181b;
+  --panel-2: #09090b;
+  --panel-3: rgba(9, 9, 11, 0.3);
+
+  --ink: #f5f5f5;
+  --ink-2: #e5e5e5;
+  --ink-3: #a3a3a3;
+  --ink-4: #737373;
+  --ink-canvas: #e5e5e5;
+
+  --hair: rgba(255, 255, 255, 0.1);
+  --hair-strong: rgba(255, 255, 255, 0.16);
+  --hover: rgba(255, 255, 255, 0.05);
+
+  --accent: #34d399;
+  --accent-hover: #6ee7b7;
+  --accent-soft: rgba(52, 211, 153, 0.1);
+  --on-accent: #0a0a0a;
+
+  --positive: #34d399;
+  --positive-hover: #6ee7b7;
+  --on-positive: #0a0a0a;
+
+  --header-bg: #09090b;
+  --header-ink: #f5f5f5;
+  --header-eyebrow: #34d399;
+
+  --shadow-panel: rgba(0, 0, 0, 0.6);
+
+  /* The dark theme reads these tiles as *raised* rather than recessed — its
+     header sits at #09090b, so #18181b is a step up out of it, which is how
+     this theme has always rendered them. Same token, opposite direction. */
+  --well: #18181b;
+  --well-hair: rgba(255, 255, 255, 0.07);
+  --well-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-panel-3: var(--panel-3);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-ink-canvas: var(--ink-canvas);
+
+  --color-hair: var(--hair);
+  --color-hair-strong: var(--hair-strong);
+  --color-hover: var(--hover);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+
+  --color-positive: var(--positive);
+  --color-positive-hover: var(--positive-hover);
+  --color-on-positive: var(--on-positive);
+
+  --color-header-bg: var(--header-bg);
+  --color-header-ink: var(--header-ink);
+  --color-header-eyebrow: var(--header-eyebrow);
+}
+
+/*
+  Tailwind v4 keys `dark:` off prefers-color-scheme by default. This site
+  picks its theme explicitly (localStorage + toggle), so re-point the
+  variant at the .dark class instead. Most components shouldn't need
+  `dark:` at all — use the tokens above — but it's here for the cases
+  where a value genuinely has no light/dark counterpart.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  The stat tiles in the filter sidebar's header. Since the light theme's
+  panels are all one flat navy, these need their own surface to read as
+  discrete tiles at all — a plain background swap isn't enough, because two
+  flat blues an eye can barely separate just looks like a rendering bug.
+
+  So it's the full inset treatment: a darker fill, a hairline, and an inner
+  shadow along the top edge with a light catch underneath. That's what sells
+  "recessed well" rather than "slightly different rectangle", and it suits a
+  numeric readout — the number sits *in* the panel instead of floating on it.
+
+  Bundled as one class rather than three utilities because the three parts
+  only work together, and because the dark theme inverts the direction (see
+  --well there). Kept out of @theme deliberately: box-shadow isn't a color
+  token, and splitting it across both places would let them drift.
+*/
+.stat-well {
+  background-color: var(--well);
+  border: 1px solid var(--well-hair);
+  box-shadow: var(--well-shadow);
+}
+
+/*
   Shared alignment for the bottom-right map control stack: MapLibre's own
   NavigationControl (zoom buttons) plus our MapThemeSelector.astro button,
   stacked directly above it. Both read from these variables so they can
@@ -66,6 +251,13 @@ html, body {
 }
 
 .maplibregl-popup-content {
+  /*
+    Deliberately white in BOTH themes. The popup floats over the basemap
+    rather than sitting in the app chrome, so it reads as a map artifact,
+    not a panel — and a white card stays legible over both the dark and
+    light basemaps. buildPreviewHtml() in mapMarkers.ts assumes this and
+    styles its contents with fixed dark-on-white classes to match.
+  */
   background: #ffffff !important;
   border-radius: 0.85rem !important;
   padding: 14px 16px !important;

@@ -12,7 +12,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
 <section
   id="map-workspace"
-  class="relative w-full h-dvh overflow-hidden bg-[#f4f4f5]"
+  class="relative w-full h-dvh overflow-hidden bg-canvas"
 >
   <MapThemeSelector />
 
@@ -23,7 +23,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   <NewsFeedParent newsItems={newsItems} errorMessage={errorMessage} />
 
   <div class="relative w-full h-full">
-    <div id="map" class="absolute inset-0 w-full h-full bg-[#f4f4f5]"></div>
+    <div id="map" class="absolute inset-0 w-full h-full bg-canvas"></div>
   </div>
 </section>
 
@@ -32,7 +32,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   import * as pmtiles from "pmtiles";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { clientProjects } from "~/data/dataCenters";
-  import { getDefaultMapStyleUrl } from "~/data/mapStyles";
+  import { getInitialMapStyleId, getMapStyleUrlById } from "~/data/mapStyles";
   import { STATUS_HEX } from "~/data/mapStatusMeta";
   import { LEGAL_STATUS_META } from "~/data/legalStatusMeta";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
@@ -142,7 +142,10 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
     const map = new maplibregl.Map({
       container: "map",
-      style: getDefaultMapStyleUrl(),
+      // Opens on the user's saved basemap, or the one paired with their
+      // saved site theme if they never picked one — so a light-theme
+      // visitor never gets a dark basemap on first paint.
+      style: getMapStyleUrlById(getInitialMapStyleId()),
       center: MINNESOTA_CENTER,
       zoom: DEFAULT_ZOOM,
       scrollZoom: true,

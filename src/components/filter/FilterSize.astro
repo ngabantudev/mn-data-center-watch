@@ -22,25 +22,25 @@ const { countsByTier } = Astro.props;
 
 <AccordionSection id="size" title="Capacity Scale">
   <div
-    class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-t border-b border-white/5 bg-neutral-950/30"
+    class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-t border-b border-hair bg-panel-3"
   >
     <div class="flex items-center gap-2 text-[10px] font-semibold">
       <button
         id="mf-size-all"
         type="button"
-        class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2"
+        class="text-accent hover:text-accent-hover underline underline-offset-2"
         >All</button
       >
-      <span class="text-neutral-700">/</span>
+      <span class="text-ink-4">/</span>
       <button
         id="mf-size-none"
         type="button"
-        class="text-neutral-500 hover:text-neutral-300 underline underline-offset-2"
+        class="text-ink-4 hover:text-ink underline underline-offset-2"
         >None</button
       >
     </div>
     <span
-      class="text-[9px] uppercase tracking-wider text-neutral-600 font-semibold whitespace-nowrap"
+      class="text-[9px] uppercase tracking-wider text-ink-4 font-semibold whitespace-nowrap"
     >
       Grid draw
     </span>
@@ -49,10 +49,10 @@ const { countsByTier } = Astro.props;
   <div class="flex flex-col gap-0.5 p-1.5 pb-3">
     {
       SIZE_TIER_META.map((meta) => (
-        <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
+        <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-hover">
           <input
             type="checkbox"
-            class="mf-size-checkbox w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 shrink-0 cursor-pointer"
+            class="mf-size-checkbox w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 shrink-0 cursor-pointer"
             style={`accent-color: ${meta.hex}`}
             value={meta.tier}
             checked
@@ -66,18 +66,18 @@ const { countsByTier } = Astro.props;
           </span>
           <span class="flex-1 min-w-0">
             <span class="flex items-baseline gap-1.5">
-              <span class="text-[11px] md:text-xs font-semibold text-neutral-100 leading-none">
+              <span class="text-[11px] md:text-xs font-semibold text-ink leading-none">
                 {meta.label}
               </span>
-              <span class="text-[9px] font-mono text-neutral-500 leading-none">
+              <span class="text-[9px] font-mono text-ink-4 group-hover:text-ink-2 leading-none">
                 {meta.rangeLabel}
               </span>
             </span>
-            <span class="block text-[9px] text-neutral-500 leading-tight mt-1 truncate">
+            <span class="block text-[9px] text-ink-4 group-hover:text-ink-2 leading-tight mt-1 truncate">
               {meta.description}
             </span>
           </span>
-          <span class="text-[10px] md:text-[11px] font-bold text-neutral-500 font-mono tabular-nums shrink-0 ml-auto">
+          <span class="text-[10px] md:text-[11px] font-bold text-ink-4 group-hover:text-ink-2 font-mono tabular-nums shrink-0 ml-auto">
             {countsByTier[meta.tier] ?? 0}
           </span>
         </label>
