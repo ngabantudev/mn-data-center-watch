@@ -1,88 +1,98 @@
 ---
 // src/components/map/MapDetailCta.astro
 //
-// The campaign action block pinned to the bottom of the facility detail drawer
-// (MapDetailParent.astro). Static markup rather than part of buildDetailHtml()
-// so its listeners survive the innerHTML swap on every marker click — the form
-// state is deliberately *not* reset between facilities, so someone who fills it
-// in while browsing site A can still submit after clicking through to site B.
+// The campaign action block. Lives on the *map*, in a MapLibre popup anchored
+// above the selected facility's marker — not in the detail sidebar. It appears
+// only after a marker is selected (no hover required) and is torn down on
+// deselect. MapParent.astro owns that lifecycle.
 //
-// Which facility they were looking at rides along as `sourceProject`, read from
-// the panel's data-project attribute at submit time.
+// This component renders the block once into a hidden host and does nothing
+// else; MapParent.astro hands the *same DOM node* to `popup.setDOMContent()`
+// on each selection and returns it here on close. That node-move is what makes
+// a form in a popup viable at all: MapLibre's usual `setHTML()` would rebuild
+// the markup on every selection, dropping the listeners bound below and
+// wiping anything half-typed. Moving one live node preserves both, so a
+// visitor who starts filling this in at one site can click through to another
+// and still submit.
+//
+// Styling is fixed dark-on-white rather than themed, because
+// `.maplibregl-popup-content` is deliberately white in both themes (see
+// global.css) — same reasoning buildPreviewHtml() follows in mapMarkers.ts.
 import { Megaphone } from 'lucide-astro';
 ---
 
-<div class="shrink-0 border-t border-hair-strong bg-panel-2 px-3 py-3">
-  <div class="flex items-start gap-2 mb-2">
-    <div class="flex items-center justify-center w-6 h-6 rounded-md bg-accent-soft shrink-0 mt-0.5">
-      <Megaphone size={13} stroke-width={2.25} class="text-accent" />
+<!-- Parked here at render time; MapParent.astro moves #mcta-block in and out
+     of the popup. `hidden` keeps it out of the page while it's parked. -->
+<div id="mcta-host" hidden>
+  <div id="mcta-block" class="font-sans w-71.5 max-w-full select-text text-neutral-900">
+    <div class="flex items-start gap-2 mb-2">
+      <div class="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50 border border-emerald-200 shrink-0 mt-0.5">
+        <Megaphone size={13} stroke-width={2.25} class="text-emerald-700" />
+      </div>
+      <div class="min-w-0">
+        <h4 class="text-[12px] font-bold text-neutral-900 leading-tight wrap-break-word">
+          Stop Corporate Tech Sprawl: Join the Statewide Data Center Campaign.
+        </h4>
+        <p id="mcta-context" class="text-[10.5px] text-neutral-500 leading-snug mt-1"></p>
+      </div>
     </div>
-    <div class="min-w-0">
-      <h4 class="text-[12px] font-bold text-ink leading-tight wrap-break-word">
-        Stop Corporate Tech Sprawl: Join the Statewide Data Center Campaign.
-      </h4>
-      <p class="text-[10.5px] text-ink-3 leading-snug mt-1">
-        Sign up for organizing alerts and we'll route you to the working group closest to you.
-      </p>
-    </div>
+
+    <form id="mcta-form" novalidate class="flex flex-col gap-1.5">
+      <label class="sr-only" for="mcta-name">Full name</label>
+      <input
+        id="mcta-name"
+        name="name"
+        type="text"
+        autocomplete="name"
+        required
+        maxlength="120"
+        placeholder="Full name"
+        class="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+      />
+
+      <div class="flex gap-1.5">
+        <div class="w-20 shrink-0">
+          <label class="sr-only" for="mcta-zip">ZIP code</label>
+          <input
+            id="mcta-zip"
+            name="zip"
+            type="text"
+            inputmode="numeric"
+            autocomplete="postal-code"
+            required
+            maxlength="5"
+            placeholder="ZIP"
+            class="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+          />
+        </div>
+        <div class="flex-1 min-w-0">
+          <label class="sr-only" for="mcta-email">Email address</label>
+          <input
+            id="mcta-email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            required
+            maxlength="254"
+            placeholder="Email address"
+            class="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+          />
+        </div>
+      </div>
+
+      <button
+        id="mcta-submit"
+        type="submit"
+        class="inline-flex items-center justify-center w-full text-center text-[11px] bg-emerald-600 text-white py-2 px-3 rounded-lg hover:bg-emerald-700 transition font-semibold tracking-wide shadow-sm disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1"
+      >
+        Join the Campaign
+      </button>
+    </form>
+
+    <!-- aria-live so the routed-chapter result and validation errors are
+         announced rather than only appearing visually below the button. -->
+    <p id="mcta-status" role="status" aria-live="polite" class="hidden mt-1.5 text-[10.5px] leading-snug"></p>
   </div>
-
-  <form id="mcta-form" novalidate class="flex flex-col gap-1.5">
-    <label class="sr-only" for="mcta-name">Full name</label>
-    <input
-      id="mcta-name"
-      name="name"
-      type="text"
-      autocomplete="name"
-      required
-      maxlength="120"
-      placeholder="Full name"
-      class="w-full rounded-md border border-hair bg-panel px-2 py-1.5 text-[11px] text-ink placeholder:text-ink-4 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:border-accent"
-    />
-
-    <div class="flex gap-1.5">
-      <div class="w-24 shrink-0">
-        <label class="sr-only" for="mcta-zip">ZIP code</label>
-        <input
-          id="mcta-zip"
-          name="zip"
-          type="text"
-          inputmode="numeric"
-          autocomplete="postal-code"
-          required
-          maxlength="5"
-          pattern="\d{5}"
-          placeholder="ZIP"
-          class="w-full rounded-md border border-hair bg-panel px-2 py-1.5 text-[11px] text-ink placeholder:text-ink-4 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:border-accent"
-        />
-      </div>
-      <div class="flex-1 min-w-0">
-        <label class="sr-only" for="mcta-email">Email address</label>
-        <input
-          id="mcta-email"
-          name="email"
-          type="email"
-          autocomplete="email"
-          required
-          maxlength="254"
-          placeholder="Email address"
-          class="w-full rounded-md border border-hair bg-panel px-2 py-1.5 text-[11px] text-ink placeholder:text-ink-4 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:border-accent"
-        />
-      </div>
-    </div>
-
-    <button
-      id="mcta-submit"
-      type="submit"
-      class="inline-flex items-center justify-center w-full text-center text-[11px] bg-positive text-on-positive py-2 px-3 rounded-lg hover:bg-positive-hover transition font-semibold tracking-wide shadow-sm disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-    >
-      Join the Campaign
-    </button>
-  </form>
-
-  <!-- aria-live so the routed-chapter result and validation errors are announced
-       rather than only appearing visually below the button. -->
-  <p id="mcta-status" role="status" aria-live="polite" class="hidden mt-1.5 text-[10.5px] leading-snug"></p>
 </div>
 
 <script>
@@ -90,14 +100,15 @@ import { Megaphone } from 'lucide-astro';
     const form = document.getElementById('mcta-form') as HTMLFormElement | null;
     const status = document.getElementById('mcta-status');
     const submit = document.getElementById('mcta-submit') as HTMLButtonElement | null;
-    if (!form || !status || !submit) return;
+    const block = document.getElementById('mcta-block');
+    if (!form || !status || !submit || !block) return;
 
     const field = (id: string) => document.getElementById(id) as HTMLInputElement | null;
 
     function say(message: string, tone: 'error' | 'success'): void {
       status!.textContent = message;
       status!.className = `mt-1.5 text-[10.5px] leading-snug font-medium ${
-        tone === 'error' ? 'text-ink-2' : 'text-accent'
+        tone === 'error' ? 'text-red-600' : 'text-emerald-700'
       }`;
     }
 
@@ -116,8 +127,9 @@ import { Megaphone } from 'lucide-astro';
         return say('Please enter a valid email address.', 'error');
       }
 
-      const sourceProject =
-        document.getElementById('map-detail-panel')?.dataset.project ?? '';
+      // Set by MapParent.astro when it opens the popup, so organizers know
+      // which site drew the volunteer in.
+      const sourceProject = block!.dataset.project ?? '';
 
       submit!.disabled = true;
       submit!.textContent = 'Signing you up…';
@@ -151,6 +163,12 @@ import { Megaphone } from 'lucide-astro';
         submit!.textContent = 'Join the Campaign';
       }
     });
+
+    // A click inside the popup must not reach the map — MapLibre would read it
+    // as a click on empty basemap and deselect the marker, closing this popup
+    // out from under the person typing in it.
+    block.addEventListener('click', (e) => e.stopPropagation());
+    block.addEventListener('mousedown', (e) => e.stopPropagation());
   }
 
   document.addEventListener('astro:page-load', initCampaignCta);
