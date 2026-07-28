@@ -3,14 +3,26 @@
 import AccordionSection from "~/components/ui/AccordionSection.astro";
 import { Trees, Droplet, Landmark } from "lucide-astro";
 
-// Config matches the IDs and keys your map script is listening for
+// Config matches the IDs and keys your map script is listening for.
+//
+// These hues are layer *identity*, not chrome, so they stay fixed rather
+// than going through the theme tokens — each one matches the fill its layer
+// paints on the map (see MapParent.astro's environmental layer paint specs),
+// and that pairing has to hold in both themes.
+//
+// Both themes put these on a dark panel (navy #003865 in light, near-black
+// in dark), so both need the brighter end of each ramp. The light theme sits
+// a step brighter still: on that navy, blue-500 lands at 3.3:1 and
+// purple-500 at 3.0:1, i.e. under AA — the 400s clear it. The dark theme
+// keeps the 500/400 pair it has always used.
 const LAYERS = [
   {
     id: "mf-toggle-protected",
     apiKey: "showProtectedLands",
     label: "Protected Lands",
     icon: Trees,
-    colorClass: "text-emerald-500 group-hover:text-emerald-400",
+    colorClass:
+      "text-emerald-400 group-hover:text-emerald-300 dark:text-emerald-500 dark:group-hover:text-emerald-400",
     accentClass: "accent-emerald-400",
   },
   {
@@ -18,7 +30,8 @@ const LAYERS = [
     apiKey: "showDrinkingWater",
     label: "Drinking Water Supply",
     icon: Droplet,
-    colorClass: "text-blue-500 group-hover:text-blue-400",
+    colorClass:
+      "text-blue-400 group-hover:text-blue-300 dark:text-blue-500 dark:group-hover:text-blue-400",
     accentClass: "accent-blue-400",
   },
   {
@@ -26,29 +39,30 @@ const LAYERS = [
     apiKey: "showCityBoundaries",
     label: "City Boundaries",
     icon: Landmark,
-    colorClass: "text-purple-500 group-hover:text-purple-400",
+    colorClass:
+      "text-purple-400 group-hover:text-purple-300 dark:text-purple-500 dark:group-hover:text-purple-400",
     accentClass: "accent-purple-400",
   },
 ];
 ---
 
 <AccordionSection id="layers" title="Climate & Regional Impacts">
-  <div class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5">
+  <div class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair">
     {
       LAYERS.map((layer) => {
         const IconComponent = layer.icon;
         return (
-          <label class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-white/5">
+          <label class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover">
             <input
               type="checkbox"
               id={layer.id}
               data-api-key={layer.apiKey}
-              class={`environmental-layer-toggle w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 ${layer.accentClass} cursor-pointer`}
+              class={`environmental-layer-toggle w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 ${layer.accentClass} cursor-pointer`}
             />
             <span class={`transition-colors ${layer.colorClass}`}>
               <IconComponent size={16} stroke-width={2} />
             </span>
-            <span class="text-xs font-semibold text-neutral-200 group-hover:text-white transition-colors">
+            <span class="text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors">
               {layer.label}
             </span>
           </label>

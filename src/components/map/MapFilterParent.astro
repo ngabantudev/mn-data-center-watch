@@ -74,7 +74,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 <div
   id="map-filters"
   data-total={totalCount}
-  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-neutral-900 backdrop-blur-md border border-white/10 md:border-r md:border-l-0 md:border-t-0 md:border-b-0 shadow-2xl shadow-black/60 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0 rounded-2xl md:rounded-none"
+  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-panel backdrop-blur-md border border-hair md:border-r md:border-l-0 md:border-t-0 md:border-b-0 shadow-2xl shadow-[color:var(--shadow-panel)] flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0 rounded-2xl md:rounded-none"
 >
   <FilterHeader totalCount={totalCount} />
 
@@ -109,7 +109,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     aria-expanded="true"
     aria-controls="map-filters"
     aria-label="Toggle map filters panel"
-    class="hidden md:flex absolute z-40 items-center justify-center bg-neutral-900 border border-white/10 border-l-0 text-neutral-400 hover:text-neutral-100 hover:bg-[#17171d] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/50
+    class="hidden md:flex absolute z-40 items-center justify-center bg-panel border border-hair border-l-0 text-ink-3 hover:text-ink hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50
            top-1/2 right-0 translate-x-full -translate-y-1/2 w-8 h-12 rounded-r-xl"
   >
     <svg

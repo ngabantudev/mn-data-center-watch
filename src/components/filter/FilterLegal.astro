@@ -22,32 +22,38 @@ const holdMeta = LEGAL_STATUS_META.filter((m) => m.isHold);
 
 <AccordionSection id="legal" title="Environmental Review & Legal Hold">
   <div
-    class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5"
+    class="px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair"
   >
     <label
-      class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-white/5"
+      class="flex items-center gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover"
     >
       <input
         id="mf-legal-hold-only"
         type="checkbox"
-        class="w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 accent-amber-400 shrink-0 cursor-pointer"
+        class="w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 accent-amber-400 shrink-0 cursor-pointer"
       />
-      <span class="text-amber-500 group-hover:text-amber-400 transition-colors">
+      <!-- Amber is the legal-hold signal colour shared with the map's hold
+           ring, so it stays fixed rather than becoming a theme token. Both
+           themes put it on a dark panel; light runs a step brighter because
+           its panel is the navy. -->
+      <span
+        class="text-amber-400 group-hover:text-amber-300 dark:text-amber-500 dark:group-hover:text-amber-400 transition-colors"
+      >
         <Scale size={16} stroke-width={2} />
       </span>
       <span
-        class="text-xs font-semibold text-neutral-200 group-hover:text-white transition-colors flex-1 min-w-0"
+        class="text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors flex-1 min-w-0"
       >
         Under Review / Legal Hold only
       </span>
       <span
-        class="text-[10px] font-bold text-neutral-500 font-mono tabular-nums shrink-0"
+        class="text-[10px] font-bold text-ink-4 group-hover:text-ink-2 font-mono tabular-nums shrink-0"
       >
         {holdCount}
       </span>
     </label>
 
-    <p class="px-2 pt-1 text-[10px] leading-snug text-neutral-500">
+    <p class="px-2 pt-1 text-[10px] leading-snug text-ink-4">
       Sites tied up in state environmental review (EAW/EIS) or active
       litigation. These are where legal support and statewide precedent move
       fastest.
@@ -63,14 +69,14 @@ const holdMeta = LEGAL_STATUS_META.filter((m) => m.isHold);
             style={`background-color: ${meta.hex}; --tw-ring-color: ${meta.hex}40`}
           />
           <span class="flex-1 min-w-0">
-            <span class="block text-[11px] font-semibold text-neutral-100 leading-none truncate">
+            <span class="block text-[11px] font-semibold text-ink leading-none truncate">
               {meta.label}
             </span>
-            <span class="block text-[9px] text-neutral-500 leading-tight mt-0.5 truncate">
+            <span class="block text-[9px] text-ink-4 leading-tight mt-0.5 truncate">
               {meta.description}
             </span>
           </span>
-          <span class="text-[10px] font-bold text-neutral-500 font-mono tabular-nums shrink-0">
+          <span class="text-[10px] font-bold text-ink-4 font-mono tabular-nums shrink-0">
             {countsByLegalStatus[meta.legalStatus] ?? 0}
           </span>
         </div>

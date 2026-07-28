@@ -86,70 +86,70 @@ export function buildDetailHtml(project: Project): string {
 
   const metricsHtml = `
     ${project.developer ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-white/5 pb-1 mb-1">
-        <span class="text-neutral-500 font-medium">Developer:</span>
-        <span class="font-bold text-neutral-100">${project.developer}</span>
+      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1">
+        <span class="text-ink-4 font-medium">Developer:</span>
+        <span class="font-bold text-ink">${project.developer}</span>
       </div>
     ` : ''}
     ${project.estimatedCost ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-white/5 pb-1 mb-1">
-        <span class="text-neutral-500 font-medium">Est. Cost:</span>
-        <span class="font-bold text-neutral-100">${project.estimatedCost}</span>
+      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1">
+        <span class="text-ink-4 font-medium">Est. Cost:</span>
+        <span class="font-bold text-ink">${project.estimatedCost}</span>
       </div>
     ` : ''}
     ${project.powerCapacityMW ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-white/5 pb-1 mb-1">
-        <span class="text-neutral-500 font-medium">Power Grid Draw:</span>
-        <span class="font-bold text-neutral-100">${project.powerCapacityMW}</span>
+      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1">
+        <span class="text-ink-4 font-medium">Power Grid Draw:</span>
+        <span class="font-bold text-ink">${project.powerCapacityMW}</span>
       </div>
     ` : ''}
     ${project.waterFootprint ? `
-      <div class="flex flex-col text-[11px] border-b border-white/5 pb-1 mb-1">
-        <span class="text-neutral-500 font-medium">Water System Footprint:</span>
-        <span class="font-semibold text-neutral-300 mt-0.5 leading-tight">${project.waterFootprint}</span>
+      <div class="flex flex-col text-[11px] border-b border-hair pb-1 mb-1">
+        <span class="text-ink-4 font-medium">Water System Footprint:</span>
+        <span class="font-semibold text-ink-2 mt-0.5 leading-tight">${project.waterFootprint}</span>
       </div>
     ` : ''}
   `;
 
   const asymmetryHtml = project.economicAsymmetry ? `
-    <div class="mt-2 pt-2 border-t border-white/10 text-[11px] leading-tight text-neutral-400">
-      <span class="block text-[9px] text-neutral-500 font-bold uppercase tracking-wider mb-1">Economic Footprint</span>
-      <p class="font-medium text-neutral-300 mb-1.5">${project.economicAsymmetry.metricRatioText}</p>
-      <div class="grid grid-cols-2 gap-1 text-[10px] bg-white/5 p-1.5 rounded">
+    <div class="mt-2 pt-2 border-t border-hair text-[11px] leading-tight text-ink-3">
+      <span class="block text-[9px] text-ink-4 font-bold uppercase tracking-wider mb-1">Economic Footprint</span>
+      <p class="font-medium text-ink-2 mb-1.5">${project.economicAsymmetry.metricRatioText}</p>
+      <div class="grid grid-cols-2 gap-1 text-[10px] bg-hover p-1.5 rounded">
         <div>
-          <span class="block text-neutral-500 font-medium">Est. Construction:</span>
-          <span class="font-bold text-neutral-100">${project.economicAsymmetry.constructionJobsEstimate ?? 'N/A'} jobs</span>
+          <span class="block text-ink-4 font-medium">Est. Construction:</span>
+          <span class="font-bold text-ink">${project.economicAsymmetry.constructionJobsEstimate ?? 'N/A'} jobs</span>
         </div>
         <div>
-          <span class="block text-neutral-500 font-medium">Est. Permanent:</span>
-          <span class="font-bold text-neutral-100">${project.economicAsymmetry.permanentOperationalJobsEstimate ?? 'N/A'} jobs</span>
+          <span class="block text-ink-4 font-medium">Est. Permanent:</span>
+          <span class="font-bold text-ink">${project.economicAsymmetry.permanentOperationalJobsEstimate ?? 'N/A'} jobs</span>
         </div>
       </div>
     </div>
   ` : '';
 
   const publicRecordHtml = project.publicRecord ? `
-    <div class="mt-2 pt-2 border-t border-dashed border-white/10">
-      <span class="block text-[9px] text-neutral-500 font-bold uppercase tracking-wider mb-1">Official Registry</span>
-      <a href="${project.publicRecord.url}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1">
+    <div class="mt-2 pt-2 border-t border-dashed border-hair">
+      <span class="block text-[9px] text-ink-4 font-bold uppercase tracking-wider mb-1">Official Registry</span>
+      <a href="${project.publicRecord.url}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-accent hover:text-accent-hover hover:underline inline-flex items-center gap-1">
         📄 ${project.publicRecord.title} &rarr;
       </a>
     </div>
   ` : '';
 
   return `
-    <div class="p-0.5 text-neutral-100 font-sans select-text">
+    <div class="p-0.5 text-ink font-sans select-text">
       <div class="flex items-center gap-2 mb-1">
         <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${color}"></span>
-        <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-wider">${statusText}</span>
+        <span class="text-[9px] font-bold text-ink-4 uppercase tracking-wider">${statusText}</span>
       </div>
-      <h3 class="font-bold text-base text-neutral-100 border-b border-white/10 pb-1 mb-2 leading-snug wrap-break-word">${project.name}</h3>
-      <p class="text-xs text-neutral-400 leading-relaxed mb-3 wrap-break-word">${project.description}</p>
+      <h3 class="font-bold text-base text-ink border-b border-hair pb-1 mb-2 leading-snug wrap-break-word">${project.name}</h3>
+      <p class="text-xs text-ink-3 leading-relaxed mb-3 wrap-break-word">${project.description}</p>
       ${buildLegalBadgeHtml(project, 'detail')}
 
-      <div class="bg-white/5 border border-white/10 p-2 rounded-lg mb-2">
-        <span class="block text-[9px] text-neutral-500 font-bold uppercase tracking-wider mb-1">Impact & Status</span>
-        <p class="text-xs text-neutral-200 leading-normal font-medium mb-2 wrap-break-word">${project.businessImpact}</p>
+      <div class="bg-hover border border-hair p-2 rounded-lg mb-2">
+        <span class="block text-[9px] text-ink-4 font-bold uppercase tracking-wider mb-1">Impact & Status</span>
+        <p class="text-xs text-ink-2 leading-normal font-medium mb-2 wrap-break-word">${project.businessImpact}</p>
         ${metricsHtml}
         ${asymmetryHtml}
       </div>
@@ -157,7 +157,9 @@ export function buildDetailHtml(project: Project): string {
       ${publicRecordHtml}
 
       <div class="mt-3">
-        <a href="${project.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-full text-center text-[11px] bg-emerald-500 text-neutral-900 py-2 px-3 rounded-lg hover:bg-emerald-400 transition font-semibold tracking-wide shadow-sm pointer-events-auto">
+        <!-- The one primary CTA in the panel, so it gets --positive (the MN
+             brand green in the light theme) rather than the link accent. -->
+        <a href="${project.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-full text-center text-[11px] bg-positive text-on-positive py-2 px-3 rounded-lg hover:bg-positive-hover transition font-semibold tracking-wide shadow-sm pointer-events-auto">
           Track News Source &rarr;
         </a>
       </div>
