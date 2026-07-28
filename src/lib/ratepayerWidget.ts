@@ -52,6 +52,29 @@ function formatAnnualEnergy(annualMWh: number): string {
 }
 
 /**
+ * The facility's draw measured against its own utility's customer base.
+ *
+ * Flips to a multiple above parity rather than running the percentage past
+ * 100: Pine Island alone out-draws every Xcel account in Minnesota, and
+ * "Equal to 114% of every account Xcel serves" reads as a broken sentence
+ * exactly where the number is most damning.
+ *
+ * "Household electricity" is doing real work in this phrasing — the numerator
+ * is homes-equivalent (annual MWh ÷ average household use) while the
+ * denominator is customer accounts of every class. That's a legitimate civic
+ * comparison, but the wording has to say which unit it's counting in.
+ */
+function formatUtilityShare(impact: RatepayerImpact): string {
+  const ratio = impact.shareOfUtilityAccounts;
+  if (!ratio || !impact.utility) return '';
+
+  const name = impact.utility.name;
+  return ratio >= 1
+    ? `As much household electricity as ${ratio.toFixed(1)}× every customer ${name} serves.`
+    : `As much household electricity as ${formatPercent(ratio)} of the customers ${name} serves.`;
+}
+
+/**
  * Every value in the widget that depends on the slider. Keys are the
  * `data-rp` slot names in the markup below.
  */
@@ -63,9 +86,7 @@ function impactFields(impact: RatepayerImpact): Record<string, string> {
     'share-state-load': formatPercent(impact.shareOfStateLoad),
     'share-state-households': formatPercent(impact.shareOfStateHouseholds),
     scale: impact.scaleText,
-    'share-utility': impact.shareOfUtilityAccounts
-      ? `Equal to ${formatPercent(impact.shareOfUtilityAccounts)} of every account ${impact.utility!.name} serves.`
-      : '',
+    'share-utility': formatUtilityShare(impact),
   };
 }
 
