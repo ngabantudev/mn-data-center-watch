@@ -227,7 +227,13 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
       const context = document.getElementById("mcta-context");
       if (context) {
-        context.textContent = `Organizing near ${project.name}. Enter your ZIP and we'll route you to the closest working group.`;
+        // While signups are off, this must not promise a routing that can't
+        // happen yet — MapDetailCta.astro's SIGNUP_ENABLED flag is the source
+        // of truth, surfaced here via the data attribute it renders.
+        context.textContent =
+          block.dataset.signupEnabled === "true"
+            ? `Organizing near ${project.name}. Enter your ZIP and we'll route you to the closest working group.`
+            : `Organizing near ${project.name}.`;
       }
 
       // Clear the marker *and* its legal-hold ring, which is the widest thing
