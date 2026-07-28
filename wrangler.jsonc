@@ -8,6 +8,22 @@
 		"directory": "./dist",
 		"binding": "ASSETS"
 	},
+	// Kept on: these logs are how a broken upstream (Open States, the tile
+	// bucket) gets diagnosed, and nothing in this Worker writes personal data
+	// to them any more — the one thing that did, /api/join, has been removed
+	// along with the form that fed it.
+	//
+	// What config CANNOT do: request logs still carry client IP addresses,
+	// which are personal data in most frameworks even though this site has no
+	// forms and no accounts. There is no wrangler flag that strips them. The
+	// only real control is the log RETENTION setting in the Cloudflare
+	// dashboard (Workers & Pages -> the Worker -> Observability), which has to
+	// be set there and is not captured in this file. Same caveat applies on
+	// any other host — Vercel's function logs behave the same way.
+	//
+	// `head_sampling_rate` reduces how many requests are logged at all, which
+	// is the one lever here that does reduce IP exposure. Left unset so error
+	// diagnosis stays complete; turn it down if log volume ever matters more.
 	"observability": {
 		"enabled": true
 	}
