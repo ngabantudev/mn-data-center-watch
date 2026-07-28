@@ -1,7 +1,14 @@
 ---
 // src/components/map/MapFilterParent.astro
-import { clientProjects, type ProjectStatus } from "~/data/dataCenters";
+import {
+  clientProjects,
+  type LegalStatus,
+  type ProjectStatus,
+} from "~/data/dataCenters";
 import { STATUS_META } from "~/data/mapStatusMeta";
+import { getLegalStatus, isUnderLegalHold } from "~/data/legalStatusMeta";
+import { getSizeTier, type SizeTier } from "~/data/sizeTierMeta";
+import { countBy } from "~/lib/collections";
 import { parseMW } from "~/lib/projectMetrics";
 import {
   Zap,
@@ -15,31 +22,33 @@ import FilterHeader from "~/components/filter/FilterHeader.astro";
 import FilterLayer from "../filter/FilterLayer.astro";
 import FilterStatus from "../filter/FilterStatus.astro";
 import FilterProject from "../filter/FilterProject.astro";
+import FilterLegal from "../filter/FilterLegal.astro";
+import FilterSize from "../filter/FilterSize.astro";
 
 interface Props {
   newsItems: NewsItem[];
   errorMessage: string | null;
 }
 
-// Logic setup
-const countsByStatus = STATUS_META.reduce(
-  (acc, meta) => {
-    acc[meta.status] = clientProjects.filter(
-      (p) => p.status === meta.status,
-    ).length;
-    return acc;
-  },
-  {} as Record<ProjectStatus, number>,
-);
+// Logic setup — single O(n) pass per axis rather than one full scan per bucket.
+const rawStatusCounts = countBy(clientProjects, (p) => p.status);
+const countsByStatus = Object.fromEntries(
+  STATUS_META.map((meta) => [meta.status, rawStatusCounts[meta.status] ?? 0]),
+) as Record<ProjectStatus, number>;
+
+const countsByLegalStatus = countBy(clientProjects, getLegalStatus) as Record<
+  LegalStatus,
+  number
+>;
+const holdCount = clientProjects.filter(isUnderLegalHold).length;
+
+const countsByTier = countBy(clientProjects, (p) =>
+  getSizeTier(parseMW(p.powerCapacityMW) || 5),
+) as Record<SizeTier, number>;
 
 const largestProjects = [...clientProjects].sort(
   (a, b) => parseMW(b.powerCapacityMW) - parseMW(a.powerCapacityMW),
 );
-
-const maxMW = largestProjects.reduce((max, p) => {
-  const val = parseMW(p.powerCapacityMW);
-  return val > max ? val : max;
-}, 100);
 
 const totalCount = clientProjects.length;
 
@@ -74,10 +83,17 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
   >
     <FilterStatus
-      maxMW={maxMW}
       STATUS_META={STATUS_META}
       countsByStatus={countsByStatus}
       STATUS_ICONS={STATUS_ICONS}
+      openByDefault={false}
+    />
+
+    <FilterSize countsByTier={countsByTier} openByDefault={false} />
+
+    <FilterLegal
+      countsByLegalStatus={countsByLegalStatus}
+      holdCount={holdCount}
       openByDefault={false}
     />
 
@@ -117,7 +133,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 
 <script>
   import { clientProjects } from "~/data/dataCenters";
-  import { parseMW } from "~/lib/projectMetrics";
+  import { countVisible, type FilterCriteria } from "~/lib/projectFilters";
 
   const STORAGE_KEY = "mapFiltersCollapsed";
 
@@ -143,13 +159,18 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
       document.querySelectorAll<HTMLInputElement>(".mf-status-checkbox, .mf-checkbox"),
     );
 
+    const sizeCheckboxes = Array.from(
+      document.querySelectorAll<HTMLInputElement>(".mf-size-checkbox"),
+    );
+    const sizeAllBtn = document.getElementById("mf-size-all");
+    const sizeNoneBtn = document.getElementById("mf-size-none");
+
     const projectLinks = Array.from(
       document.querySelectorAll<HTMLButtonElement>(".mf-project-link"),
     );
-    const mwSlider = document.getElementById(
-      "mf-mw-slider",
+    const legalHoldToggle = document.getElementById(
+      "mf-legal-hold-only",
     ) as HTMLInputElement | null;
-    const mwLabel = document.getElementById("mf-mw-val");
     const toggleBtn = document.getElementById("mf-toggle") as HTMLButtonElement | null;
     const toggleIcon = document.getElementById("mf-toggle-icon") as SVGElement | null;
 
@@ -299,64 +320,68 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     );
 
     function dispatchFilterChange(): void {
-      const statuses = getActiveStatuses();
-      const minMW = mwSlider ? Number(mwSlider.value) : 0;
+      const criteria: FilterCriteria = {
+        statuses: checkedValues(statusCheckboxes),
+        sizeTiers: checkedValues(sizeCheckboxes),
+        legalHoldOnly: legalHoldToggle?.checked ?? false,
+      };
 
       if (countLabel) {
-        const visibleCount = clientProjects.filter((p) => {
-          const status = p.status || "planned";
-          return (
-            statuses.includes(status) && parseMW(p.powerCapacityMW) >= minMW
-          );
-        }).length;
+        // Same predicate the map's layer filter is built from, so the
+        // label and the visible markers can't disagree.
+        const visibleCount = countVisible(clientProjects, criteria);
         countLabel.textContent = `Showing ${visibleCount} of ${totalCount}`;
       }
 
       document.dispatchEvent(
-        new CustomEvent("mapfilterchange", {
-          detail: { statuses, minMW },
-        }),
+        new CustomEvent("mapfilterchange", { detail: criteria }),
       );
     }
 
-    function getActiveStatuses(): string[] {
-      return statusCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+    function checkedValues(boxes: HTMLInputElement[]): string[] {
+      return boxes.filter((cb) => cb.checked).map((cb) => cb.value);
     }
 
-    // Status filter listeners
-    statusCheckboxes.forEach((checkbox) => {
-      const onChange = () => dispatchFilterChange();
-      checkbox.addEventListener("change", onChange);
-      filterCleanups.push(() =>
-        checkbox.removeEventListener("change", onChange),
-      );
-    });
+    /**
+     * Wires one checkbox group plus its All / None shortcuts. The status and
+     * capacity groups behave identically, so the listener bookkeeping lives
+     * here once rather than being copy-pasted per group.
+     */
+    function wireCheckboxGroup(
+      boxes: HTMLInputElement[],
+      allBtn: HTMLElement | null,
+      noneBtn: HTMLElement | null,
+    ): void {
+      boxes.forEach((checkbox) => {
+        const onChange = () => dispatchFilterChange();
+        checkbox.addEventListener("change", onChange);
+        filterCleanups.push(() =>
+          checkbox.removeEventListener("change", onChange),
+        );
+      });
 
-    const onSelectAll = () => {
-      statusCheckboxes.forEach((cb) => (cb.checked = true));
-      dispatchFilterChange();
-    };
-    selectAllBtn?.addEventListener("click", onSelectAll);
-    filterCleanups.push(() =>
-      selectAllBtn?.removeEventListener("click", onSelectAll),
-    );
+      const setAll = (checked: boolean) => () => {
+        boxes.forEach((cb) => (cb.checked = checked));
+        dispatchFilterChange();
+      };
 
-    const onClearAll = () => {
-      statusCheckboxes.forEach((cb) => (cb.checked = false));
-      dispatchFilterChange();
-    };
-    clearAllBtn?.addEventListener("click", onClearAll);
-    filterCleanups.push(() =>
-      clearAllBtn?.removeEventListener("click", onClearAll),
-    );
+      const onAll = setAll(true);
+      const onNone = setAll(false);
+      allBtn?.addEventListener("click", onAll);
+      noneBtn?.addEventListener("click", onNone);
+      filterCleanups.push(() => {
+        allBtn?.removeEventListener("click", onAll);
+        noneBtn?.removeEventListener("click", onNone);
+      });
+    }
 
-    const onMwInput = () => {
-      if (mwLabel) mwLabel.textContent = `${mwSlider!.value} MW`;
-      dispatchFilterChange();
-    };
-    mwSlider?.addEventListener("input", onMwInput);
+    wireCheckboxGroup(statusCheckboxes, selectAllBtn, clearAllBtn);
+    wireCheckboxGroup(sizeCheckboxes, sizeAllBtn, sizeNoneBtn);
+
+    const onLegalHoldChange = () => dispatchFilterChange();
+    legalHoldToggle?.addEventListener("change", onLegalHoldChange);
     filterCleanups.push(() =>
-      mwSlider?.removeEventListener("input", onMwInput),
+      legalHoldToggle?.removeEventListener("change", onLegalHoldChange),
     );
 
     projectLinks.forEach((link) => {

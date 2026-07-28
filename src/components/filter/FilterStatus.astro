@@ -5,39 +5,18 @@ import type { StatusMeta } from "~/data/mapStatusMeta";
 import type { Zap } from "lucide-astro";
 
 interface Props {
-  maxMW: number;
   STATUS_META: StatusMeta[];
   countsByStatus: Record<ProjectStatus, number>;
   STATUS_ICONS: Record<ProjectStatus, typeof Zap>;
   openByDefault?: boolean;
 }
 
-const { maxMW, STATUS_META, countsByStatus, STATUS_ICONS } = Astro.props;
+const { STATUS_META, countsByStatus, STATUS_ICONS } = Astro.props;
 ---
 
 <AccordionSection id="filters" title="Project Status">
   <div
-    class="px-3.5 md:px-4 py-3 bg-neutral-950/20 border-t border-b border-white/5 flex flex-col gap-1.5"
-  >
-    <div class="flex justify-between items-center text-[11px] font-semibold">
-      <span class="text-neutral-400">Min Capacity</span>
-      <span id="mf-mw-val" class="text-emerald-400 font-bold font-mono text-xs"
-        >0 MW</span
-      >
-    </div>
-    <input
-      id="mf-mw-slider"
-      type="range"
-      min="0"
-      max={maxMW}
-      value="0"
-      step="10"
-      class="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
-    />
-  </div>
-
-  <div
-    class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-b border-white/5 bg-neutral-950/30"
+    class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-t border-b border-white/5 bg-neutral-950/30"
   >
     <div class="flex items-center gap-2 text-[10px] font-semibold">
       <button
