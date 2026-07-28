@@ -1,5 +1,6 @@
 // src/data/mapStatusMeta.ts
 import type { ProjectStatus } from './dataCenters';
+import { indexBy } from '~/lib/collections';
 
 export interface StatusMeta {
   status: ProjectStatus;
@@ -62,12 +63,6 @@ export const STATUS_META: StatusMeta[] = [
   },
 ];
 
-export const STATUS_HEX: Record<ProjectStatus, string> = STATUS_META.reduce(
-  (acc, meta) => ({ ...acc, [meta.status]: meta.hex }),
-  {} as Record<ProjectStatus, string>
-);
+export const STATUS_HEX = indexBy(STATUS_META, (m) => m.status, (m) => m.hex);
 
-export const STATUS_POPUP_LABEL: Record<ProjectStatus, string> = STATUS_META.reduce(
-  (acc, meta) => ({ ...acc, [meta.status]: meta.popupLabel }),
-  {} as Record<ProjectStatus, string>
-);
+export const STATUS_POPUP_LABEL = indexBy(STATUS_META, (m) => m.status, (m) => m.popupLabel);
