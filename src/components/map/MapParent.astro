@@ -7,6 +7,7 @@ import NewsFeedParent from "../news/NewsFeedParent.astro";
 import MapDetailParent from "~/components/map/MapDetailParent.astro";
 import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
+import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
 
 const { newsItems, errorMessage } = await fetchLocalNews();
 ---
@@ -26,6 +27,12 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   <MapDetailCta />
 
   <NewsFeedParent newsItems={newsItems} errorMessage={errorMessage} />
+
+  <!-- Statewide legislative demands. Page-level and independent of marker
+       selection, unlike MapDetailCta above — the two answer different
+       questions ("what are we fighting for" vs "what do I do about this
+       site"), so they stay separate surfaces. -->
+  <CampaignBanner />
 
   <div class="relative w-full h-full">
     <div id="map" class="absolute inset-0 w-full h-full bg-canvas"></div>
@@ -160,6 +167,8 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       center: MINNESOTA_CENTER,
       zoom: DEFAULT_ZOOM,
       scrollZoom: true,
+      // Added by hand below instead, so it lands *after* the zoom buttons in
+      // the bottom-right stack — see the note there.
       attributionControl: false,
       cooperativeGestures: window.innerWidth < 768,
     });
@@ -169,6 +178,56 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       new maplibregl.NavigationControl({ showCompass: false }),
       "bottom-right",
     );
+
+    // Credit is a license condition, not a courtesy — OpenStreetMap data is
+    // ODbL. `compact` keeps it to a single ⓘ button until clicked, so the
+    // obligation is met without spending map on a phone. Overlay credits ride
+    // on their own sources (see syncEnvironmentalLayers), so each appears only
+    // while that layer is switched on.
+    //
+    // Added here rather than through the Map constructor's `attributionControl`
+    // option on purpose: the constructor adds it before this NavigationControl,
+    // which puts it *above* the zoom buttons. The corner container stacks in
+    // DOM order and is anchored to its bottom edge, so adding it last is what
+    // puts it at the bottom — which is what global.css's gap and
+    // --map-ctrl-attrib-height (and MapThemeSelector's offset) assume.
+    map.addControl(
+      new maplibregl.AttributionControl({
+        compact: true,
+        customAttribution: [
+          '<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>',
+          '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+        ],
+      }),
+      "bottom-right",
+    );
+
+    // MapLibre's compact mode initialises *expanded*: `_updateCompact()` adds
+    // `maplibregl-compact` and `maplibregl-compact-show` together, so the full
+    // credit list is showing on first paint until something minimizes it. The
+    // whole point of compact here is to stay out of the way until asked, so
+    // collapse it once — removing `maplibregl-compact-show` is exactly what
+    // MapLibre's own `_updateCompactMinimize` does.
+    //
+    // Runs once, guarded: at this moment the control may still be
+    // `maplibregl-attrib-empty` (the style hasn't reported its sources yet),
+    // in which case the classes aren't on it and the collapse can't land. It
+    // is retried on `styledata` until it succeeds, then never again — so
+    // toggling an overlay later can't snap the panel shut on someone reading
+    // it.
+    let attributionCollapsed = false;
+    const collapseAttributionOnce = (): void => {
+      if (attributionCollapsed) return;
+      const el = mapElement.querySelector(
+        ".maplibregl-ctrl-attrib.maplibregl-compact",
+      );
+      if (!el) return;
+      el.classList.remove("maplibregl-compact-show");
+      attributionCollapsed = true;
+    };
+
+    collapseAttributionOnce();
+    map.on("styledata", collapseAttributionOnce);
 
     // Surface tile/source load failures — MapLibre swallows these otherwise.
     map.on("error", (e) => {
@@ -233,13 +292,10 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 
       const context = document.getElementById("mcta-context");
       if (context) {
-        // While signups are off, this must not promise a routing that can't
-        // happen yet — MapDetailCta.astro's SIGNUP_ENABLED flag is the source
-        // of truth, surfaced here via the data attribute it renders.
-        context.textContent =
-          block.dataset.signupEnabled === "true"
-            ? `Organizing near ${project.name}. Enter your ZIP and we'll route you to the closest working group.`
-            : `Organizing near ${project.name}.`;
+        // Names the site so the actions below read as being about *this*
+        // facility. Nothing here promises a follow-up from us — the block is
+        // links out to public processes, by design (see MapDetailCta.astro).
+        context.textContent = `Organizing near ${project.name}.`;
       }
 
       // Clear the marker *and* its legal-hold ring, which is the widest thing
@@ -543,9 +599,17 @@ const { newsItems, errorMessage } = await fetchLocalNews();
           const protocolUrl = `pmtiles://${fileUrl}`;
 
           if (!map.getSource(sourceId)) {
+            if (import.meta.env.DEV && !layer.attribution) {
+              console.warn(
+                `[attribution] Layer "${layer.id}" has no attribution set. Add one in ~/data/mapLayers.ts before shipping it — these datasets carry credit requirements.`,
+              );
+            }
             map.addSource(sourceId, {
               type: "vector",
               url: protocolUrl,
+              // Carried by the source, not the control, so MapLibre lists the
+              // credit only while this layer is actually on the map.
+              attribution: layer.attribution,
             });
           }
 

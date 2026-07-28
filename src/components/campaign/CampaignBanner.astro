@@ -1,0 +1,467 @@
+---
+// src/components/campaign/CampaignBanner.astro
+//
+// The statewide half of the campaign: a collapsible "Statewide Campaign Goals"
+// banner over the map, listing the bills we're fighting for with live status
+// from Open States, plus a two-action center (email your legislator, comment
+// to the PUC).
+//
+// Deliberately separate from MapDetailCta.astro. That block is *per-facility*
+// and lives in the marker popup — it answers "what do I do about this site".
+// This one is page-level and answers "what are we fighting for statewide", so
+// it must be reachable without selecting a marker first.
+//
+// Everything below the shell is rendered client-side from /api/legislation,
+// because bill status is live data and baking it into the prerendered page
+// would freeze it at build time.
+import {
+  Landmark,
+  ChevronDown,
+  Megaphone,
+  Mail,
+  MessageSquareText,
+  ExternalLink,
+  X,
+} from "lucide-astro";
+import {
+  MN_LEG_DIRECTORY_URL,
+  MN_REVISOR_SEARCH_URL,
+  PUC_COMMENT_URL,
+  PUC_EDOCKETS_URL,
+} from "~/data/legislation";
+---
+
+<!--
+  Placement: top-centre of the map area. On desktop it's inset past both rails
+  (18rem filters left, 24rem news right) so it never sits on top of either. On
+  mobile the news card owns the very top, so NewsFeedParent.astro drops to
+  top-16 to leave this collapsed pill the first row — see the note there.
+-->
+<div
+  id="campaign-banner"
+  class="fixed md:absolute top-3 left-4 right-4 mx-auto max-w-sm md:mx-0 md:left-76 md:right-100 md:max-w-md z-55 pointer-events-auto font-sans"
+>
+  <button
+    id="cb-toggle"
+    type="button"
+    aria-expanded="false"
+    aria-controls="cb-panel"
+    class="group w-full flex items-center gap-2 px-3.5 py-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-[color:var(--shadow-panel)] hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+  >
+    <Landmark size={14} class="shrink-0 text-accent" />
+    <span
+      class="text-[10px] font-bold uppercase tracking-wider text-ink-2 group-hover:text-ink truncate"
+      >Statewide Campaign Goals</span
+    >
+    <ChevronDown
+      id="cb-chevron"
+      size={14}
+      class="ml-auto shrink-0 text-ink-4 group-hover:text-ink-2 transition-transform duration-200 -rotate-90"
+    />
+  </button>
+
+  <div
+    id="cb-panel"
+    class="hidden mt-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-[color:var(--shadow-panel)] overflow-hidden"
+  >
+    <div class="px-3.5 py-3 border-b border-hair">
+      <p class="text-[11px] text-ink-3 leading-snug">
+        What we're fighting for in St. Paul. Bill status is pulled live from
+        Open States.
+      </p>
+    </div>
+
+    <!-- Filled by the island below. Starts with a loading row so the panel
+         never opens to an empty box. -->
+    <div id="cb-bills" class="px-3.5 py-3 space-y-2 max-h-64 overflow-y-auto">
+      <p class="text-[11px] text-ink-4">Loading bill status…</p>
+    </div>
+
+    <div class="px-3.5 py-3 border-t border-hair flex flex-wrap gap-2">
+      <button
+        id="cb-action-open"
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11px] font-bold text-[color:var(--on-accent)] hover:bg-accent-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+      >
+        <Megaphone size={12} />
+        Take action
+      </button>
+      <a
+        href={MN_REVISOR_SEARCH_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1.5 rounded-lg border border-hair px-3 py-1.5 text-[11px] font-semibold text-ink-2 hover:bg-hover hover:text-ink transition-colors"
+      >
+        All bills <ExternalLink size={11} />
+      </a>
+    </div>
+  </div>
+</div>
+
+<!--
+  Native <dialog> rather than a hand-rolled overlay: it gives us the top layer,
+  focus trapping, Esc-to-close, and inert background for free, none of which is
+  worth reimplementing for one modal.
+-->
+<dialog
+  id="cb-action"
+  class="font-sans w-[min(32rem,92vw)] rounded-2xl border border-hair bg-panel p-0 text-ink backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+>
+  <div class="flex items-start justify-between gap-3 px-4 py-3.5 border-b border-hair">
+    <div>
+      <h2 class="text-sm font-bold text-ink">Take action</h2>
+      <p class="text-[11px] text-ink-3 mt-0.5">
+        Two ways to put this on the record in St. Paul.
+      </p>
+    </div>
+    <button
+      id="cb-action-close"
+      type="button"
+      aria-label="Close"
+      class="shrink-0 rounded-lg p-1 text-ink-4 hover:text-ink hover:bg-hover transition-colors"
+    >
+      <X size={16} />
+    </button>
+  </div>
+
+  <div class="px-4 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+    <section class="space-y-2">
+      <h3 class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-2">
+        <Mail size={13} class="text-accent" /> Email your state legislators
+      </h3>
+
+      <div id="cb-reps" class="space-y-2">
+        <p class="text-[11px] text-ink-4">Finding your district…</p>
+      </div>
+
+      <details id="cb-preview" class="hidden rounded-lg border border-hair bg-[color:var(--well)] px-3 py-2">
+        <summary class="cursor-pointer text-[11px] font-semibold text-ink-2">
+          Preview the draft — edit it before sending
+        </summary>
+        <p
+          id="cb-preview-body"
+          class="mt-2 whitespace-pre-wrap text-[11px] leading-relaxed text-ink-3"
+        >
+        </p>
+      </details>
+
+      <p class="text-[10px] text-ink-4 leading-snug">
+        Offices weigh a constituent's own sentence far more heavily than
+        identical mass mail. The draft opens in your mail app — please add
+        yours.
+      </p>
+    </section>
+
+    <section class="space-y-2 border-t border-hair pt-4">
+      <h3 class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-2">
+        <MessageSquareText size={13} class="text-accent" /> Submit a public
+        comment to the PUC
+      </h3>
+
+      <div id="cb-dockets" class="space-y-2"></div>
+
+      <div class="flex flex-wrap gap-2 pt-1">
+        <a
+          href={PUC_COMMENT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-[color:var(--positive)] px-3 py-1.5 text-[11px] font-bold text-[color:var(--on-positive)] hover:bg-[color:var(--positive-hover)] transition-colors"
+        >
+          Comment to the PUC <ExternalLink size={11} />
+        </a>
+        <a
+          href={PUC_EDOCKETS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-hair px-3 py-1.5 text-[11px] font-semibold text-ink-2 hover:bg-hover hover:text-ink transition-colors"
+        >
+          Browse eDockets <ExternalLink size={11} />
+        </a>
+      </div>
+
+      <p class="text-[10px] text-ink-4 leading-snug">
+        Anyone may comment on a docket before the Commission — you do not need
+        to be a party to the case.
+      </p>
+    </section>
+  </div>
+</dialog>
+
+<script>
+  import { CHAMBER_LABEL, composeRepEmail, mailtoHref } from "~/lib/legislation";
+  import type {
+    LegislationPayload,
+    LegislatorsPayload,
+    LegislatorView,
+    TrackedBillView,
+  } from "~/lib/legislation";
+
+  const STORAGE_KEY = "cb-expanded";
+  const DIRECTORY_URL = "https://www.leg.mn.gov/leg/legdir";
+
+  const root = document.getElementById("campaign-banner");
+  if (root) {
+    const toggle = document.getElementById("cb-toggle") as HTMLButtonElement;
+    const chevron = document.getElementById("cb-chevron")!;
+    const panel = document.getElementById("cb-panel")!;
+    const billsEl = document.getElementById("cb-bills")!;
+    const repsEl = document.getElementById("cb-reps")!;
+    const docketsEl = document.getElementById("cb-dockets")!;
+    const previewEl = document.getElementById("cb-preview")!;
+    const previewBody = document.getElementById("cb-preview-body")!;
+    const dialog = document.getElementById("cb-action") as HTMLDialogElement;
+
+    let legislation: LegislationPayload | null = null;
+    let legislators: LegislatorsPayload | null = null;
+    /** Guards the lazy load so re-opening the panel doesn't refetch. Bill
+     *  status moves on the order of days and the route is edge-cached for
+     *  hours, so one fetch per page view is already generous. */
+    let started = false;
+
+    /** Everything below builds nodes and assigns textContent rather than
+     *  innerHTML: bill titles, action descriptions and member names all come
+     *  from a third-party API, and none of it is ours to trust as markup. */
+    const el = (tag: string, cls?: string, text?: string) => {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined) n.textContent = text;
+      return n;
+    };
+
+    function renderBills(payload: LegislationPayload) {
+      billsEl.replaceChildren();
+
+      for (const bill of payload.bills) {
+        const card = el("div", "rounded-lg border border-hair px-2.5 py-2");
+
+        const head = el("div", "flex items-baseline justify-between gap-2");
+        head.append(
+          el("span", "text-[11px] font-bold text-accent", bill.identifier),
+        );
+        if (bill.status.known && bill.status.url) {
+          const a = el("a", "shrink-0 text-[10px] font-semibold text-ink-3 hover:text-ink underline", "Track") as HTMLAnchorElement;
+          a.href = bill.status.url;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          head.append(a);
+        }
+        card.append(head);
+
+        card.append(
+          el("p", "mt-0.5 text-[11px] text-ink-2 leading-snug", bill.demand),
+        );
+
+        if (bill.status.known) {
+          const date = bill.status.latestActionDate
+            ? ` (${bill.status.latestActionDate})`
+            : "";
+          card.append(
+            el(
+              "p",
+              "mt-1 text-[10px] text-ink-4 leading-snug",
+              `Latest: ${bill.status.latestAction}${date}`,
+            ),
+          );
+        } else {
+          // Never invent a status. An unreachable tracker is a missing fact,
+          // and saying so is what keeps the banner trustworthy on the days it
+          // can't reach Open States.
+          card.append(
+            el(
+              "p",
+              "mt-1 text-[10px] text-ink-4 leading-snug",
+              "Live status unavailable — check the tracker directly.",
+            ),
+          );
+        }
+
+        billsEl.append(card);
+      }
+
+      if (payload.source === "unlinked") {
+        billsEl.append(
+          el(
+            "p",
+            "text-[10px] text-ink-4",
+            "Live bill tracking is not configured on this deployment.",
+          ),
+        );
+      }
+
+      docketsEl.replaceChildren();
+      for (const d of payload.dockets) {
+        const card = el("div", "rounded-lg border border-hair px-3 py-2");
+        card.append(el("p", "text-[11px] font-bold text-ink", `Docket ${d.docket}`));
+        card.append(el("p", "text-[10px] text-ink-4 leading-snug", d.title));
+        card.append(el("p", "mt-1 text-[11px] text-ink-2 leading-snug", d.ask));
+        docketsEl.append(card);
+      }
+    }
+
+    function repRow(rep: LegislatorView, bills: TrackedBillView[]) {
+      const row = el(
+        "div",
+        "flex items-center justify-between gap-3 rounded-lg border border-hair px-3 py-2",
+      );
+
+      const info = el("div", "min-w-0");
+      const party = rep.party ? ` (${rep.party})` : "";
+      info.append(
+        el("p", "truncate text-[11px] font-bold text-ink", `${rep.title} ${rep.name}${party}`),
+      );
+      const seat = [
+        CHAMBER_LABEL[rep.chamber],
+        rep.district ? `District ${rep.district}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      info.append(el("p", "truncate text-[10px] text-ink-4", seat));
+      row.append(info);
+
+      const href = mailtoHref(rep, bills);
+      const link = el(
+        "a",
+        href
+          ? "shrink-0 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-bold text-[color:var(--on-accent)] hover:bg-accent-hover transition-colors"
+          : "shrink-0 rounded-lg border border-hair px-2.5 py-1 text-[11px] font-semibold text-ink-2 hover:bg-hover hover:text-ink transition-colors",
+        href ? "Email" : "Contact",
+      ) as HTMLAnchorElement;
+
+      if (href) {
+        link.href = href;
+      } else {
+        // Not every member publishes an address — some only have a contact
+        // form. Prefer the member's own form, then their Open States page,
+        // rather than rendering a dead mailto.
+        link.href = rep.contactUrl ?? rep.url ?? DIRECTORY_URL;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+      }
+      row.append(link);
+
+      return row;
+    }
+
+    function renderReps() {
+      const bills = legislation?.bills ?? [];
+      const found = legislators?.legislators ?? [];
+      repsEl.replaceChildren();
+
+      if (found.length === 0) {
+        const msg =
+          legislators?.source === "unlinked"
+            ? "District lookup is not configured on this deployment."
+            : "Could not match your location to a Minnesota district.";
+        const p = el("p", "text-[11px] text-ink-4 leading-snug", `${msg} `);
+        const a = el(
+          "a",
+          "font-semibold text-accent underline",
+          "Find your legislators",
+        ) as HTMLAnchorElement;
+        a.href = DIRECTORY_URL;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        p.append(a);
+        repsEl.append(p);
+        previewEl.classList.add("hidden");
+        return;
+      }
+
+      for (const rep of found) repsEl.append(repRow(rep, bills));
+
+      previewBody.textContent = composeRepEmail(found[0]!, bills).body;
+      previewEl.classList.remove("hidden");
+    }
+
+    /** Resolves the visitor's coordinates, or confirms there are none to get.
+     *  Never blocks: a denied prompt just means we fall back to the directory
+     *  link instead of a prefilled mailto. */
+    function coords(): Promise<{ lat: number; lng: number } | null> {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          (pos) =>
+            resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(null),
+          { timeout: 8000 },
+        );
+      });
+    }
+
+    async function load() {
+      if (started) return;
+      started = true;
+
+      try {
+        const res = await fetch("/api/legislation");
+        if (res.ok) legislation = await res.json();
+      } catch {
+        // Leave the loading row replaced by the message below.
+      }
+
+      if (legislation) {
+        renderBills(legislation);
+      } else {
+        billsEl.replaceChildren(
+          el("p", "text-[11px] text-ink-4", "Could not load bill status."),
+        );
+      }
+
+      const point = await coords();
+      const query = point ? `?lat=${point.lat}&lng=${point.lng}` : "";
+      try {
+        const res = await fetch(`/api/legislators${query}`);
+        if (res.ok) legislators = await res.json();
+      } catch {
+        // renderReps falls back to the public directory.
+      }
+      renderReps();
+    }
+
+    function setExpanded(next: boolean) {
+      panel.classList.toggle("hidden", !next);
+      chevron.classList.toggle("-rotate-90", !next);
+      toggle.setAttribute("aria-expanded", String(next));
+      try {
+        localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        // Private-mode storage failures shouldn't break the toggle.
+      }
+      if (next) load();
+    }
+
+    toggle.addEventListener("click", () => {
+      setExpanded(panel.classList.contains("hidden"));
+    });
+
+    document.getElementById("cb-action-open")!.addEventListener("click", () => {
+      load();
+      dialog.showModal();
+    });
+    document.getElementById("cb-action-close")!.addEventListener("click", () => {
+      dialog.close();
+    });
+    // Click-outside-to-close: the ::backdrop registers as a click on the
+    // dialog element itself, so compare against the content box.
+    dialog.addEventListener("click", (event) => {
+      const box = dialog.getBoundingClientRect();
+      const outside =
+        event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom;
+      if (outside) dialog.close();
+    });
+
+    // Restore the stored preference after first paint rather than inlining it
+    // into the markup — the page is prerendered, so the served HTML is shared
+    // by every visitor and can't carry one visitor's choice.
+    let restored = false;
+    try {
+      restored = localStorage.getItem(STORAGE_KEY) === "1";
+    } catch {
+      restored = false;
+    }
+    if (restored) setExpanded(true);
+  }
+</script>
