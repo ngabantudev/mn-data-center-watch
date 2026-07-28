@@ -20,19 +20,19 @@ const { largestProjects } = Astro.props;
         <button
           type="button"
           data-project-name={project.name}
-          class="mf-project-link flex items-center justify-between w-full px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors text-left group"
+          class="mf-project-link flex items-center justify-between w-full px-2 py-1.5 rounded-md hover:bg-hover transition-colors text-left group"
         >
           <div class="min-w-0 flex flex-col">
-            <span class="text-[11px] font-medium text-neutral-200 truncate">
+            <span class="text-[11px] font-medium text-ink-2 truncate">
               {project.name}
             </span>
-            <span class="text-[9px] text-neutral-500">
+            <span class="text-[9px] text-ink-4 group-hover:text-ink-2">
               {project.powerCapacityMW}
             </span>
           </div>
           <ChevronRight
             size={14}
-            class="text-neutral-600 group-hover:text-neutral-300 shrink-0 ml-2"
+            class="text-ink-4 group-hover:text-ink shrink-0 ml-2"
           />
         </button>
       ))

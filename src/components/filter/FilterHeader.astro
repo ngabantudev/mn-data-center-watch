@@ -9,14 +9,18 @@ interface Props {
 const { totalCount } = Astro.props;
 
 // --- CONFIGURATION VALUES (Tweak theme colors and styling here) ---
+// These are theme tokens (defined in global.css), not fixed colors, so the
+// same class list resolves correctly in both the light civic theme and the
+// dark one. Swap a token for another token here, not for a raw hex.
 const THEME = {
-  accentTextClass: "text-emerald-400",
-  primaryTextClass: "text-neutral-100",
-  labelTargetClass: "text-neutral-400",
-  boxBgClass: "bg-neutral-900",
-  boxBorderClass: "border-white/5",
-  gridSpacingClass: "grid-cols-2 gap-2 px-3 pb-4",
-  boxPaddingClass: "p-4",
+  accentTextClass: "text-accent",
+  primaryTextClass: "text-ink",
+  labelTargetClass: "text-ink-3",
+  // Surface + hairline + inner shadow together; defined in global.css
+  // because the three have to move as a unit. See .stat-well there.
+  boxBgClass: "stat-well",
+  gridSpacingClass: "grid-cols-2 gap-3 px-4 pb-4",
+  boxPaddingClass: "p-3",
   largeTextSizeClass: "text-xl md:text-2xl"
 };
 
@@ -58,47 +62,53 @@ const totalPermanentJobs = validProjects.reduce((acc, p) => {
 }, 0);
 ---
 
-<div class="w-full hidden md:flex flex-col border-b border-white/10 bg-neutral-950">
+<div class="w-full hidden md:flex flex-col border-b border-hair bg-panel-2">
+  <!--
+    Masthead. In the light theme --header-bg is the State of Minnesota deep
+    blue with white type, the banner treatment government sites lead with; in
+    the dark theme it resolves to near-black with light type, i.e. what this
+    header looked like before. One markup path, both results.
+  -->
   <button
     id="mf-header-trigger"
     type="button"
     aria-expanded="true"
     aria-controls="mf-content"
-    class="w-full flex items-center justify-between px-4 py-4 shrink-0 min-w-0 text-left appearance-none bg-transparent cursor-pointer md:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400/50"
+    class="w-full flex items-center justify-between px-4 py-4 shrink-0 min-w-0 text-left appearance-none bg-header-bg cursor-pointer md:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
   >
     <div class="flex-1 min-w-0 pr-2 py-1">
-      <span class="block text-xs md:text-sm font-semibold tracking-[0.25em] text-emerald-400 uppercase leading-none mb-2">
+      <span class="block text-xs md:text-sm font-semibold tracking-[0.25em] text-header-eyebrow uppercase leading-none mb-2">
         Data Center Watch
       </span>
-      <h1 class="text-3xl md:text-4xl font-black tracking-tight text-neutral-100 uppercase leading-none">
+      <h1 class="text-3xl md:text-4xl font-black tracking-tight text-header-ink uppercase leading-none">
         Minnesota
       </h1>
     </div>
     <ChevronDown
       size={20}
-      class="md:hidden text-neutral-500 transition-transform duration-200 shrink-0 ml-auto"
+      class="md:hidden text-header-ink/70 transition-transform duration-200 shrink-0 ml-auto"
     />
   </button>
 
-    <div class={`grid ${THEME.gridSpacingClass} border-t border-white/5 bg-transparent`}>
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Total Power</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.accentTextClass}`}>{(totalMW / 1000).toFixed(2)} GW</span>
+    <div class={`grid ${THEME.gridSpacingClass} bg-transparent`}>
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Total Power</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.accentTextClass}`}>{(totalMW / 1000).toFixed(2)} GW</span>
     </div>
 
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Total Cost</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.primaryTextClass}`}>${totalCapExBillion.toFixed(1)}B</span>
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Total Cost</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.primaryTextClass}`}>${totalCapExBillion.toFixed(1)}B</span>
     </div>
 
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Active Centers</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.primaryTextClass}`}>{activeCount} <span class="text-neutral-500">/ {totalCount}</span></span>
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Active Centers</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.primaryTextClass}`}>{activeCount} <span class="text-ink-4">/ {totalCount}</span></span>
     </div>
 
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} ${THEME.boxBorderClass} flex flex-col justify-center min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} mt-1.5 uppercase tracking-wider`}>Permanent Tech Jobs</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight ${THEME.primaryTextClass}`}>~{totalPermanentJobs}</span>
+    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
+      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Permanent Tech Jobs</span>
+      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.primaryTextClass}`}>~{totalPermanentJobs}</span>
     </div>
   </div>
 </div>

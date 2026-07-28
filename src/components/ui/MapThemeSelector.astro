@@ -1,6 +1,15 @@
 ---
 // src/components/map/MapThemeSelector.astro
 import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
+import { Sun, Moon } from "lucide-astro";
+
+// Site chrome theme first, basemap second. They're two different things but
+// one decision in the user's head ("make this light"), so they share a
+// popover rather than competing for space in the control stack.
+const SITE_THEMES = [
+  { id: "light", label: "Light", icon: Sun },
+  { id: "dark", label: "Dark", icon: Moon },
+] as const;
 ---
 
 <!--
@@ -63,6 +72,34 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
     <span
       class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1"
     >
+      Site Theme
+    </span>
+
+    <div class="grid grid-cols-2 gap-1 px-1 pb-1.5" role="radiogroup" aria-label="Site theme">
+      {
+        SITE_THEMES.map((option) => {
+          const Icon = option.icon;
+          return (
+            <button
+              type="button"
+              role="radio"
+              aria-checked="false"
+              class="mts-theme flex items-center justify-center gap-1.5 text-[11px] font-semibold text-neutral-600 rounded-lg px-2 py-1.5 border border-neutral-200 hover:bg-neutral-100 transition"
+              data-theme={option.id}
+            >
+              <Icon size={13} stroke-width={2.25} />
+              <span>{option.label}</span>
+            </button>
+          );
+        })
+      }
+    </div>
+
+    <div class="border-t border-neutral-200 mx-1"></div>
+
+    <span
+      class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1"
+    >
       Map Theme
     </span>
     {
@@ -96,6 +133,19 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
 </div>
 
 <script>
+  import {
+    getInitialMapStyleId,
+    getMapStyleIdForTheme,
+    getMapStyleUrlById,
+    storeMapStyleId,
+  } from "~/data/mapStyles";
+  import {
+    getActiveTheme,
+    isSiteTheme,
+    setTheme,
+    type SiteTheme,
+  } from "~/lib/siteTheme";
+
   function initThemeSelector(): void {
     const root = document.getElementById("map-theme-selector");
     if (!root) return;
@@ -107,10 +157,26 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
     const options = Array.from(
       document.querySelectorAll<HTMLButtonElement>(".mts-option"),
     );
+    const themeButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(".mts-theme"),
+    );
 
     let open = false;
     let currentStyleId =
-      root.dataset.defaultStyle || options[0]?.dataset.styleId || "";
+      getInitialMapStyleId() ||
+      root.dataset.defaultStyle ||
+      options[0]?.dataset.styleId ||
+      "";
+
+    function applyStyle(styleId: string): void {
+      currentStyleId = styleId;
+      syncChecks();
+      document.dispatchEvent(
+        new CustomEvent("mapstylechange", {
+          detail: { url: getMapStyleUrlById(styleId), id: styleId },
+        }),
+      );
+    }
 
     function syncChecks(): void {
       options.forEach((opt) => {
@@ -119,6 +185,28 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
         if (check) check.style.opacity = active ? "1" : "0";
         opt.classList.toggle("bg-neutral-100", active);
       });
+
+      const theme = getActiveTheme();
+      themeButtons.forEach((btn) => {
+        const active = btn.dataset.theme === theme;
+        btn.setAttribute("aria-checked", String(active));
+        btn.classList.toggle("bg-neutral-100", active);
+        btn.classList.toggle("border-neutral-400", active);
+        btn.classList.toggle("text-neutral-900", active);
+        btn.classList.toggle("border-neutral-200", !active);
+        btn.classList.toggle("text-neutral-600", !active);
+      });
+    }
+
+    function selectTheme(theme: SiteTheme): void {
+      // Theme and basemap move together: picking Light also drops the map to
+      // its paired basemap, and likewise for Dark. Persisted so a reload
+      // comes back to the same pairing; picking a basemap by hand afterwards
+      // overwrites it and holds until the next theme switch.
+      setTheme(theme);
+      const styleId = getMapStyleIdForTheme(theme);
+      storeMapStyleId(styleId);
+      applyStyle(styleId);
     }
 
     function setOpen(next: boolean): void {
@@ -142,17 +230,19 @@ import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
 
     options.forEach((opt) => {
       opt.addEventListener("click", () => {
-        currentStyleId = opt.dataset.styleId || currentStyleId;
-        const url = opt.dataset.styleUrl;
-        syncChecks();
+        const styleId = opt.dataset.styleId;
+        if (!styleId) return;
+        // Picking a basemap by hand makes it sticky — see storeMapStyleId.
+        storeMapStyleId(styleId);
+        applyStyle(styleId);
         setOpen(false);
-        if (url) {
-          document.dispatchEvent(
-            new CustomEvent("mapstylechange", {
-              detail: { url, id: currentStyleId },
-            }),
-          );
-        }
+      });
+    });
+
+    themeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const theme = btn.dataset.theme;
+        if (isSiteTheme(theme)) selectTheme(theme);
       });
     });
 

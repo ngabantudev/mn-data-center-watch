@@ -26,6 +26,7 @@ const displayDescription = metadata.description || siteDescription;
 
 // Minimal favicon matching the map's own marker style: a colored circle
 // with a white ring on a dark square, so the browser tab echoes the map.
+// Kept theme-independent — the tab icon shouldn't flicker on theme switch.
 const faviconSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
   '<rect width="32" height="32" rx="8" fill="#131314"/>' +
@@ -34,13 +35,39 @@ const faviconSvg =
 const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
 ---
 
-<!doctype html>
-<html lang="en" class="dark motion-safe:scroll-smooth">
+<!--
+  No `dark` class in the served markup — the inline script in <head> adds it
+  before first paint when that's the stored preference. Keeping it off the
+  static HTML means the light civic theme is what a no-JS or slow-JS visitor
+  sees, which is the safer default for a public-records site.
+-->
+<html lang="en" class="motion-safe:scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#131314" />
+    <meta name="theme-color" content="#003865" />
     <link rel="icon" href={faviconHref} type="image/svg+xml" />
+
+    {/*
+      Runs before first paint to avoid a flash of the wrong theme. It has to
+      be inline and dependency-free — importing siteTheme.ts here would defer
+      it past paint, which is the exact problem it exists to solve — so the
+      storage key and theme-color values are duplicated from that module.
+      Keep the two in sync if either changes.
+    */}
+    <script is:inline>
+      (function () {
+        try {
+          var stored = localStorage.getItem("siteTheme");
+          if (stored !== "light" && stored !== "dark") stored = "light";
+          if (stored === "dark") {
+            document.documentElement.classList.add("dark");
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute("content", "#131314");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>{displayTitle}</title>
     <meta name="description" content={displayDescription} />
 
@@ -77,7 +104,12 @@ const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
   -->
   </head>
 
-  <body class="bg-[#131314] text-neutral-200 antialiased h-full flex flex-col">
+  <!--
+    text-ink-canvas, not text-ink: the body sits on --canvas (the map
+    backdrop), and in the light theme --ink is white for use on the navy
+    sidebars. See the palette notes in global.css.
+  -->
+  <body class="bg-canvas text-ink-canvas antialiased h-full flex flex-col">
     <main id="main-content" class="grow">
       <slot />
     </main>
