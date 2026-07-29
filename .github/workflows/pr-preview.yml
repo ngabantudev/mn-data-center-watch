@@ -1,0 +1,192 @@
+# .github/workflows/pr-preview.yml
+#
+# Builds every pull request and uploads it to Cloudflare as a *preview version*
+# of the existing mn-data-center-watch Worker, then posts the URL on the PR.
+#
+# NOTE ON THE DIRECTORY: this file is in `.github/workflows/` — with the leading
+# dot. The repo also has a `github/workflows/refresh-news.yml` without one,
+# which GitHub does not read and which has therefore never run. If that cron is
+# meant to be live it needs moving here, and it needs its DEPLOY_HOOK_URL
+# secret, which isn't set.
+#
+# `wrangler versions upload` is deliberate, and the whole safety story:
+#
+#   versions upload  -> new version, its own URL, ZERO production traffic
+#   versions deploy  -> shifts production traffic     <- never run here
+#
+# So this workflow cannot break the live site, and it stays correct even if you
+# later connect Cloudflare Workers Builds for production deploys — that handles
+# the production branch, this handles PR previews, and they don't overlap.
+#
+# REQUIRED SECRETS (Settings > Secrets and variables > Actions):
+#
+#   CLOUDFLARE_ACCOUNT_ID   3b53258b8c4caba650af9584b4228a3b
+#   CLOUDFLARE_API_TOKEN    Create at
+#                           dash.cloudflare.com/profile/api-tokens > Create Token
+#                           > "Edit Cloudflare Workers" template, scoped to this
+#                           account. Minimum permissions:
+#                             Account > Workers Scripts  > Edit
+#                             Account > Workers KV Storage > Edit  (the adapter
+#                               binds a SESSION namespace; upload fails without
+#                               permission to read that binding)
+#
+# Use an API token, not a Global API Key: a token can be scoped to Workers on
+# one account and revoked on its own, which a global key cannot.
+
+name: PR preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Least privilege: read the code, write the one comment. No deployments scope,
+# nothing that can push.
+permissions:
+  contents: read
+  pull-requests: write
+
+# A new push supersedes the previous preview for that PR — no point spending a
+# build on a commit nobody will look at.
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+
+    # Secrets are not exposed to pull_request runs from forks, so the upload
+    # would fail with a confusing auth error rather than an obvious skip.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Matches the `engines.node` floor in package.json.
+          node-version: "22.12"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        # No OPENSTATES_API_KEY here on purpose. The bill list is fetched
+        # per-request by /api/legislation, never baked in at build time, so the
+        # build has nothing to do with the key — and a preview build shouldn't
+        # need a secret to prove the page compiles.
+        run: npm run build
+
+      - name: Upload preview version
+        id: upload
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+
+          # Fail with the actual problem. Without this, a missing token surfaces
+          # as a wrangler auth error that reads like a broken config rather than
+          # a secret nobody has added yet.
+          missing=""
+          [ -z "$CLOUDFLARE_API_TOKEN" ]  && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — add them under Settings > Secrets and variables > Actions. See the header of this workflow file for the exact token permissions."
+            exit 1
+          fi
+
+          npx wrangler versions upload \
+            --tag "pr-${{ github.event.pull_request.number }}" \
+            --message "PR #${{ github.event.pull_request.number }} @ ${GITHUB_SHA::7}" \
+            2>&1 | tee upload.log
+
+          # The dot in the character class matters: a preview host is
+          # <version>-<worker>.<subdomain>.workers.dev — two labels before
+          # workers.dev, not one. Without it this matches nothing.
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' upload.log | head -1)
+          VERSION=$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' upload.log | head -1)
+
+          if [ -z "$URL" ]; then
+            echo "::error::No preview URL in wrangler output. Preview URLs may be disabled for this Worker."
+            exit 1
+          fi
+
+          echo "url=$URL"         >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test the preview
+        id: smoke
+        env:
+          URL: ${{ steps.upload.outputs.url }}
+        run: |
+          # A URL that 500s is worse than no preview, because it reads as "the
+          # change is broken" when it may just be a cold start. Check the page
+          # and the live route, and report what each actually returned.
+          page=$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 "$URL/")
+          api=$(curl -s -o api.json -w '%{http_code}' --max-time 45 "$URL/api/legislation")
+
+          summary=$(node -e '
+            try {
+              const d = require("./api.json");
+              const s = d.session || {};
+              process.stdout.write(
+                `source \`${d.source}\` · ${d.totalMatched} bills matched · ` +
+                `${(d.core||[]).length} name data centers in the title · ` +
+                `${(d.mentions||[]).filter(b => (b.blindspots||[]).length).length} blindspot(s)` +
+                (s.name ? ` · ${s.name}` : "")
+              );
+            } catch { process.stdout.write("could not parse payload"); }
+          ' 2>/dev/null || echo "could not parse payload")
+
+          echo "page=$page"       >> "$GITHUB_OUTPUT"
+          echo "api=$api"         >> "$GITHUB_OUTPUT"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
+      - name: Comment the preview URL
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          URL: ${{ steps.upload.outputs.url }}
+          VERSION: ${{ steps.upload.outputs.version }}
+          PAGE: ${{ steps.smoke.outputs.page }}
+          API: ${{ steps.smoke.outputs.api }}
+          SUMMARY: ${{ steps.smoke.outputs.summary }}
+        run: |
+          # A hidden marker makes the comment findable, so each push edits one
+          # comment instead of burying the discussion in a stack of bot posts.
+          MARKER="<!-- cf-pr-preview -->"
+
+          {
+            echo "$MARKER"
+            echo "### Preview deployed"
+            echo
+            echo "**$URL**"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Page | \`$PAGE\` |"
+            echo "| \`/api/legislation\` | \`$API\` |"
+            echo "| Live data | $SUMMARY |"
+            echo "| Version | \`$VERSION\` |"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo
+            echo "Uploaded with \`wrangler versions upload\` — this version has its own"
+            echo "URL and receives **no production traffic**. To promote it:"
+            echo
+            echo "\`\`\`"
+            echo "npx wrangler versions deploy $VERSION"
+            echo "\`\`\`"
+          } > comment.md
+
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+                --paginate --jq "map(select(.body | contains(\"$MARKER\"))) | .[0].id // empty")
+
+          if [ -n "$ID" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+              -F body=@comment.md
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+              -F body=@comment.md
+          fi

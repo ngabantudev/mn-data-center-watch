@@ -10,6 +10,27 @@
 		"directory": "./dist",
 		"binding": "ASSETS"
 	},
+	// OPTIONAL cache upgrade for the legislative tracker.
+	//
+	// ~/lib/edgeCache.ts looks for a `LEGISLATION_CACHE` KV binding and uses it
+	// when present, falling back to isolate memory plus the Cache API when it
+	// isn't. Nothing needs this to work — it ships without a binding on purpose.
+	//
+	// What KV adds: the memory layer dies with the isolate and the Cache API is
+	// per-colo and a no-op on workers.dev, so on a cold isolate the tracker
+	// refreshes from Open States again. That's fine at 4 requests against a
+	// 10/min ceiling, and it stops being fine if traffic arrives from many
+	// regions at once. KV is the only layer that survives both.
+	//
+	// To enable:
+	//   wrangler kv namespace create LEGISLATION_CACHE
+	// then uncomment below with the returned id. (The `SESSION` namespace this
+	// project already has is Astro's, created by the Cloudflare adapter for
+	// sessions — don't reuse it for this.)
+	//
+	// "kv_namespaces": [
+	// 	{ "binding": "LEGISLATION_CACHE", "id": "<id from the command above>" }
+	// ],
 	// OFF, deliberately — this is the no-PII posture applied to our own logs.
 	//
 	// Worker request logs carry client IP addresses. An IP is personal data in
