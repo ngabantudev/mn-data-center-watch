@@ -22,6 +22,7 @@ import {
   Mail,
   MessageSquareText,
   ExternalLink,
+  MapPin,
   Radar,
   X,
 } from "lucide-astro";
@@ -188,8 +189,26 @@ import {
       </h3>
 
       <div id="cb-reps" class="space-y-2">
-        <p class="text-[11px] text-ink-4">Finding your district…</p>
+        <p class="text-[11px] text-ink-4">Loading…</p>
       </div>
+
+      <!--
+        Location is opt-in, from this button and nowhere else. The panel used to
+        ask on page load, which is both rude and pointless — reading a bill list
+        doesn't depend on where the reader lives. See `requestLocation` below.
+      -->
+      <button
+        id="cb-locate"
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded-lg border border-hair px-3 py-1.5 text-[11px] font-semibold text-ink-2 hover:bg-hover hover:text-ink transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+      >
+        <MapPin size={12} /> Use my location to find mine
+      </button>
+      <p class="text-[10px] text-ink-4 leading-snug">
+        Only if you tap that. Rounded to about a kilometre before it leaves your
+        browser, sent once to look up which district you're in, and not stored
+        by us.
+      </p>
 
       <details id="cb-preview" class="hidden rounded-lg border border-hair bg-(--well) px-3 py-2">
         <summary class="cursor-pointer text-[11px] font-semibold text-ink-2">
@@ -267,6 +286,11 @@ import {
 
   const STORAGE_KEY = "cb-expanded";
   const DIRECTORY_URL = "https://www.leg.mn.gov/leg/legdir";
+
+  /** Decimal places kept from a coordinate before it leaves the browser —
+   *  ~1km, matching COORD_PRECISION in ~/pages/api/legislators.ts. Districts
+   *  are far larger than that, so nothing useful is lost. */
+  const COORD_PRECISION = 2;
 
   /** How many bills the emailed draft lists. A constituent letter enumerating
    *  two dozen bills reads as a mailing list, not a constituent. */
@@ -515,8 +539,8 @@ import {
         : `${s.name} is in session.`;
 
       introEl.textContent =
-        `${when} Searching bills for “${payload.query}”: ${payload.totalMatched} matched, ` +
-        `${payload.core.length} name it in the title.` +
+        `${when} Bills containing “${payload.query}”: ${payload.totalMatched} matches, ` +
+        `${payload.core.length} in title.` +
         (payload.truncated ? " List is partial." : "");
 
       // Say so, plainly and in the reader's terms, when this isn't current.
@@ -674,27 +698,61 @@ import {
       return row;
     }
 
+    /** A plain link to the state's own directory. The default, and on its own a
+     *  complete answer to "who represents me" — it just costs a few more clicks
+     *  than a district lookup would. */
+    function directoryFallback(lead: string) {
+      const p = el("p", "text-[11px] text-ink-4 leading-snug", `${lead} `);
+      const a = el(
+        "a",
+        "font-semibold text-accent underline",
+        "Look yours up at leg.mn.gov",
+      ) as HTMLAnchorElement;
+      a.href = DIRECTORY_URL;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      p.append(a);
+      return p;
+    }
+
+    /**
+     * The default state of the legislator section: no location requested, no
+     * prompt raised, and a working way to find your representatives anyway.
+     *
+     * Nothing here touches navigator.geolocation. That is the whole point — see
+     * the note on `requestLocation` below.
+     */
+    function renderRepsIdle() {
+      repsEl.replaceChildren();
+      previewEl.classList.add("hidden");
+
+      if (legislators?.source === "unlinked") {
+        repsEl.append(
+          directoryFallback("District lookup isn't configured on this deployment."),
+        );
+        return;
+      }
+
+      repsEl.append(
+        directoryFallback(
+          "Every Minnesotan has one senator and one representative in St. Paul.",
+        ),
+      );
+    }
+
     function renderReps() {
       const bills = emailBills();
       const found = legislators?.legislators ?? [];
       repsEl.replaceChildren();
 
       if (found.length === 0) {
-        const msg =
-          legislators?.source === "unlinked"
-            ? "District lookup is not configured on this deployment."
-            : "Could not match your location to a Minnesota district.";
-        const p = el("p", "text-[11px] text-ink-4 leading-snug", `${msg} `);
-        const a = el(
-          "a",
-          "font-semibold text-accent underline",
-          "Find your legislators",
-        ) as HTMLAnchorElement;
-        a.href = DIRECTORY_URL;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        p.append(a);
-        repsEl.append(p);
+        repsEl.append(
+          directoryFallback(
+            legislators?.source === "unlinked"
+              ? "District lookup isn't configured on this deployment."
+              : "That location didn't match a Minnesota district.",
+          ),
+        );
         previewEl.classList.add("hidden");
         return;
       }
@@ -705,10 +763,24 @@ import {
       previewEl.classList.remove("hidden");
     }
 
-    /** Resolves the visitor's coordinates, or confirms there are none to get.
-     *  Never blocks: a denied prompt just means we fall back to the directory
-     *  link instead of a prefilled mailto. */
-    function coords(): Promise<{ lat: number; lng: number } | null> {
+    /**
+     * Asks the browser for coordinates — ONLY ever from a click handler.
+     *
+     * This used to run inside load(), which made it automatic in the worst way:
+     * expanding the panel to read the bill list stored `cb-expanded=1`, and
+     * every later visit then restored that state on page load and silently
+     * re-raised the location prompt before the visitor had clicked anything.
+     * Reading a list of bills has nothing to do with where someone lives.
+     *
+     * It also sat badly with this project's no-PII posture. We don't keep
+     * request logs precisely so as not to hold IP addresses; asking unprompted
+     * for something far more precise than an IP, to render a convenience, was
+     * the same trade going the other way.
+     *
+     * Keep this reachable only from an explicit gesture. If a future change
+     * needs coordinates somewhere else, that call site needs its own button.
+     */
+    function requestLocation(): Promise<{ lat: number; lng: number } | null> {
       return new Promise((resolve) => {
         if (!navigator.geolocation) return resolve(null);
         navigator.geolocation.getCurrentPosition(
@@ -720,6 +792,45 @@ import {
       });
     }
 
+    async function findMyLegislators(btn: HTMLButtonElement) {
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "Checking…";
+
+      const point = await requestLocation();
+      if (!point) {
+        // Declined, dismissed, or unsupported. All three mean the same thing to
+        // us, and none is an error worth scolding anyone about.
+        btn.disabled = false;
+        btn.textContent = original;
+        renderRepsIdle();
+        return;
+      }
+
+      // Round HERE, not just server-side.
+      //
+      // /api/legislators already rounds to 2dp before calling Open States, but
+      // it was receiving full GPS precision in the query string first — which
+      // is metre-level, and enough to identify a house. Districts are large;
+      // ~1km is more than enough to place someone in one. Rounding in the
+      // browser means the precise value never leaves the device at all, which
+      // is what the note under the button promises.
+      const lat = point.lat.toFixed(COORD_PRECISION);
+      const lng = point.lng.toFixed(COORD_PRECISION);
+
+      try {
+        const res = await fetch(`/api/legislators?lat=${lat}&lng=${lng}`);
+        if (res.ok) legislators = await res.json();
+      } catch {
+        // renderReps falls back to the directory link.
+      }
+
+      btn.disabled = false;
+      btn.textContent = original;
+      renderReps();
+    }
+
+    /** Loads the bill list. Deliberately does NOT touch location. */
     async function load() {
       if (started) return;
       started = true;
@@ -739,15 +850,7 @@ import {
         );
       }
 
-      const point = await coords();
-      const query = point ? `?lat=${point.lat}&lng=${point.lng}` : "";
-      try {
-        const res = await fetch(`/api/legislators${query}`);
-        if (res.ok) legislators = await res.json();
-      } catch {
-        // renderReps falls back to the public directory.
-      }
-      renderReps();
+      renderRepsIdle();
     }
 
     function setExpanded(next: boolean) {
@@ -769,6 +872,13 @@ import {
     document.getElementById("cb-action-open")!.addEventListener("click", () => {
       load();
       dialog.showModal();
+    });
+
+    // The only path to navigator.geolocation in this component. A click, every
+    // time — nothing restores it from storage and nothing calls it on load.
+    const locateBtn = document.getElementById("cb-locate") as HTMLButtonElement;
+    locateBtn.addEventListener("click", () => {
+      void findMyLegislators(locateBtn);
     });
     document.getElementById("cb-action-close")!.addEventListener("click", () => {
       dialog.close();
