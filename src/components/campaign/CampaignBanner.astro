@@ -72,6 +72,31 @@ import {
       </p>
     </div>
 
+    <!--
+      Where every bill stands, in three numbers.
+
+      Shown even when a count is zero, because the zero is the finding: "0
+      Passed" next to two dozen proposed is the single most informative thing
+      on this panel, and hiding empty groups would quietly delete it.
+    -->
+    <div
+      id="cb-summary"
+      class="flex items-stretch gap-1.5 px-3.5 py-2.5 border-b border-hair"
+      aria-label="Bill counts by stage"
+    ></div>
+
+    <!--
+      Chamber filter. Same pill affordance as the news panel's date ranges, so
+      it's an interaction already established elsewhere on the page rather than
+      a new one to learn.
+    -->
+    <div
+      id="cb-chamber-group"
+      role="group"
+      aria-label="Filter bills by chamber"
+      class="flex items-center gap-1.5 px-3.5 py-2 border-b border-hair"
+    ></div>
+
     <!-- One scroll container for all three groups below, so the panel keeps a
          predictable height however many bills the search turns up. -->
     <div id="cb-scroll" class="max-h-80 overflow-y-auto">
@@ -221,14 +246,19 @@ import {
 
 <script>
   import {
+    STAGE_INK,
+    STAGE_META_BY_STAGE,
+    STAGES_IN_ORDER,
+  } from "~/data/billStageMeta";
+  import {
     CHAMBER_LABEL,
-    STAGE_LABEL,
     composeRepEmail,
     mailtoHref,
     relativeAge,
     sponsorLine,
   } from "~/lib/legislation";
   import type {
+    BillStage,
     LegislationPayload,
     LegislatorsPayload,
     LegislatorView,
@@ -248,6 +278,8 @@ import {
     const chevron = document.getElementById("cb-chevron")!;
     const panel = document.getElementById("cb-panel")!;
     const introEl = document.getElementById("cb-intro")!;
+    const summaryEl = document.getElementById("cb-summary")!;
+    const chamberEl = document.getElementById("cb-chamber-group")!;
     const billsEl = document.getElementById("cb-bills")!;
     const blindspotWrap = document.getElementById("cb-blindspot-wrap")!;
     const blindspotsEl = document.getElementById("cb-blindspots")!;
@@ -280,15 +312,105 @@ import {
     const CHIP =
       "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide";
 
-    function stageChip(bill: LiveBill) {
-      // A passed bill is the one state worth colouring. Everything else is
-      // various shades of "sitting in committee", and giving each its own
-      // colour would imply a precision the three-rung derivation doesn't have.
-      const cls =
-        bill.stage === "passed"
-          ? `${CHIP} bg-positive text-on-positive`
-          : `${CHIP} border border-hair text-ink-3`;
-      return el("span", cls, STAGE_LABEL[bill.stage]);
+    /** Which chamber the list is narrowed to, or null for both. */
+    let chamberFilter: string | null = null;
+
+    /**
+     * The coloured stage pill.
+     *
+     * The label is always present, never colour alone — that's what keeps the
+     * red/green pair meaningful to a colourblind reader, and it's why the pill
+     * carries a `title` spelling the stage out in full as well.
+     */
+    function stageChip(stage: BillStage) {
+      const meta = STAGE_META_BY_STAGE[stage];
+      const chip = el(
+        "span",
+        `${CHIP} ${meta.color} ${STAGE_INK}`,
+        meta.label,
+      );
+      chip.title = meta.description;
+      return chip;
+    }
+
+    /** Small outlined pill for the chamber, so House/Senate is scannable
+     *  without reading the bill number. */
+    function chamberChip(chamber: string) {
+      return el("span", `${CHIP} border border-hair text-ink-3`, chamber);
+    }
+
+    /** The three-number summary. Renders every stage including the zeros. */
+    function renderSummary(bills: LiveBill[]) {
+      summaryEl.replaceChildren();
+
+      for (const stage of STAGES_IN_ORDER) {
+        const meta = STAGE_META_BY_STAGE[stage];
+        const n = bills.filter((b) => b.stage === stage).length;
+
+        const cell = el(
+          "div",
+          "flex-1 min-w-0 rounded-lg border border-hair px-2 py-1.5",
+        );
+        const head = el("div", "flex items-center gap-1.5");
+        head.append(el("span", `h-2 w-2 shrink-0 rounded-full ${meta.color}`));
+        head.append(
+          el("span", "text-[13px] font-bold leading-none text-ink", String(n)),
+        );
+        cell.append(head);
+        cell.append(
+          el(
+            "p",
+            "mt-1 text-[9px] font-bold uppercase tracking-wide text-ink-3 truncate",
+            meta.label,
+          ),
+        );
+        cell.title = `${n} ${meta.label} — ${meta.description}`;
+        summaryEl.append(cell);
+      }
+    }
+
+    /** House / Senate pills, with counts, plus an "All" reset. */
+    function renderChamberFilter(bills: LiveBill[]) {
+      chamberEl.replaceChildren();
+
+      const chambers = Array.from(
+        new Set(bills.map((b) => b.chamber).filter((c): c is string => !!c)),
+      ).sort();
+
+      // One chamber (or none) means there is nothing to choose between, and a
+      // filter with a single option is just clutter.
+      if (chambers.length < 2) {
+        chamberEl.classList.add("hidden");
+        return;
+      }
+      chamberEl.classList.remove("hidden");
+
+      const options: { label: string; value: string | null }[] = [
+        { label: `All ${bills.length}`, value: null },
+        ...chambers.map((c) => ({
+          label: `${c} ${bills.filter((b) => b.chamber === c).length}`,
+          value: c,
+        })),
+      ];
+
+      for (const opt of options) {
+        const active = chamberFilter === opt.value;
+        const btn = el(
+          "button",
+          "text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors " +
+            (active
+              ? "text-accent border-accent/30 bg-accent-soft"
+              : "text-ink-4 border-hair hover:text-ink"),
+          opt.label,
+        ) as HTMLButtonElement;
+        btn.type = "button";
+        btn.setAttribute("aria-pressed", String(active));
+        btn.addEventListener("click", () => {
+          chamberFilter = opt.value;
+          if (legislation) renderBills(legislation);
+        });
+        chamberEl.append(btn);
+      }
     }
 
     function billCard(bill: LiveBill, highlight = false) {
@@ -301,10 +423,8 @@ import {
 
       const head = el("div", "flex items-center gap-1.5 flex-wrap");
       head.append(el("span", "text-[11px] font-bold text-accent", bill.identifier));
-      if (bill.chamber) {
-        head.append(el("span", "text-[10px] text-ink-4", bill.chamber));
-      }
-      head.append(stageChip(bill));
+      head.append(stageChip(bill.stage));
+      if (bill.chamber) head.append(chamberChip(bill.chamber));
 
       if (bill.stance) {
         head.append(
@@ -412,29 +532,76 @@ import {
       }
     }
 
+    /** Heading for one stage group: colour, name, count. */
+    function stageHeading(stage: BillStage, count: number) {
+      const meta = STAGE_META_BY_STAGE[stage];
+      const row = el(
+        "div",
+        "flex items-center gap-1.5 pt-1 first:pt-0 sticky top-0 bg-panel/95 backdrop-blur-md py-1 z-10",
+      );
+      row.append(el("span", `h-2 w-2 shrink-0 rounded-full ${meta.color}`));
+      row.append(
+        el(
+          "h4",
+          "text-[10px] font-bold uppercase tracking-wider text-ink-2",
+          `${meta.label} · ${count}`,
+        ),
+      );
+      row.append(
+        el("span", "text-[9px] text-ink-4 truncate", meta.description),
+      );
+      return row;
+    }
+
     function renderBills(payload: LegislationPayload) {
       renderIntro(payload);
 
-      const blindspots = payload.mentions.filter((b) => b.blindspots.length > 0);
-      const quiet = payload.mentions.filter((b) => b.blindspots.length === 0);
+      // Counts and the chamber filter describe the whole core set, never the
+      // filtered view — otherwise clicking "House" would make the totals shrink
+      // and the panel would look like bills had disappeared.
+      renderSummary(payload.core);
+      renderChamberFilter(payload.core);
+
+      const inChamber = (b: LiveBill) =>
+        chamberFilter === null || b.chamber === chamberFilter;
+
+      const blindspots = payload.mentions.filter(
+        (b) => b.blindspots.length > 0 && inChamber(b),
+      );
+      const quiet = payload.mentions.filter(
+        (b) => b.blindspots.length === 0 && inChamber(b),
+      );
 
       blindspotsEl.replaceChildren();
       blindspotWrap.classList.toggle("hidden", blindspots.length === 0);
       for (const bill of blindspots) blindspotsEl.append(billCard(bill, true));
 
+      const core = payload.core.filter(inChamber);
+
       billsEl.replaceChildren();
-      if (payload.core.length === 0) {
+      if (core.length === 0) {
         billsEl.append(
           el(
             "p",
             "text-[11px] text-ink-4 leading-snug",
-            payload.source === "live"
-              ? "No bill in this session names data centers in its title."
-              : "No bills to show.",
+            payload.source !== "live"
+              ? "No bills to show."
+              : chamberFilter
+                ? `No ${chamberFilter} bill in this session names data centers in its title.`
+                : "No bill in this session names data centers in its title.",
           ),
         );
       }
-      for (const bill of payload.core) billsEl.append(billCard(bill));
+
+      // Grouped by stage, most consequential first. Empty groups are skipped
+      // here — the summary strip above already reports their zero, so there's
+      // no need for an empty heading to say it twice.
+      for (const stage of STAGES_IN_ORDER) {
+        const group = core.filter((b) => b.stage === stage);
+        if (group.length === 0) continue;
+        billsEl.append(stageHeading(stage, group.length));
+        for (const bill of group) billsEl.append(billCard(bill));
+      }
 
       mentionsEl.replaceChildren();
       moreEl.classList.toggle("hidden", quiet.length === 0);
