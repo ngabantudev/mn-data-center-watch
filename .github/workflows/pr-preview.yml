@@ -128,7 +128,22 @@ jobs:
           # change is broken" when it may just be a cold start. Check the page
           # and the live route, and report what each actually returned.
           page=$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 "$URL/")
-          api=$(curl -s -o api.json -w '%{http_code}' --max-time 45 "$URL/api/legislation")
+          api=$(curl -s -o api.json -w '%{http_code}' --max-time 60 "$URL/api/legislation")
+
+          # Retry once on `degraded`, because a fresh version reached from a colo
+          # that has never cached this data does its own cold fetch, and if one
+          # of those four upstream calls loses a race the route correctly reports
+          # degraded. Observed on a build that was completely healthy a minute
+          # later — a false alarm in the one artifact a reviewer trusts.
+          #
+          # The 65s wait is not padding. A failed refresh sets a 60s backoff (see
+          # ~/lib/edgeCache.ts), so any sooner retry is suppressed by our own
+          # code and returns degraded again no matter how healthy the upstream is.
+          if grep -q '"source":"degraded"' api.json 2>/dev/null; then
+            echo "Cold-cache degraded response; waiting out the 60s refresh backoff before retrying."
+            sleep 65
+            api=$(curl -s -o api.json -w '%{http_code}' --max-time 60 "$URL/api/legislation")
+          fi
 
           summary=$(node -e '
             try {
