@@ -4,10 +4,13 @@
 # of the existing mn-data-center-watch Worker, then posts the URL on the PR.
 #
 # NOTE ON THE DIRECTORY: this file is in `.github/workflows/` — with the leading
-# dot. The repo also has a `github/workflows/refresh-news.yml` without one,
-# which GitHub does not read and which has therefore never run. If that cron is
-# meant to be live it needs moving here, and it needs its DEPLOY_HOOK_URL
-# secret, which isn't set.
+# dot. GitHub reads nothing else. A `github/workflows/refresh-news.yml` used to
+# sit here without the dot and had therefore never run once; it's been deleted,
+# since /api/news now fetches live and there is nothing for it to refresh.
+#
+# `github/.gitattributes` is still there and is also dead — being inside that
+# directory, its LFS rules only apply to files under it, and there are none.
+# Left alone rather than changing LFS config as a drive-by.
 #
 # `wrangler versions upload` is deliberate, and the whole safety story:
 #
