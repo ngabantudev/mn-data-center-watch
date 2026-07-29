@@ -6,6 +6,32 @@ export interface NewsItem {
   source: string;
 }
 
+/**
+ * Deliberately distinguishes "the fetch failed" from "the fetch worked and
+ * matched nothing".
+ *
+ * That distinction is load-bearing now that ~/pages/api/news.ts caches this and
+ * falls back to the last good result. Collapsing both into an empty array would
+ * make a genuinely quiet news day look identical to a failed request — and the
+ * cache would either overwrite good results with an outage's emptiness, or
+ * serve last week's articles on a day that really had none. Neither is true.
+ */
+export type NewsResult =
+  | { ok: true; newsItems: NewsItem[] }
+  | { ok: false; reason: string };
+
+/**
+ * Wall-clock budget for the Google News RSS call.
+ *
+ * Was 2000ms, which failed roughly one request in three from a Worker —
+ * measured across all four windows on a live deployment. Google itself answers
+ * in 0.2-0.6s, so the old budget wasn't wrong about Google being fast; it was
+ * too tight to absorb a cold isolate and a TLS handshake on top. There is no
+ * cost to waiting longer on the rare slow call: the result is cached, so the
+ * next visitor doesn't wait at all.
+ */
+const FETCH_TIMEOUT_MS = 8000;
+
 // --- Tune these lists to control precision without touching the fetch/parse logic ---
 
 // Must match at least one of these — establishes it's actually about a data center.
@@ -62,16 +88,17 @@ function buildDateQuery(windowDays: number): string {
   return `after:${fmt(after)} before:${fmt(now)}`;
 }
 
-export async function fetchLocalNews(
-  windowDays: number = 7,
-): Promise<{ newsItems: NewsItem[]; errorMessage: string | null }> {
-  const rawQuery = `"data center" Minnesota ${buildDateQuery(windowDays)}`;
-  const query = encodeURIComponent(rawQuery);
-  const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
-
-  // Force an early escape if the internal environment hangs during build or HMR
+/**
+ * One attempt. Separated from `fetchNews` so the retry below is obviously a
+ * retry of exactly this, and so the failure reason it returns is the real one
+ * rather than a generic message chosen at the call site.
+ */
+async function attemptNews(
+  googleNewsUrl: string,
+): Promise<NewsResult> {
+  // Force an early escape rather than hanging a request on a slow upstream.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
     const response = await fetch(googleNewsUrl, {
@@ -84,7 +111,10 @@ export async function fetchLocalNews(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return { newsItems: [], errorMessage: "Feed momentarily unavailable." };
+      // Carry the status. "Feed unavailable" and "Google answered 429 to this
+      // datacenter IP" call for completely different fixes, and the old code
+      // made them indistinguishable from outside.
+      return { ok: false, reason: `Google News returned ${response.status}.` };
     }
 
     const xmlText = await response.text();
@@ -125,11 +155,61 @@ export async function fetchLocalNews(
       .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime())
       .map(({ haystack, ...item }) => item);
 
-    return { newsItems, errorMessage: null };
+    return { ok: true, newsItems };
 
   } catch (error) {
     clearTimeout(timeoutId);
-    console.warn("⚠️ Miniflare safety fallback triggered. Bypassing news fetch.");
-    return { newsItems: [], errorMessage: "News temporarily unavailable in dev environment." };
+    // The old message here claimed "unavailable in dev environment", which was
+    // being served in production — the same abort path runs in both, and this
+    // was the string a live visitor saw when the 2s budget expired.
+    const aborted = (error as Error | undefined)?.name === "AbortError";
+    return {
+      ok: false,
+      reason: aborted
+        ? `No response from Google News within ${FETCH_TIMEOUT_MS / 1000}s.`
+        : "Couldn't reach Google News.",
+    };
   }
+}
+
+/**
+ * Fetch one window, retrying once.
+ *
+ * The retry is not belt-and-braces, it's the fix for a measured failure: on a
+ * live deployment the *first* call for a given window intermittently failed
+ * while immediate repeats succeeded, so the connection — not the query — is
+ * what's flaky. Unlike Open States, Google News RSS enforces no per-minute
+ * quota here, so an immediate second attempt is free and almost always works.
+ *
+ * Two attempts, not more. Past that we'd be adding latency to a request that
+ * has a cached fallback behind it anyway.
+ */
+export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
+  const rawQuery = `"data center" Minnesota ${buildDateQuery(windowDays)}`;
+  const query = encodeURIComponent(rawQuery);
+  const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
+
+  const first = await attemptNews(googleNewsUrl);
+  if (first.ok) return first;
+
+  // Whatever the second attempt says stands: on success it's the data, and on
+  // failure it's the more recent truth about why.
+  return attemptNews(googleNewsUrl);
+}
+
+/**
+ * Build-time adapter, kept for the prerendered first paint in MapParent.astro.
+ *
+ * That call bakes a snapshot into the static HTML so the panel has something to
+ * show before JS runs. It is no longer the source of truth — the client
+ * refetches from /api/news on mount — so a failure here costs a blank panel for
+ * one paint, not a stale feed until the next deploy.
+ */
+export async function fetchLocalNews(
+  windowDays: number = 7,
+): Promise<{ newsItems: NewsItem[]; errorMessage: string | null }> {
+  const result = await fetchNews(windowDays);
+  return result.ok
+    ? { newsItems: result.newsItems, errorMessage: null }
+    : { newsItems: [], errorMessage: result.reason };
 }

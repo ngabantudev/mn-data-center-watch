@@ -74,7 +74,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 <div
   id="map-filters"
   data-total={totalCount}
-  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-panel backdrop-blur-md border border-hair md:border-r md:border-l-0 md:border-t-0 md:border-b-0 shadow-2xl shadow-[color:var(--shadow-panel)] flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0 rounded-2xl md:rounded-none"
+  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-panel backdrop-blur-md border border-hair md:border-r md:border-l-0 md:border-t-0 md:border-b-0 shadow-2xl shadow-(color:--shadow-panel) flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0 rounded-2xl md:rounded-none"
 >
   <FilterHeader totalCount={totalCount} />
 

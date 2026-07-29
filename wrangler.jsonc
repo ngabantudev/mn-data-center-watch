@@ -16,11 +16,12 @@
 	// when present, falling back to isolate memory plus the Cache API when it
 	// isn't. Nothing needs this to work — it ships without a binding on purpose.
 	//
-	// What KV adds: the memory layer dies with the isolate and the Cache API is
-	// per-colo and a no-op on workers.dev, so on a cold isolate the tracker
-	// refreshes from Open States again. That's fine at 4 requests against a
-	// 10/min ceiling, and it stops being fine if traffic arrives from many
-	// regions at once. KV is the only layer that survives both.
+	// What KV adds: the memory layer dies with the isolate, and the Cache API —
+	// which does work here, verified by a cached payload surviving a version
+	// upload — is still per-colo. So a visitor hitting a colo that hasn't seen
+	// this data yet triggers a fresh refresh. That's fine at 4 requests against
+	// a 10/min ceiling, and stops being fine once traffic arrives from many
+	// regions at once. KV is the only layer shared between colos.
 	//
 	// To enable:
 	//   wrangler kv namespace create LEGISLATION_CACHE

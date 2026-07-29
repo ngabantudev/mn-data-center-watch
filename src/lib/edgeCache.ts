@@ -8,22 +8,29 @@
 // came back `429 {"detail":"exceeded limit of 10/min"}`. A single cold refresh
 // of the bill tracker spends 4 of those 10 (one for the session list, three for
 // pages of results), so three visitors arriving at the same cold moment is
-// enough to start failing. `Cache-Control: s-maxage` alone does not fix that:
-// it relies on a zone cache in front of the Worker, and on a workers.dev
-// deployment there isn't one.
+// enough to start failing.
+//
+// `Cache-Control: s-maxage` alone does not fix that. It needs a zone cache in
+// front of the Worker, and this deployment is on workers.dev, where responses
+// come back with no `cf-cache-status` at all — verified live. The header is
+// inert here, so everything below has to work without it.
 //
 // So four layers, cheapest first:
 //
-//   1. module memory — survives between requests on the same isolate and works
-//      everywhere, including workers.dev where the other two do nothing;
+//   1. module memory — survives between requests on the same isolate;
 //   2. single-flight — concurrent requests for the same key await ONE upstream
 //      refresh rather than each starting their own. This is the layer that
 //      actually prevents the 429, because the failure mode is concurrency;
-//   3. the Cache API — shared across isolates in a colo, when there's a zone;
-//   4. KV, if and only if a binding is present — the only layer that survives
-//      an isolate eviction and is shared between colos. Optional by design:
-//      no binding means no setup, and adding one later upgrades the cache with
-//      no change to this file or its callers.
+//   3. the Cache API — shared across isolates in a colo. Note this DOES work on
+//      workers.dev, despite the absent zone cache above: an explicit
+//      caches.default put/match is not the same mechanism as automatic response
+//      caching. Confirmed by a cached payload outliving a version upload, which
+//      necessarily replaces the isolate;
+//   4. KV, if and only if a binding is present — the only layer shared between
+//      colos, so the only one that helps when traffic arrives from several
+//      regions at once. Optional by design: no binding means no setup, and
+//      adding one later upgrades the cache with no change to this file or its
+//      callers.
 //
 // And the property that matters most on a civic site: a refresh that fails
 // serves the last good copy, labelled with when it was fetched, rather than an
@@ -85,10 +92,19 @@ const inflight = new Map<string, Promise<unknown>>();
  */
 const coldRetryAfter = new Map<string, number>();
 
-/** How long to wait after a failed refresh before trying again. Matched to
- *  Open States' rate-limit window — a shorter backoff would just collect
- *  another 429, and a longer one delays recovery for no gain. */
-const FAILURE_BACKOFF_MS = 60_000;
+/**
+ * Default wait after a failed refresh before trying again, matched to Open
+ * States' one-minute rate-limit window: retrying inside it only collects
+ * another 429.
+ *
+ * Callers override it, because the right value depends entirely on *why* the
+ * upstream failed. A rate-limited API needs the full window. An upstream that
+ * simply dropped one connection — Google News RSS does this — should be retried
+ * in seconds, since backing off for a minute there converts one transient blip
+ * into a minute of empty UI. Getting this wrong is invisible until you watch a
+ * cold cache in production, which is exactly how it was found.
+ */
+const DEFAULT_FAILURE_BACKOFF_MS = 60_000;
 
 function kv(): KvLike | null {
   const candidate = (env as Record<string, unknown> | undefined)?.[KV_BINDING];
@@ -198,9 +214,20 @@ async function write<T>(
  */
 export async function withCache<T>(
   key: string,
-  opts: { freshSeconds: number; keepSeconds: number },
+  opts: {
+    freshSeconds: number;
+    keepSeconds: number;
+    /** Wait before retrying after a failed refresh. Defaults to one minute;
+     *  set it low for upstreams that fail transiently rather than by quota. */
+    failureBackoffSeconds?: number;
+  },
   build: () => Promise<T | null>,
 ): Promise<CacheResult<T> | null> {
+  const backoffMs =
+    opts.failureBackoffSeconds !== undefined
+      ? opts.failureBackoffSeconds * 1000
+      : DEFAULT_FAILURE_BACKOFF_MS;
+
   const now = Date.now();
   const cached = await read<T>(key);
 
@@ -270,12 +297,12 @@ export async function withCache<T>(
   if (cached) {
     await write(
       key,
-      { ...cached, retryAfter: now + FAILURE_BACKOFF_MS },
+      { ...cached, retryAfter: now + backoffMs },
       opts.keepSeconds,
     );
     return { value: cached.value, storedAt: cached.storedAt, stale: true };
   }
 
-  coldRetryAfter.set(key, now + FAILURE_BACKOFF_MS);
+  coldRetryAfter.set(key, now + backoffMs);
   return null;
 }

@@ -28,7 +28,7 @@ const RANGE_OPTIONS = [
 <div
   id="news-feed-panel"
   data-initial-days={initialDays}
-  class="fixed md:absolute top-16 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-panel/90 md:bg-panel backdrop-blur-xl md:backdrop-blur-md border border-hair md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-[color:var(--shadow-panel)] md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
+  class="fixed md:absolute top-16 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-panel/90 md:bg-panel backdrop-blur-xl md:backdrop-blur-md border border-hair md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-(color:--shadow-panel) md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
 >
   <!-- Desktop Header -->
   <div
@@ -401,7 +401,19 @@ const RANGE_OPTIONS = [
     });
   }
 
-  async function showRange(root: HTMLElement, days: number): Promise<void> {
+  /**
+   * Fetch and render one window.
+   *
+   * `silent` is for the refresh on mount, where there is already server-rendered
+   * content on screen: flashing "Loading…" over headlines the reader is halfway
+   * through, to replace them with the same headlines, is worse than saying
+   * nothing. A range *click* is an explicit request and does show progress.
+   */
+  async function showRange(
+    root: HTMLElement,
+    days: number,
+    opts: { silent?: boolean } = {},
+  ): Promise<void> {
     currentDays = days;
     updateRangeButtons(root);
 
@@ -409,10 +421,10 @@ const RANGE_OPTIONS = [
     // cached response can't be trusted to contain everything a direct
     // query for `days` would (see the note on articleCache above).
     const status = document.getElementById("nf-range-status");
-    if (status) status.textContent = "Loading…";
+    if (status && !opts.silent) status.textContent = "Loading…";
 
     const buttons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
-    buttons.forEach((btn) => (btn.disabled = true));
+    if (!opts.silent) buttons.forEach((btn) => (btn.disabled = true));
 
     try {
       const res = await fetch(`/api/news?days=${days}`);
@@ -443,7 +455,7 @@ const RANGE_OPTIONS = [
       }
     } finally {
       buttons.forEach((btn) => (btn.disabled = false));
-      if (status) status.textContent = "";
+      if (status && !opts.silent) status.textContent = "";
     }
   }
 
@@ -575,6 +587,22 @@ const RANGE_OPTIONS = [
     // Mobile carousel (server-rendered items on first mount, re-run after range changes)
     initCarousel();
     newsCleanups.push(() => carouselCleanup?.());
+
+    // Refresh from the live route on mount.
+    //
+    // This is what makes the scheduled full-site rebuild unnecessary. The
+    // markup above is a build-time snapshot — it paints instantly and works
+    // without JS, but it's frozen at deploy time, and refreshing it was the
+    // only job of the six-hourly cron. /api/news answers the same query live
+    // and is cached server-side per window, so one fetch serves every visitor
+    // in that window and the panel is never older than its freshness period.
+    //
+    // Silent when there's already something on screen: the common case is that
+    // live results match the snapshot, and a visible reload for no visible
+    // change is just noise.
+    const hasPaintedItems =
+      !initialPayload.errorMessage && initialPayload.newsItems.length > 0;
+    void showRange(root, currentDays, { silent: hasPaintedItems });
   }
 
   document.addEventListener("astro:page-load", initNewsFeed);

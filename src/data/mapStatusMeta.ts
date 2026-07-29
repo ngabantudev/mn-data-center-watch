@@ -5,7 +5,16 @@ import { indexBy } from '~/lib/collections';
 export interface StatusMeta {
   status: ProjectStatus;
   hex: string;
-  /** Tailwind bg-[#hex] class — kept as a literal string so Tailwind's scanner can pick it up */
+  /**
+   * The background utility for `hex`, spelled out in full below rather than
+   * composed at runtime, since Tailwind only emits classes it finds as literal
+   * text.
+   *
+   * This comment used to illustrate the pattern with a `hex` placeholder in it,
+   * which the scanner also treats as literal text — it was emitting a real
+   * `background-color:#hex` rule into the production stylesheet. Invalid CSS
+   * that browsers drop, but shipped to every visitor. Don't reintroduce it.
+   */
   color: string;
   /** Short label used in the filters sidebar */
   filterLabel: string;
