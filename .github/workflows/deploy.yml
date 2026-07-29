@@ -1,0 +1,138 @@
+# .github/workflows/deploy.yml
+#
+# Deploys `main` to production on every push.
+#
+# WHY THIS EXISTS: merging a PR used to change nothing about the live site.
+# Workers Builds was never connected to this repo, and pr-preview.yml only calls
+# `wrangler versions upload`, which deliberately never takes production traffic.
+# So `main` and production drifted — at the point this was written, production
+# was serving a build from over a day earlier, still carrying the automatic
+# geolocation prompt that had already been removed on `main`.
+#
+# That's the failure mode worth designing against: not a broken deploy, but a
+# fix that everyone believes shipped and didn't. A privacy change sitting
+# unreleased for a week is exactly the shape of that bug.
+#
+# This is the only workflow that touches production traffic. pr-preview.yml
+# stays upload-only, so previews still can't affect the live site.
+
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  # Lets you re-run a deploy from the Actions tab without an empty commit —
+  # useful if a deploy failed on a transient upload error.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Deploys queue, they do not cancel. `cancel-in-progress: true` would be wrong
+# here: killing a run mid-deploy risks an older push winning the race and
+# quietly reverting production to a previous commit.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Matches the `engines.node` floor in package.json.
+          node-version: "22.12"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        # No OPENSTATES_API_KEY here on purpose. Bills and news are both fetched
+        # per request at runtime, never baked in at build time, so the build has
+        # no need for the key — and production reads it from the Worker secret.
+        run: npm run build
+
+      - name: Deploy
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+
+          # Fail with the actual problem rather than a wrangler auth error that
+          # reads like broken config.
+          missing=""
+          [ -z "$CLOUDFLARE_API_TOKEN" ]  && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — add them under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          npx wrangler deploy 2>&1 | tee deploy.log
+
+          # Same lesson as pr-preview.yml: a Workers host is
+          # <name>.<subdomain>.workers.dev, so the character class has to allow
+          # dots. Without one, this matches nothing and the smoke test below
+          # silently checks an empty URL.
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          VERSION=$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' deploy.log | head -1)
+
+          if [ -z "$URL" ]; then
+            echo "::warning::No URL in wrangler output; falling back to the known production host."
+            URL="https://mn-data-center-watch.resistance.workers.dev"
+          fi
+
+          echo "url=$URL"         >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify production
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          # A deploy that reports success while the site 500s is the worst
+          # outcome, so check the page and both live routes and fail the run if
+          # any of them is unhappy. This is the gate that makes a red tick in the
+          # Actions tab mean "production is broken" rather than "a script ended".
+          fail=0
+
+          check() {
+            name="$1"; path="$2"
+            code=$(curl -s -o body.json -w '%{http_code}' --max-time 60 "$URL$path")
+            printf '  %-24s %s\n' "$name" "$code"
+            case "$code" in
+              200) ;;
+              *) echo "::error::$name returned $code"; fail=1 ;;
+            esac
+          }
+
+          echo "Checking $URL"
+          check "/"                  "/"
+          check "/api/legislation"   "/api/legislation"
+          check "/api/news?days=7"   "/api/news?days=7"
+
+          exit $fail
+
+      - name: Summary
+        if: always()
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          VERSION: ${{ steps.deploy.outputs.version }}
+        run: |
+          {
+            echo "### Production deploy"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| URL | $URL |"
+            echo "| Version | \`${VERSION:-unknown}\` |"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo "| Result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
