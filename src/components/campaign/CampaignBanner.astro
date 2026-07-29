@@ -286,7 +286,7 @@ import {
       // colour would imply a precision the three-rung derivation doesn't have.
       const cls =
         bill.stage === "passed"
-          ? `${CHIP} bg-[color:var(--positive)] text-[color:var(--on-positive)]`
+          ? `${CHIP} bg-positive text-on-positive`
           : `${CHIP} border border-hair text-ink-3`;
       return el("span", cls, STAGE_LABEL[bill.stage]);
     }
@@ -295,7 +295,7 @@ import {
       const card = el(
         "div",
         highlight
-          ? "rounded-lg border border-[color:var(--hair-strong)] bg-[color:var(--accent-soft)] px-2.5 py-2"
+          ? "rounded-lg border border-hair-strong bg-accent-soft px-2.5 py-2"
           : "rounded-lg border border-hair px-2.5 py-2",
       );
 
@@ -310,7 +310,7 @@ import {
         head.append(
           el(
             "span",
-            `${CHIP} bg-accent text-[color:var(--on-accent)]`,
+            `${CHIP} bg-accent text-on-accent`,
             bill.stance.position === "oppose" ? "We oppose" : "Campaign priority",
           ),
         );
@@ -487,7 +487,7 @@ import {
       const link = el(
         "a",
         href
-          ? "shrink-0 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-bold text-[color:var(--on-accent)] hover:bg-accent-hover transition-colors"
+          ? "shrink-0 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-bold text-on-accent hover:bg-accent-hover transition-colors"
           : "shrink-0 rounded-lg border border-hair px-2.5 py-1 text-[11px] font-semibold text-ink-2 hover:bg-hover hover:text-ink transition-colors",
         href ? "Email" : "Contact",
       ) as HTMLAnchorElement;
