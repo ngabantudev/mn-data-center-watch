@@ -105,10 +105,10 @@ export const GET: APIRoute = async ({ url }) => {
   const key = openStatesKey();
   if (!key) return json({ legislators: [], source: "unlinked" }, 60);
 
-  const people = await fetchLegislatorsByPoint(key, lat, lng).catch(() => null);
-  if (!people) return json({ legislators: [], source: "degraded" }, 60);
+  const people = await fetchLegislatorsByPoint(key, lat, lng);
+  if (!people.ok) return json({ legislators: [], source: "degraded" }, 60);
 
-  const legislators = people
+  const legislators = people.data
     .map(toView)
     .filter((l): l is LegislatorView => l !== null)
     // Senate first, then House — the order MN legislators are usually listed.
