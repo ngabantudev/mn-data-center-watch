@@ -94,18 +94,24 @@ import {
   </button>
 
   <!--
-    `hidden flex flex-col`, all three at once: Tailwind emits `.hidden` after
-    `.flex` in the utilities layer, so the class the script toggles wins while
-    it's present and the panel is a flex column the moment it comes off. The
-    facility panel and the news rail resolve the same question the same way.
+    Ships `hidden`; `setExpanded` swaps that for `flex` (see the script below),
+    which is how MapDetailParent.astro handles the same question.
 
-    Flex matters on a phone, where `.mobile-sheet` caps this at 62dvh — the bill
-    list has to be the part that scrolls, not the panel, or the take-action row
-    at the bottom is the first thing to be pushed off.
+    Writing `hidden flex` together in this list would also work — Tailwind emits
+    `.hidden` after `.flex` in the utilities layer, so the toggled class wins —
+    but it is a static conflict between two display utilities, and a Tailwind
+    linter will strip one of them. It stripped `flex` from this element once
+    already.
+
+    Being a flex column is load-bearing rather than decorative, and only on a
+    phone: `.mobile-sheet` caps this panel at 62dvh, so the bill list has to be
+    the part that gives. Laid out as a block, `flex-1 min-h-0` on that scroller
+    resolves against nothing and the take-action row at the bottom is the first
+    thing pushed off the screen.
   -->
   <div
     id="cb-panel"
-    class="band mobile-sheet hidden flex flex-col md:mt-2 rounded-xl bg-panel md:bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) overflow-hidden"
+    class="band mobile-sheet hidden flex-col md:mt-2 rounded-xl bg-panel md:bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) overflow-hidden"
   >
     <div class="px-3.5 py-3 border-b border-hair flex items-start gap-2 shrink-0">
       <p id="cb-intro" class="text-[11px] text-ink-3 leading-snug min-w-0 flex-1">
@@ -946,7 +952,10 @@ import {
      * proposition as restoring a bar that sits above it.
      */
     function setExpanded(next: boolean, opts: { persist?: boolean } = {}) {
+      // Both, not just `hidden` — see the note on the element. `flex` is not in
+      // its class list, so nothing shows this panel except this line.
       panel.classList.toggle("hidden", !next);
+      panel.classList.toggle("flex", next);
       chevron.classList.toggle("-rotate-90", !next);
       toggle.setAttribute("aria-expanded", String(next));
       // Private-mode storage failures can't break the toggle — see storage.ts.
