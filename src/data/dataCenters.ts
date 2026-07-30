@@ -68,7 +68,7 @@ export const clientProjects: Project[] = [
   // ==========================================
   // ACTIVE / OPERATIONAL SITES (12 TOTAL)
   // ==========================================
-{
+  {
     name: "Downtown Minneapolis Data Center (MSP4)",
     developer: "DataBank",
     description: "The primary carrier-hotel and network interconnection hub for the Upper Midwest, hosting the Midwest Internet Cooperative Exchange (MICE) and over 75 unique network providers.",
@@ -84,7 +84,7 @@ export const clientProjects: Project[] = [
       url: "https://www.micemn.net/"
     }
   },
-{
+  {
     name: "East Twin Cities Data Center (MSP2)",
     developer: "DataBank",
     description: "Purpose-built multi-tenant colocation facility and Tier III carrier-hotel leveraging Eagan's open-access wholesale fiber rings.",
@@ -239,7 +239,7 @@ export const clientProjects: Project[] = [
   // ==========================================
   // SITES UNDER CONSTRUCTION
   // ==========================================
-{
+  {
     name: "Oppidan Eagan Data Center",
     description: "Single-story, build-to-suit edge data center located south of the Eagan YMCA, optimized for regional enterprise logistics.",
     coordinates: [44.82613684076696, -93.10676078822209],
@@ -396,7 +396,7 @@ export const clientProjects: Project[] = [
       metricRatioText: "High CapEx / Low Labor: Regional server node housing major structural arrays while employing a skeletal maintenance staff of 20."
     }
   },
-    {
+  {
     name: "Unisys Eagan Data Center",
     developer: "Unisys (facility since sold; new owner not confirmed)",
     description: "Enterprise data corridor footprint servicing legacy cloud infrastructure and high-volume redundancy architectures.",
@@ -627,19 +627,19 @@ export const clientProjects: Project[] = [
     }
   },
   {
-  "name": "Apple Valley Technology Park (Oppidan)",
-  "developer": "Oppidan Investment Co.",
-  "description": "In late March 2026, the Apple Valley City Council unanimously passed resolutions denying the preliminary plat, site plans, and conditional use permit for Oppidan Investment Co.'s proposed 300 MW, 1-million-square-foot data center campus on a 134-acre sand and gravel mining site at County Road 42 and Pilot Knob Road.",
-  "coordinates": [44.7314, -93.1856],
-  "url": "https://bringmethenews.com/minnesota-news/oppidans-plan-to-build-five-data-centers-in-apple-valley-is-rejected",
-  "businessImpact": "❌ <strong>Definitively Rejected</strong> | The City Council formalized its denial following intense resident opposition regarding local utility impact, water pollution, and the developer's subsequent withdrawal of the necessary rezoning request.",
-  "status": "rejected",
-  "estimatedCost": "$750 Million",
-  "powerCapacityMW": "300 MW",
-  "waterFootprint": "Rejected before final utility allocation profiles could be formalized.",
-  "publicRecord": {
-    "title": "Apple Valley City Council Official Land Use Considerations",
-    "url": "https://www.applevalleymn.gov/CivicAlerts.asp?AID=4164&ARC=6303"
-  }
-}
+    name: "Apple Valley Technology Park (Oppidan)",
+    developer: "Oppidan Investment Co.",
+    description: "In late March 2026, the Apple Valley City Council unanimously passed resolutions denying the preliminary plat, site plans, and conditional use permit for Oppidan Investment Co.'s proposed 300 MW, 1-million-square-foot data center campus on a 134-acre sand and gravel mining site at County Road 42 and Pilot Knob Road.",
+    coordinates: [44.7314, -93.1856],
+    url: "https://bringmethenews.com/minnesota-news/oppidans-plan-to-build-five-data-centers-in-apple-valley-is-rejected",
+    businessImpact: "❌ <strong>Definitively Rejected</strong> | The City Council formalized its denial following intense resident opposition regarding local utility impact, water pollution, and the developer's subsequent withdrawal of the necessary rezoning request.",
+    status: "rejected",
+    estimatedCost: "$750 Million",
+    powerCapacityMW: "300 MW",
+    waterFootprint: "Rejected before final utility allocation profiles could be formalized.",
+    publicRecord: {
+      title: "Apple Valley City Council Official Land Use Considerations",
+      url: "https://www.applevalleymn.gov/CivicAlerts.asp?AID=4164&ARC=6303",
+    },
+  },
 ];
