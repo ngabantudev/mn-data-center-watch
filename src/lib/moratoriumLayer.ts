@@ -13,14 +13,30 @@
 // attach/detach around a basemap swap, synchronous show/hide, and ids handed to
 // the map's one hit test — so it reads the same from MapParent.
 //
-// Dots, not shaded city polygons, and that is a sourcing decision rather than a
-// visual one. Tinting the city-boundaries archive by moratorium status means
-// matching our town names against that dataset's `FEATURE_NAME` values; a miss
-// there paints the wrong city, or silently paints none, and a resident cannot
-// tell which happened. A labelled dot at published coordinates makes exactly
-// the claim we can support: this town, this council, this ordinance.
+// TWO THINGS ARE DRAWN, and the split is deliberate.
+//
+//   1. The city's own boundary, shaded in its posture's colour. This is the
+//      honest rendering: a moratorium is an ordinance over a jurisdiction, and
+//      the jurisdiction is that polygon. It rides on the city-boundaries
+//      archive as a "companion" of that layer (see `~/lib/overlayLayers.ts`),
+//      so it shares one source with the City Boundaries toggle instead of
+//      parsing every tile of a statewide archive twice.
+//
+//      Matching is on `GNIS_FEATURE_ID`, the federal id, never on the name.
+//      Minnesota has repeated city names across counties, and a near-match
+//      would shade the wrong city with nothing on screen to reveal it. Every
+//      id in the registry was read out of this archive.
+//
+//   2. A dot with the town's name. It is a *label anchor*, not a location
+//      claim — it sits at the city centre, and is neither city hall nor any
+//      project site. It stays because a small city's polygon is a few pixels
+//      at statewide zoom, which is exactly the zoom someone scans the state at.
+//      Both popups say what it is, because an unexplained dot on a map reads
+//      as an address.
 
 import maplibregl from 'maplibre-gl';
+import { CITY_BOUNDARIES_LAYER_ID, CITY_GNIS_FIELD } from '~/data/mapLayers';
+import type { CompanionLayerSpec } from '~/lib/overlayLayers';
 import {
   MORATORIUM_ISSUE_URL,
   POSTURE_BY_ID,
@@ -76,6 +92,45 @@ const POSTURE_COLOR: unknown[] = [
 ];
 
 /**
+ * The shaded boundary: a fill on the city-boundaries source, restricted to the
+ * cities in the registry and coloured by each one's posture.
+ *
+ * The colour expression is keyed on `GNIS_FEATURE_ID` rather than carrying the
+ * posture as a feature property, because these features come out of a tile
+ * archive we don't control — there is nowhere to put a property. `match` labels
+ * must be unique, and GNIS ids are, which is the second reason not to key on
+ * name: two cities called the same thing would be a duplicate-label error at
+ * style-load rather than a wrong shade.
+ */
+const TINT_COLOR: unknown[] = [
+  'match',
+  ['get', CITY_GNIS_FIELD],
+  ...POSTURED.flatMap((j) => [j.gnisFeatureId, POSTURE_BY_ID[j.posture].hex]),
+  POSTURE_BY_ID.open.hex,
+];
+
+export const MORATORIUM_TINT: CompanionLayerSpec = {
+  id: 'moratorium-tint',
+  baseId: CITY_BOUNDARIES_LAYER_ID,
+  filter: [
+    'in',
+    ['get', CITY_GNIS_FIELD],
+    ['literal', POSTURED.map((j) => j.gnisFeatureId)],
+  ],
+  paint: {
+    'fill-color': TINT_COLOR,
+    // Heavy enough to name a colour at a glance across the whole state, light
+    // enough that the basemap's roads and water still read through it — this
+    // shading is an answer about a place, not a replacement for it.
+    'fill-opacity': 0.42,
+    // A hairline edge in the same colour, which is all a highlighted polygon
+    // needs and costs no extra layer. The city's own border, when that toggle
+    // is on, draws over this in the flag's dark blue.
+    'fill-outline-color': TINT_COLOR,
+  },
+};
+
+/**
  * Third-party-safe by default. Nothing in the registry is meant to be markup —
  * unlike a project's `businessImpact`, which is authored as HTML — so a stray
  * angle bracket in an ordinance summary should render as one.
@@ -116,7 +171,8 @@ function buildHoverHtml(jurisdiction: PosturedJurisdiction): string {
           ? `<p class="mt-1 text-[11px] text-neutral-600 leading-snug">${escape(timeline)}</p>`
           : ''
       }
-      <p class="mt-1.5 text-[9px] font-semibold text-blue-600 uppercase tracking-wide">Click for the ordinance &rarr;</p>
+      <p class="mt-1.5 text-[10px] text-neutral-500 leading-snug">Shaded area = the city this applies across.</p>
+      <p class="mt-1 text-[9px] font-semibold text-blue-600 uppercase tracking-wide">Click for the ordinance &rarr;</p>
     </div>
   `;
 }
@@ -182,6 +238,11 @@ function buildDetailHtml(jurisdiction: PosturedJurisdiction): string {
       ${block('Development', development)}
       ${block('Contested', jurisdiction.contest ? `<p class="text-[11px] text-neutral-600 leading-snug">${escape(jurisdiction.contest)}</p>` : null)}
       ${block('Sources', `<ul class="flex flex-col gap-1">${sources}</ul>`)}
+
+      <p class="mt-2 pt-2 border-t border-neutral-100 text-[10px] text-neutral-500 leading-snug">
+        The shaded boundary is the city the ordinance applies across. This dot
+        marks the city centre — it is not city hall, and not a project site.
+      </p>
     </div>
   `;
 }

@@ -234,6 +234,33 @@ function readArchiveOnce(layer: MapLayerMeta): Promise<ArchiveInfo | null> {
 
 // --- The controller ---
 
+/**
+ * An extra fill drawn from a registry layer's source, switched independently of
+ * that layer's own toggle.
+ *
+ * This exists for one thing: shading the cities that have acted on a
+ * moratorium, using the same city-boundaries archive the City Boundaries
+ * toggle draws. Giving it its own MapLibre source pointed at the same file
+ * would have been fewer lines here and a worse outcome — two sources over one
+ * URL parse every tile twice, and the tile bucket sends no `Cache-Control`, so
+ * a visitor with both switched on would download and parse the whole statewide
+ * archive twice over.
+ *
+ * Kept generic and kept dumb: this controller knows a companion has a base, a
+ * paint, and a filter. It knows nothing about moratoriums — the spec is built
+ * in `~/lib/moratoriumLayer.ts` and handed in by MapParent, which is where the
+ * rest of the map's wiring already lives.
+ */
+export interface CompanionLayerSpec {
+  /** Map layer id. */
+  id: string;
+  /** `MapLayerMeta.id` whose PMTiles source and vector layer this draws from. */
+  baseId: string;
+  paint: Record<string, unknown>;
+  /** MapLibre filter restricting which of the base's features it paints. */
+  filter?: unknown[];
+}
+
 export interface OverlayLayersOptions {
   /**
    * The map's own layer ids, bottom-first. Overlay fills are inserted beneath
@@ -241,6 +268,8 @@ export interface OverlayLayersOptions {
    * warning halo.
    */
   layersAbove: string[];
+  /** Extra fills riding on a registry layer's source. See `CompanionLayerSpec`. */
+  companions?: CompanionLayerSpec[];
 }
 
 export interface OverlayLayers {
@@ -254,6 +283,8 @@ export interface OverlayLayers {
   detachFromStyle(): void;
   /** Switch a layer on or off. Off takes effect immediately. */
   setVisible(id: string, visible: boolean): void;
+  /** Switch a companion fill on or off, independently of its base layer. */
+  setCompanionVisible(id: string, visible: boolean): void;
   /** Read each archive's metadata ahead of the first toggle. */
   warmArchives(): void;
   /** Map layer ids currently on the map and visible, for hit-testing. */
@@ -264,12 +295,22 @@ export interface OverlayLayers {
 
 export function createOverlayLayers(
   map: maplibregl.Map,
-  { layersAbove }: OverlayLayersOptions,
+  { layersAbove, companions = [] }: OverlayLayersOptions,
 ): OverlayLayers {
   tileProtocol();
 
   /** Switched on in the sidebar, whether or not it's on the map yet. */
   const wanted = new Set<string>();
+  /** Same, for companion fills — they have their own toggles. */
+  const wantedCompanions = new Set<string>();
+
+  const companionById = new Map(companions.map((c) => [c.id, c]));
+  const companionsByBase = new Map<string, CompanionLayerSpec[]>();
+  for (const companion of companions) {
+    const list = companionsByBase.get(companion.baseId);
+    if (list) list.push(companion);
+    else companionsByBase.set(companion.baseId, [companion]);
+  }
 
   let styleReady = false;
   /** Memoized `visibleLayerIds()`, dropped by every `apply()`. */
@@ -282,35 +323,83 @@ export function createOverlayLayers(
    * which is what it was before — the fills are translucent and overlap, so
    * that order is visible.
    */
-  const insertBefore = (index: number): string | undefined =>
+  const nextLayerAbove = (index: number): string | undefined =>
     MAP_LAYER_META.slice(index + 1)
       .map((l) => layerIdFor(l.id))
       .find((id) => map.getLayer(id)) ??
     layersAbove.find((id) => map.getLayer(id));
+
+  /**
+   * One layer's own stack, bottom-first: fill, then any companion shading a
+   * subset of it, then its border. Stated as a rule rather than left to the
+   * order things happen to be added, because all three are switched
+   * independently — a tint under its own base fill, or over its own border,
+   * is what you get otherwise.
+   */
+  const beforeFill = (layer: MapLayerMeta, index: number): string | undefined =>
+    (companionsByBase.get(layer.id) ?? [])
+      .map((c) => c.id)
+      .find((id) => map.getLayer(id)) ??
+    beforeCompanion(layer, index);
+
+  const beforeCompanion = (
+    layer: MapLayerMeta,
+    index: number,
+  ): string | undefined =>
+    (layer.outline && map.getLayer(outlineLayerIdFor(layer.id))
+      ? outlineLayerIdFor(layer.id)
+      : undefined) ?? nextLayerAbove(index);
+
+  /**
+   * The layer's tile source, added on first use. Shared: a companion needs it
+   * whether or not the base layer's own toggle has ever been switched on.
+   */
+  const ensureSource = (layer: MapLayerMeta): string => {
+    const sourceId = sourceIdFor(layer.id);
+    if (map.getSource(sourceId)) return sourceId;
+
+    if (import.meta.env.DEV && !layer.attribution) {
+      console.warn(
+        `[overlay] Layer "${layer.id}" has no attribution set. Add one in ~/data/mapLayers.ts before shipping it — these datasets carry credit requirements.`,
+      );
+    }
+    map.addSource(sourceId, {
+      type: 'vector',
+      url: `pmtiles://${tileUrlFor(layer)}`,
+      // Carried by the source, not the control, so MapLibre lists the credit
+      // only while this layer is actually showing.
+      attribution: layer.attribution,
+    });
+    return sourceId;
+  };
+
+  const addCompanion = (
+    companion: CompanionLayerSpec,
+    layer: MapLayerMeta,
+    archive: ArchiveInfo,
+    index: number,
+  ): void => {
+    map.addLayer(
+      {
+        id: companion.id,
+        type: 'fill',
+        source: ensureSource(layer),
+        'source-layer': archive.sourceLayer,
+        layout: { visibility: 'visible' },
+        paint: companion.paint,
+        ...(companion.filter ? { filter: companion.filter } : {}),
+      } as maplibregl.FillLayerSpecification,
+      beforeCompanion(layer, index),
+    );
+  };
 
   const addFill = (
     layer: MapLayerMeta,
     archive: ArchiveInfo,
     index: number,
   ): void => {
-    const sourceId = sourceIdFor(layer.id);
-
-    if (!map.getSource(sourceId)) {
-      if (import.meta.env.DEV && !layer.attribution) {
-        console.warn(
-          `[overlay] Layer "${layer.id}" has no attribution set. Add one in ~/data/mapLayers.ts before shipping it — these datasets carry credit requirements.`,
-        );
-      }
-      map.addSource(sourceId, {
-        type: 'vector',
-        url: `pmtiles://${tileUrlFor(layer)}`,
-        // Carried by the source, not the control, so MapLibre lists the credit
-        // only while this layer is actually showing.
-        attribution: layer.attribution,
-      });
-    }
-
-    const before = insertBefore(index);
+    const sourceId = ensureSource(layer);
+    const before = beforeFill(layer, index);
 
     map.addLayer(
       {
@@ -333,8 +422,8 @@ export function createOverlayLayers(
 
     if (!layer.outline) return;
 
-    // Added against the same reference layer, so it lands directly above the
-    // fill it belongs to and still below the markers.
+    // Added against the *next layer up* rather than `before`, which is what
+    // puts it above both the fill just added and any companion between them.
     map.addLayer(
       {
         id: outlineLayerIdFor(layer.id),
@@ -360,8 +449,15 @@ export function createOverlayLayers(
           ],
         },
       },
-      before,
+      nextLayerAbove(index),
     );
+  };
+
+  /** Show or hide whichever of these map layers actually exist. */
+  const setVisibility = (ids: string[], visibility: 'visible' | 'none'): void => {
+    for (const id of ids) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
+    }
   };
 
   /**
@@ -376,27 +472,31 @@ export function createOverlayLayers(
 
     for (const [index, layer] of MAP_LAYER_META.entries()) {
       const layerId = layerIdFor(layer.id);
-      const onMap = Boolean(map.getLayer(layerId));
+      const archive = archiveInfo.get(layer.id);
 
       // A layer with borders owns two map layers, and both follow the one
       // checkbox — a visible outline over a hidden fill would draw a city grid
       // nobody asked for.
-      const setVisibility = (visibility: 'visible' | 'none') => {
-        for (const id of [layerId, outlineLayerIdFor(layer.id)]) {
-          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
-        }
-      };
+      const ownIds = [layerId, outlineLayerIdFor(layer.id)];
 
-      if (!wanted.has(layer.id)) {
-        if (onMap) setVisibility('none');
-        continue;
+      if (!wanted.has(layer.id)) setVisibility(ownIds, 'none');
+      else if (archive) {
+        if (map.getLayer(layerId)) setVisibility(ownIds, 'visible');
+        else addFill(layer, archive, index);
       }
 
-      const archive = archiveInfo.get(layer.id);
-      if (!archive) continue;
-
-      if (onMap) setVisibility('visible');
-      else addFill(layer, archive, index);
+      // Companions ride the same source but answer to their own toggle, so a
+      // tint can be showing over a base layer that is switched off — which is
+      // the normal case: shading eleven cities does not require drawing the
+      // other 895.
+      for (const companion of companionsByBase.get(layer.id) ?? []) {
+        if (!wantedCompanions.has(companion.id)) {
+          setVisibility([companion.id], 'none');
+        } else if (archive) {
+          if (map.getLayer(companion.id)) setVisibility([companion.id], 'visible');
+          else addCompanion(companion, layer, archive, index);
+        }
+      }
     }
   };
 
@@ -422,6 +522,11 @@ export function createOverlayLayers(
     }
 
     wanted.delete(layer.id);
+    // Anything drawn from this archive goes with it — a companion has no
+    // source of its own to fall back on.
+    for (const companion of companionsByBase.get(layer.id) ?? []) {
+      wantedCompanions.delete(companion.id);
+    }
     apply();
     document.dispatchEvent(
       new CustomEvent<LayerUnavailableDetail>(LAYER_UNAVAILABLE_EVENT, {
@@ -455,6 +560,27 @@ export function createOverlayLayers(
       // thanks to `warmArchives`, is the usual case.
       apply();
       if (visible && !archiveInfo.has(id)) void readAndApply(id);
+    },
+
+    setCompanionVisible: (id, visible) => {
+      const companion = companionById.get(id);
+      if (!companion) return;
+      if (
+        unavailableArchives.has(companion.baseId) ||
+        wantedCompanions.has(id) === visible
+      ) {
+        return;
+      }
+
+      if (visible) wantedCompanions.add(id);
+      else wantedCompanions.delete(id);
+
+      apply();
+      // Same shape as `setVisible`: the base archive has to be read before the
+      // companion knows which vector layer inside it to draw from.
+      if (visible && !archiveInfo.has(companion.baseId)) {
+        void readAndApply(companion.baseId);
+      }
     },
 
     warmArchives: () => {

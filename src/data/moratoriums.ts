@@ -79,9 +79,25 @@ export interface MoratoriumTimeline {
 
 export interface Jurisdiction {
   id: string;
+  /**
+   * Federal GNIS feature id, and the key the map shades this city's boundary
+   * by. Required, not optional: the tint matches polygons on this number
+   * rather than on `name`, because names repeat across Minnesota counties and
+   * a near-match would shade the wrong city with no way for a reader to tell.
+   * Every id here was read out of the boundary archive the map draws from —
+   * `GNIS_FEATURE_ID` in `convertedCity_Boundaries_in_Minnesota.pmtiles` — so a
+   * new entry needs its id looked up there, not guessed.
+   */
+  gnisFeatureId: number;
   /** Town name as the council uses it. */
   name: string;
   county: string;
+  /**
+   * The city's centre, where its dot and label sit. NOT city hall and not the
+   * site of any project — the ordinance applies across the whole boundary,
+   * which is what the shaded polygon shows. The popup says so, because a dot
+   * on a map reads as a location claim unless it is told not to.
+   */
   coordinates: LatLngTuple;
   status: MoratoriumStatus;
   timeline: MoratoriumTimeline;
@@ -99,6 +115,7 @@ export interface Jurisdiction {
 export const JURISDICTIONS: Jurisdiction[] = [
   {
     id: 'eagan',
+    gnisFeatureId: 2394586,
     name: 'Eagan',
     county: 'Dakota County',
     coordinates: [44.8041, -93.1668],
@@ -126,6 +143,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'carver',
+    gnisFeatureId: 2393762,
     name: 'Carver',
     county: 'Carver County',
     coordinates: [44.7639, -93.6294],
@@ -153,6 +171,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'rosemount',
+    gnisFeatureId: 2396433,
     name: 'Rosemount',
     county: 'Dakota County',
     coordinates: [44.7394, -93.1258],
@@ -178,6 +197,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'minneapolis',
+    gnisFeatureId: 2395345,
     name: 'Minneapolis',
     county: 'Hennepin County',
     coordinates: [44.9778, -93.265],
@@ -203,6 +223,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'inver-grove-heights',
+    gnisFeatureId: 2395429,
     name: 'Inver Grove Heights',
     county: 'Dakota County',
     coordinates: [44.848, -93.0427],
@@ -232,6 +253,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'apple-valley',
+    gnisFeatureId: 2393967,
     name: 'Apple Valley',
     county: 'Dakota County',
     coordinates: [44.7319, -93.2177],
@@ -251,6 +273,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'mankato',
+    gnisFeatureId: 2395831,
     name: 'Mankato',
     county: 'Blue Earth County',
     coordinates: [44.1636, -93.9994],
@@ -276,6 +299,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'north-mankato',
+    gnisFeatureId: 2395257,
     name: 'North Mankato',
     county: 'Nicollet County',
     coordinates: [44.1733, -94.033],
@@ -296,6 +320,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'elk-river',
+    gnisFeatureId: 2394650,
     name: 'Elk River',
     county: 'Sherburne County',
     coordinates: [45.3039, -93.5672],
@@ -322,6 +347,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'farmington',
+    gnisFeatureId: 2394747,
     name: 'Farmington',
     county: 'Dakota County',
     coordinates: [44.6402, -93.1436],
@@ -345,6 +371,7 @@ export const JURISDICTIONS: Jurisdiction[] = [
   },
   {
     id: 'monticello',
+    gnisFeatureId: 2395385,
     name: 'Monticello',
     county: 'Wright County',
     coordinates: [45.3055, -93.7941],

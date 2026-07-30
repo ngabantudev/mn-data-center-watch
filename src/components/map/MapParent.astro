@@ -55,6 +55,7 @@ const news = await fetchLocalNews();
     createMoratoriumLayer,
     MORATORIUM_API_KEY,
     MORATORIUM_LAYER_IDS,
+    MORATORIUM_TINT,
   } from "~/lib/moratoriumLayer";
   import {
     DEFAULT_CRITERIA,
@@ -380,8 +381,12 @@ const news = await fetchLocalNews();
     const moratoriums = createMoratoriumLayer(map, {
       layersAbove: PROJECT_LAYER_IDS,
     });
+    // The moratorium tint is handed to the overlay controller rather than
+    // drawn by the moratorium layer itself: it shades polygons out of the
+    // city-boundaries archive, and that controller already owns that source.
     const overlays = createOverlayLayers(map, {
       layersAbove: [...MORATORIUM_LAYER_IDS, ...PROJECT_LAYER_IDS],
+      companions: [MORATORIUM_TINT],
     });
 
     const applyMapFilters = () => {
@@ -617,9 +622,12 @@ const news = await fetchLocalNews();
         if (typeof value === "boolean") overlays.setVisible(layer.id, value);
       }
 
+      // One checkbox, two things on the map: the shaded city boundaries and
+      // the labelled dots that name them.
       const showMoratoriums = detail[MORATORIUM_API_KEY];
       if (typeof showMoratoriums === "boolean") {
         moratoriums.setVisible(showMoratoriums);
+        overlays.setCompanionVisible(MORATORIUM_TINT.id, showMoratoriums);
       }
 
       applyMapFilters();

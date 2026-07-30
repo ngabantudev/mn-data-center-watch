@@ -84,6 +84,21 @@ export interface MapLayerMeta {
   attribution?: string;
 }
 
+/**
+ * Named because a second layer draws from this one's source and vector layer —
+ * the moratorium tint in `~/lib/moratoriumLayer.ts` shades the specific cities
+ * that have acted. A companion pointing at a base by string literal is exactly
+ * the class of link this registry exists to remove.
+ */
+export const CITY_BOUNDARIES_LAYER_ID = 'city-boundaries';
+
+/**
+ * Attribute in the city-boundaries archive holding each city's federal GNIS
+ * feature id — a stable number, unlike `FEATURE_NAME`, which repeats across
+ * counties. It is what the moratorium tint matches on.
+ */
+export const CITY_GNIS_FIELD = 'GNIS_FEATURE_ID';
+
 export const MAP_LAYER_META: MapLayerMeta[] = [
   {
     id: 'protected-lands',
@@ -117,25 +132,40 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
     // The one layer whose *edges* are the data. Every other overlay answers
     // "what is under this site"; this one answers "whose council votes on it",
     // and that question is settled entirely by which line a parcel falls
-    // inside of. So it draws a real black border per city and keeps only
-    // enough fill to stay hit-testable for the hover label — see `outline` in
-    // MapLayerMeta for why the fill's own hairline could never do this.
-    id: 'city-boundaries',
+    // inside of. So it draws a real border per city rather than relying on the
+    // fill's hairline — see `outline` in MapLayerMeta for why that could never
+    // work here.
+    //
+    // Styled after the state's own published map of this dataset (the MnGeo /
+    // ArcGIS "City Boundaries in Minnesota" explore view): a translucent wash
+    // inside a firmer border. The two blues are the 2024 state flag's, from the
+    // State Emblems Redesign Commission's specification — Water Blue (PMS 305)
+    // for the wash, Night Sky Blue (PMS 648) for the border. Someone who has
+    // been reading the county's GIS viewer should recognise this layer on
+    // sight, and it should still read as Minnesota's.
+    //
+    // WHERE IT STILL DIFFERS FROM THE STATE'S VIEWER, and it isn't the styling:
+    // this archive was tiled to maxzoom 5. Past there MapLibre overzooms — it
+    // keeps stretching z5 tiles rather than fetching finer ones — so a border
+    // that is a smooth municipal line on gis.data.mn.gov is visibly faceted
+    // here by the time you are looking at one city. Nothing in this file can
+    // fix that; it needs the archive re-run through tippecanoe at a higher
+    // maxzoom (z10–z12) and re-uploaded, which is also the cheapest single
+    // improvement available to this layer.
+    id: CITY_BOUNDARIES_LAYER_ID,
     group: 'politics',
     toggleId: 'mf-toggle-cities',
     apiKey: 'showCityBoundaries',
     label: 'City Boundaries',
     description: 'Which council votes on the permit.',
     fileName: 'convertedCity_Boundaries_in_Minnesota.pmtiles',
-    hex: '#a855f7',
-    // Near-invisible on purpose, and not zero: `queryRenderedFeatures` hits a
-    // fill regardless of opacity, so this is what still lets someone hover
-    // anywhere inside a city and be told its name. A `fill-opacity` of 0 would
-    // work for the hit test too, but a faint tint is what makes it discoverable
-    // that the inside of the line is clickable at all.
-    fillOpacity: 0.05,
-    outlineHex: '#000000',
-    outline: { width: 0.8, opacity: 0.85 },
+    hex: '#52c9e8',
+    // Light enough to read 906 overlapping-at-a-glance polygons through, heavy
+    // enough that the inside of a border is visibly part of the layer — which
+    // is also what makes it discoverable that hovering a city names it.
+    fillOpacity: 0.18,
+    outlineHex: '#002d5d',
+    outline: { width: 0.8, opacity: 0.9 },
     attribution:
       'City boundaries: <a href="https://gisdata.mn.gov/" target="_blank" rel="noopener">Minnesota Geospatial Commons</a>',
   },
