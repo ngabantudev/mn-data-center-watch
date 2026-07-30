@@ -12,6 +12,7 @@ import { countBy } from "~/lib/collections";
 import { parseMW, projectMW } from "~/lib/projectMetrics";
 import FilterHeader from "~/components/filter/FilterHeader.astro";
 import FilterLayer from "~/components/filter/FilterLayer.astro";
+import FilterMoratorium from "~/components/filter/FilterMoratorium.astro";
 import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
@@ -57,7 +58,15 @@ const totalCount = clientProjects.length;
       holdCount={holdCount}
     />
 
-    <FilterLayer />
+    <FilterLayer group="climate" />
+
+    <!-- What a site would sit on top of, and then who decides whether it does.
+         The moratorium layer rides in the Politics section's slot: it is the
+         same question the city boundaries raise ("whose council?") with the
+         answer that council has already given. -->
+    <FilterLayer group="politics">
+      <FilterMoratorium />
+    </FilterLayer>
 
     <FilterProject largestProjects={largestProjects} />
   </div>

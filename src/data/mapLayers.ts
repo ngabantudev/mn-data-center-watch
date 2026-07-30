@@ -12,9 +12,49 @@
 // on the map. The only thing the sidebar still owns is its icon and Tailwind
 // swatch classes — see FilterLayer.astro for why those can't live here.
 
+/**
+ * Which sidebar section an overlay belongs to.
+ *
+ * Not cosmetic grouping: the two answer different questions. A climate layer
+ * says what a site would sit on top of; a politics layer says who decides
+ * whether it gets built there and what they have decided so far. Someone
+ * looking for the second was previously having to read past four environmental
+ * datasets to find "City Boundaries".
+ */
+export type MapLayerGroup = 'climate' | 'politics';
+
+/**
+ * Accordion heading per group. A total `Record` rather than the array-plus-
+ * `indexBy` pair the other registries use, because a group carries exactly one
+ * field and the map from key to it is the whole registry — and being total over
+ * the union means a call site can't be handed an `undefined` to guard against.
+ */
+export const MAP_LAYER_GROUP_TITLE: Record<MapLayerGroup, string> = {
+  climate: 'Climate & Regional Impacts',
+  politics: 'Politics',
+};
+
+/**
+ * A stroked outline drawn per polygon, on its own line layer above the fill.
+ *
+ * `fill-outline-color` can only ever be a one-pixel hairline at the *tile*
+ * resolution, which is why the city boundaries read as a single lilac wash
+ * rather than as ~850 separate jurisdictions: at statewide zoom the hairline
+ * between two adjacent cities is thinner than the translucent fill either side
+ * of it. A real line layer takes a width and scales it with zoom, so every
+ * city keeps its own visible edge.
+ */
+export interface LayerOutline {
+  /** Stroke width in px at low zoom; doubles by `~/lib/overlayLayers.ts` at z12. */
+  width: number;
+  opacity: number;
+}
+
 export interface MapLayerMeta {
   /** Stable key. Source/layer ids on the map are derived as `${id}-source|-layer`. */
   id: string;
+  /** Which sidebar accordion this layer's toggle appears under. */
+  group: MapLayerGroup;
   /** DOM id of the sidebar checkbox. */
   toggleId: string;
   /** Key this layer's toggle sends on the `mapfilterchange` event. */
@@ -29,6 +69,13 @@ export interface MapLayerMeta {
   fillOpacity: number;
   outlineHex: string;
   /**
+   * Draw each polygon's border on its own line layer in `outlineHex`. Without
+   * it the layer falls back to `fill-outline-color`, which is the right call
+   * for a dataset read as regions (protected land, a recharge area) and the
+   * wrong one for a dataset read as *borders*. See `LayerOutline`.
+   */
+  outline?: LayerOutline;
+  /**
    * Credit line for this dataset, shown in the map's attribution control
    * while the layer is switched on. Optional only so a layer can be wired
    * before its archive exists — shipping one without a credit is not an
@@ -37,9 +84,25 @@ export interface MapLayerMeta {
   attribution?: string;
 }
 
+/**
+ * Named because a second layer draws from this one's source and vector layer —
+ * the moratorium tint in `~/lib/moratoriumLayer.ts` shades the specific cities
+ * that have acted. A companion pointing at a base by string literal is exactly
+ * the class of link this registry exists to remove.
+ */
+export const CITY_BOUNDARIES_LAYER_ID = 'city-boundaries';
+
+/**
+ * Attribute in the city-boundaries archive holding each city's federal GNIS
+ * feature id — a stable number, unlike `FEATURE_NAME`, which repeats across
+ * counties. It is what the moratorium tint matches on.
+ */
+export const CITY_GNIS_FIELD = 'GNIS_FEATURE_ID';
+
 export const MAP_LAYER_META: MapLayerMeta[] = [
   {
     id: 'protected-lands',
+    group: 'climate',
     toggleId: 'mf-toggle-protected',
     apiKey: 'showProtectedLands',
     label: 'Protected Lands',
@@ -53,6 +116,7 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
   },
   {
     id: 'drinking-water',
+    group: 'climate',
     toggleId: 'mf-toggle-drinking',
     apiKey: 'showDrinkingWater',
     label: 'Drinking Water Supply',
@@ -65,15 +129,43 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
       'Drinking Water Supply Management Areas: <a href="https://gisdata.mn.gov/" target="_blank" rel="noopener">Minnesota Geospatial Commons</a>',
   },
   {
-    id: 'city-boundaries',
+    // The one layer whose *edges* are the data. Every other overlay answers
+    // "what is under this site"; this one answers "whose council votes on it",
+    // and that question is settled entirely by which line a parcel falls
+    // inside of. So it draws a real border per city rather than relying on the
+    // fill's hairline — see `outline` in MapLayerMeta for why that could never
+    // work here.
+    //
+    // Styled after the state's own published map of this dataset (the MnGeo /
+    // ArcGIS "City Boundaries in Minnesota" explore view): a translucent wash
+    // inside a firmer border. The two blues are the 2024 state flag's, from the
+    // State Emblems Redesign Commission's specification — Water Blue (PMS 305)
+    // for the wash, Night Sky Blue (PMS 648) for the border. Someone who has
+    // been reading the county's GIS viewer should recognise this layer on
+    // sight, and it should still read as Minnesota's.
+    //
+    // WHERE IT STILL DIFFERS FROM THE STATE'S VIEWER, and it isn't the styling:
+    // this archive was tiled to maxzoom 5. Past there MapLibre overzooms — it
+    // keeps stretching z5 tiles rather than fetching finer ones — so a border
+    // that is a smooth municipal line on gis.data.mn.gov is visibly faceted
+    // here by the time you are looking at one city. Nothing in this file can
+    // fix that; it needs the archive re-run through tippecanoe at a higher
+    // maxzoom (z10–z12) and re-uploaded, which is also the cheapest single
+    // improvement available to this layer.
+    id: CITY_BOUNDARIES_LAYER_ID,
+    group: 'politics',
     toggleId: 'mf-toggle-cities',
     apiKey: 'showCityBoundaries',
     label: 'City Boundaries',
     description: 'Which council votes on the permit.',
     fileName: 'convertedCity_Boundaries_in_Minnesota.pmtiles',
-    hex: '#a855f7',
-    fillOpacity: 0.15,
-    outlineHex: '#7e22ce',
+    hex: '#52c9e8',
+    // Light enough to read 906 overlapping-at-a-glance polygons through, heavy
+    // enough that the inside of a border is visibly part of the layer — which
+    // is also what makes it discoverable that hovering a city names it.
+    fillOpacity: 0.18,
+    outlineHex: '#002d5d',
+    outline: { width: 0.8, opacity: 0.9 },
     attribution:
       'City boundaries: <a href="https://gisdata.mn.gov/" target="_blank" rel="noopener">Minnesota Geospatial Commons</a>',
   },
@@ -89,6 +181,7 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
     // missing archive rather than adding an empty layer that silently renders
     // nothing. Nothing else needs to change when it lands.
     id: 'coop-territories',
+    group: 'climate',
     toggleId: 'mf-toggle-coop',
     apiKey: 'showCoopTerritories',
     label: 'Electric Co-op & Utility Territories',
@@ -129,8 +222,14 @@ export const tileUrlFor = (layer: MapLayerMeta): string =>
 
 /** MapLibre source id for a layer. */
 export const sourceIdFor = (id: string): string => `${id}-source`;
-/** MapLibre layer id for a layer. */
+/** MapLibre layer id for a layer's fill. */
 export const layerIdFor = (id: string): string => `${id}-layer`;
+/** MapLibre layer id for a layer's per-polygon border, when it declares one. */
+export const outlineLayerIdFor = (id: string): string => `${id}-outline`;
+
+/** The overlays in one sidebar section, in registry order. */
+export const layersInGroup = (group: MapLayerGroup): MapLayerMeta[] =>
+  MAP_LAYER_META.filter((layer) => layer.group === group);
 
 /** Fired on `document` when a layer's archive can't be read. */
 export const LAYER_UNAVAILABLE_EVENT = 'maplayerunavailable';

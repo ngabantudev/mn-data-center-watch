@@ -1,8 +1,10 @@
 // src/lib/overlayLayers.ts
 //
-// Everything about getting the Climate & Regional Impacts overlays onto the
-// map: reading each PMTiles archive, adding its fill, switching it on and off,
-// and naming the region under the cursor. It lived inside MapParent.astro's
+// Everything about getting the sidebar's tile overlays — the Climate &
+// Regional Impacts datasets and the Politics section's city boundaries — onto
+// the map: reading each PMTiles archive, adding its fill and any per-polygon
+// border, switching it on and off, and naming the region under the cursor.
+// It lived inside MapParent.astro's
 // script, interleaved with the marker layers, and had three problems that were
 // hard to see from there and are the reason this file exists.
 //
@@ -47,6 +49,7 @@ import {
   LAYER_UNAVAILABLE_EVENT,
   MAP_LAYER_META,
   layerIdFor,
+  outlineLayerIdFor,
   sourceIdFor,
   tileUrlFor,
   type LayerUnavailableDetail,
@@ -55,6 +58,8 @@ import {
 } from '~/data/mapLayers';
 
 const LAYER_BY_ID = new Map(MAP_LAYER_META.map((l) => [l.id, l]));
+// Keyed by fill id alone, which is what `visibleLayerIds()` hands the hit test
+// — a border layer is drawn but never queried.
 const LAYER_BY_MAP_LAYER_ID = new Map(
   MAP_LAYER_META.map((l) => [layerIdFor(l.id), l]),
 );
@@ -229,6 +234,33 @@ function readArchiveOnce(layer: MapLayerMeta): Promise<ArchiveInfo | null> {
 
 // --- The controller ---
 
+/**
+ * An extra fill drawn from a registry layer's source, switched independently of
+ * that layer's own toggle.
+ *
+ * This exists for one thing: shading the cities that have acted on a
+ * moratorium, using the same city-boundaries archive the City Boundaries
+ * toggle draws. Giving it its own MapLibre source pointed at the same file
+ * would have been fewer lines here and a worse outcome — two sources over one
+ * URL parse every tile twice, and the tile bucket sends no `Cache-Control`, so
+ * a visitor with both switched on would download and parse the whole statewide
+ * archive twice over.
+ *
+ * Kept generic and kept dumb: this controller knows a companion has a base, a
+ * paint, and a filter. It knows nothing about moratoriums — the spec is built
+ * in `~/lib/moratoriumLayer.ts` and handed in by MapParent, which is where the
+ * rest of the map's wiring already lives.
+ */
+export interface CompanionLayerSpec {
+  /** Map layer id. */
+  id: string;
+  /** `MapLayerMeta.id` whose PMTiles source and vector layer this draws from. */
+  baseId: string;
+  paint: Record<string, unknown>;
+  /** MapLibre filter restricting which of the base's features it paints. */
+  filter?: unknown[];
+}
+
 export interface OverlayLayersOptions {
   /**
    * The map's own layer ids, bottom-first. Overlay fills are inserted beneath
@@ -236,6 +268,8 @@ export interface OverlayLayersOptions {
    * warning halo.
    */
   layersAbove: string[];
+  /** Extra fills riding on a registry layer's source. See `CompanionLayerSpec`. */
+  companions?: CompanionLayerSpec[];
 }
 
 export interface OverlayLayers {
@@ -249,26 +283,45 @@ export interface OverlayLayers {
   detachFromStyle(): void;
   /** Switch a layer on or off. Off takes effect immediately. */
   setVisible(id: string, visible: boolean): void;
+  /** Switch a companion fill on or off, independently of its base layer. */
+  setCompanionVisible(id: string, visible: boolean): void;
   /** Read each archive's metadata ahead of the first toggle. */
   warmArchives(): void;
   /** Map layer ids currently on the map and visible, for hit-testing. */
   visibleLayerIds(): string[];
+  /**
+   * Visible companion ids. Kept apart from `visibleLayerIds()` because the two
+   * are hit-tested for different answers: a base fill names its region through
+   * `regionLabel`, while a companion belongs to whoever supplied it.
+   */
+  visibleCompanionIds(): string[];
   /** What to call the overlay region a queried feature belongs to. */
   regionLabel(feature: maplibregl.MapGeoJSONFeature): string | null;
 }
 
 export function createOverlayLayers(
   map: maplibregl.Map,
-  { layersAbove }: OverlayLayersOptions,
+  { layersAbove, companions = [] }: OverlayLayersOptions,
 ): OverlayLayers {
   tileProtocol();
 
   /** Switched on in the sidebar, whether or not it's on the map yet. */
   const wanted = new Set<string>();
+  /** Same, for companion fills — they have their own toggles. */
+  const wantedCompanions = new Set<string>();
+
+  const companionById = new Map(companions.map((c) => [c.id, c]));
+  const companionsByBase = new Map<string, CompanionLayerSpec[]>();
+  for (const companion of companions) {
+    const list = companionsByBase.get(companion.baseId);
+    if (list) list.push(companion);
+    else companionsByBase.set(companion.baseId, [companion]);
+  }
 
   let styleReady = false;
-  /** Memoized `visibleLayerIds()`, dropped by every `apply()`. */
+  /** Memoized id lists, dropped by every `apply()`. */
   let visibleIds: string[] | null = null;
+  let visibleCompanions: string[] | null = null;
 
   /**
    * The layer a new fill goes under: the next overlay in registry order that's
@@ -277,33 +330,83 @@ export function createOverlayLayers(
    * which is what it was before — the fills are translucent and overlap, so
    * that order is visible.
    */
-  const insertBefore = (index: number): string | undefined =>
+  const nextLayerAbove = (index: number): string | undefined =>
     MAP_LAYER_META.slice(index + 1)
       .map((l) => layerIdFor(l.id))
       .find((id) => map.getLayer(id)) ??
     layersAbove.find((id) => map.getLayer(id));
+
+  /**
+   * One layer's own stack, bottom-first: fill, then any companion shading a
+   * subset of it, then its border. Stated as a rule rather than left to the
+   * order things happen to be added, because all three are switched
+   * independently — a tint under its own base fill, or over its own border,
+   * is what you get otherwise.
+   */
+  const beforeFill = (layer: MapLayerMeta, index: number): string | undefined =>
+    (companionsByBase.get(layer.id) ?? [])
+      .map((c) => c.id)
+      .find((id) => map.getLayer(id)) ??
+    beforeCompanion(layer, index);
+
+  const beforeCompanion = (
+    layer: MapLayerMeta,
+    index: number,
+  ): string | undefined =>
+    (layer.outline && map.getLayer(outlineLayerIdFor(layer.id))
+      ? outlineLayerIdFor(layer.id)
+      : undefined) ?? nextLayerAbove(index);
+
+  /**
+   * The layer's tile source, added on first use. Shared: a companion needs it
+   * whether or not the base layer's own toggle has ever been switched on.
+   */
+  const ensureSource = (layer: MapLayerMeta): string => {
+    const sourceId = sourceIdFor(layer.id);
+    if (map.getSource(sourceId)) return sourceId;
+
+    if (import.meta.env.DEV && !layer.attribution) {
+      console.warn(
+        `[overlay] Layer "${layer.id}" has no attribution set. Add one in ~/data/mapLayers.ts before shipping it — these datasets carry credit requirements.`,
+      );
+    }
+    map.addSource(sourceId, {
+      type: 'vector',
+      url: `pmtiles://${tileUrlFor(layer)}`,
+      // Carried by the source, not the control, so MapLibre lists the credit
+      // only while this layer is actually showing.
+      attribution: layer.attribution,
+    });
+    return sourceId;
+  };
+
+  const addCompanion = (
+    companion: CompanionLayerSpec,
+    layer: MapLayerMeta,
+    archive: ArchiveInfo,
+    index: number,
+  ): void => {
+    map.addLayer(
+      {
+        id: companion.id,
+        type: 'fill',
+        source: ensureSource(layer),
+        'source-layer': archive.sourceLayer,
+        layout: { visibility: 'visible' },
+        paint: companion.paint,
+        ...(companion.filter ? { filter: companion.filter } : {}),
+      } as maplibregl.FillLayerSpecification,
+      beforeCompanion(layer, index),
+    );
+  };
 
   const addFill = (
     layer: MapLayerMeta,
     archive: ArchiveInfo,
     index: number,
   ): void => {
-    const sourceId = sourceIdFor(layer.id);
-
-    if (!map.getSource(sourceId)) {
-      if (import.meta.env.DEV && !layer.attribution) {
-        console.warn(
-          `[overlay] Layer "${layer.id}" has no attribution set. Add one in ~/data/mapLayers.ts before shipping it — these datasets carry credit requirements.`,
-        );
-      }
-      map.addSource(sourceId, {
-        type: 'vector',
-        url: `pmtiles://${tileUrlFor(layer)}`,
-        // Carried by the source, not the control, so MapLibre lists the credit
-        // only while this layer is actually showing.
-        attribution: layer.attribution,
-      });
-    }
+    const sourceId = ensureSource(layer);
+    const before = beforeFill(layer, index);
 
     map.addLayer(
       {
@@ -315,11 +418,53 @@ export function createOverlayLayers(
         paint: {
           'fill-color': layer.hex,
           'fill-opacity': layer.fillOpacity,
-          'fill-outline-color': layer.outlineHex,
+          // A layer drawing real borders gets them from the line layer below;
+          // stacking a tile-resolution hairline under a 0.8px stroke of the
+          // same colour buys nothing and darkens it unevenly by zoom.
+          ...(layer.outline ? {} : { 'fill-outline-color': layer.outlineHex }),
         },
       },
-      insertBefore(index),
+      before,
     );
+
+    if (!layer.outline) return;
+
+    // Added against the *next layer up* rather than `before`, which is what
+    // puts it above both the fill just added and any companion between them.
+    map.addLayer(
+      {
+        id: outlineLayerIdFor(layer.id),
+        type: 'line',
+        source: sourceId,
+        'source-layer': archive.sourceLayer,
+        layout: { visibility: 'visible', 'line-join': 'round' },
+        paint: {
+          'line-color': layer.outlineHex,
+          'line-opacity': layer.outline.opacity,
+          // Statewide, ~850 city outlines at a fixed width collapse into a
+          // smear; zoomed to one council's jurisdiction, the same width is
+          // too faint to trace. Doubling across z6–z12 keeps a border legible
+          // at both ends without ever becoming the loudest thing on the map.
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            6,
+            layer.outline.width,
+            12,
+            layer.outline.width * 2,
+          ],
+        },
+      },
+      nextLayerAbove(index),
+    );
+  };
+
+  /** Show or hide whichever of these map layers actually exist. */
+  const setVisibility = (ids: string[], visibility: 'visible' | 'none'): void => {
+    for (const id of ids) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
+    }
   };
 
   /**
@@ -331,21 +476,35 @@ export function createOverlayLayers(
   const apply = (): void => {
     if (!styleReady) return;
     visibleIds = null;
+    visibleCompanions = null;
 
     for (const [index, layer] of MAP_LAYER_META.entries()) {
       const layerId = layerIdFor(layer.id);
-      const onMap = Boolean(map.getLayer(layerId));
+      const archive = archiveInfo.get(layer.id);
 
-      if (!wanted.has(layer.id)) {
-        if (onMap) map.setLayoutProperty(layerId, 'visibility', 'none');
-        continue;
+      // A layer with borders owns two map layers, and both follow the one
+      // checkbox — a visible outline over a hidden fill would draw a city grid
+      // nobody asked for.
+      const ownIds = [layerId, outlineLayerIdFor(layer.id)];
+
+      if (!wanted.has(layer.id)) setVisibility(ownIds, 'none');
+      else if (archive) {
+        if (map.getLayer(layerId)) setVisibility(ownIds, 'visible');
+        else addFill(layer, archive, index);
       }
 
-      const archive = archiveInfo.get(layer.id);
-      if (!archive) continue;
-
-      if (onMap) map.setLayoutProperty(layerId, 'visibility', 'visible');
-      else addFill(layer, archive, index);
+      // Companions ride the same source but answer to their own toggle, so a
+      // tint can be showing over a base layer that is switched off — which is
+      // the normal case: shading eleven cities does not require drawing the
+      // other 895.
+      for (const companion of companionsByBase.get(layer.id) ?? []) {
+        if (!wantedCompanions.has(companion.id)) {
+          setVisibility([companion.id], 'none');
+        } else if (archive) {
+          if (map.getLayer(companion.id)) setVisibility([companion.id], 'visible');
+          else addCompanion(companion, layer, archive, index);
+        }
+      }
     }
   };
 
@@ -371,6 +530,11 @@ export function createOverlayLayers(
     }
 
     wanted.delete(layer.id);
+    // Anything drawn from this archive goes with it — a companion has no
+    // source of its own to fall back on.
+    for (const companion of companionsByBase.get(layer.id) ?? []) {
+      wantedCompanions.delete(companion.id);
+    }
     apply();
     document.dispatchEvent(
       new CustomEvent<LayerUnavailableDetail>(LAYER_UNAVAILABLE_EVENT, {
@@ -391,6 +555,7 @@ export function createOverlayLayers(
     detachFromStyle: () => {
       styleReady = false;
       visibleIds = null;
+      visibleCompanions = null;
     },
 
     setVisible: (id, visible) => {
@@ -404,6 +569,27 @@ export function createOverlayLayers(
       // thanks to `warmArchives`, is the usual case.
       apply();
       if (visible && !archiveInfo.has(id)) void readAndApply(id);
+    },
+
+    setCompanionVisible: (id, visible) => {
+      const companion = companionById.get(id);
+      if (!companion) return;
+      if (
+        unavailableArchives.has(companion.baseId) ||
+        wantedCompanions.has(id) === visible
+      ) {
+        return;
+      }
+
+      if (visible) wantedCompanions.add(id);
+      else wantedCompanions.delete(id);
+
+      apply();
+      // Same shape as `setVisible`: the base archive has to be read before the
+      // companion knows which vector layer inside it to draw from.
+      if (visible && !archiveInfo.has(companion.baseId)) {
+        void readAndApply(companion.baseId);
+      }
     },
 
     warmArchives: () => {
@@ -433,6 +619,13 @@ export function createOverlayLayers(
         ? (visibleIds ??= MAP_LAYER_META.filter(
             (l) => wanted.has(l.id) && map.getLayer(layerIdFor(l.id)),
           ).map((l) => layerIdFor(l.id)))
+        : [],
+
+    visibleCompanionIds: () =>
+      styleReady
+        ? (visibleCompanions ??= companions
+            .filter((c) => wantedCompanions.has(c.id) && map.getLayer(c.id))
+            .map((c) => c.id))
         : [],
 
     regionLabel: (feature) => {
