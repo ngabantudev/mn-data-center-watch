@@ -70,15 +70,8 @@ export const GET: APIRoute = async ({ url }) => {
   // covers up which of the two happened.
   let failure: string | null = null;
 
-  // `v2` because the parser changed, not the shape. Entries written by `v1`
-  // hold titles and urls with Google's XML escaping still in them (`Q&amp;A:
-  // …` — see the decode in ~/lib/newsFeed.ts), and they are served for up to
-  // six hours fresh and seven days as a fallback. Left on `v1` the fix would
-  // reach a window only once its own cached copy aged out; the version bump
-  // retires those entries on deploy, which is the same move `mapBasemapChoice`
-  // made for stored values that could no longer be trusted.
   const result = await withCache<NewsItem[]>(
-    `news:v2:${windowDays}d`,
+    `news:v1:${windowDays}d`,
     {
       freshSeconds,
       keepSeconds: KEEP_SECONDS,
