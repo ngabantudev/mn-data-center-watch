@@ -1,5 +1,6 @@
 // src/data/mapStyles.ts
 import { getStoredTheme, type SiteTheme } from '~/lib/siteTheme';
+import { readStored, writeStored } from '~/lib/storage';
 
 export interface MapStyleOption {
   id: string;
@@ -40,19 +41,17 @@ export const THEME_BASEMAP: Record<SiteTheme, string> = {
  */
 export const MAP_STYLE_STORAGE_KEY = 'mapStyleId';
 
+const isKnownStyleId = (value: string): value is string =>
+  MAP_STYLE_OPTIONS.some((o) => o.id === value);
+
 /** The user's explicit basemap choice, or null if they haven't made one. */
 export function getStoredMapStyleId(): string | null {
-  try {
-    const stored = localStorage.getItem(MAP_STYLE_STORAGE_KEY);
-    if (stored && MAP_STYLE_OPTIONS.some((o) => o.id === stored)) return stored;
-  } catch {}
-  return null;
+  const stored = readStored(MAP_STYLE_STORAGE_KEY);
+  return stored !== null && isKnownStyleId(stored) ? stored : null;
 }
 
 export function storeMapStyleId(id: string): void {
-  try {
-    localStorage.setItem(MAP_STYLE_STORAGE_KEY, id);
-  } catch {}
+  writeStored(MAP_STYLE_STORAGE_KEY, id);
 }
 
 export function getMapStyleUrlById(id: string): string {

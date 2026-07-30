@@ -38,6 +38,7 @@ import {
   toLiveBill,
 } from "~/lib/billClassify";
 import { withCache } from "~/lib/edgeCache";
+import { jsonResponse } from "~/lib/jsonResponse";
 import type { LegislationPayload, LiveBill } from "~/lib/legislation";
 import { fetchSessions, openStatesKey, searchBills } from "~/lib/openStates";
 
@@ -46,16 +47,6 @@ export const prerender = false;
 /** What the cache stores: everything the route computed, minus the fields that
  *  describe *this* response rather than the data. */
 type CachedLegislation = Omit<LegislationPayload, "source" | "fetchedAt">;
-
-function json(payload: LegislationPayload, maxAge: number, sMaxAge: number) {
-  return new Response(JSON.stringify(payload), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": `public, max-age=${maxAge}, s-maxage=${sMaxAge}`,
-    },
-  });
-}
 
 /** The shape every empty return shares: our own content, no live data. */
 function empty(source: LegislationPayload["source"]): LegislationPayload {
@@ -143,7 +134,7 @@ export const GET: APIRoute = async () => {
   if (!key) {
     // Still a useful response: the PUC dockets are our own content and don't
     // need the API at all. Only the bills are missing.
-    return json(empty("unlinked"), LEGISLATION_MAX_AGE, LEGISLATION_S_MAX_AGE);
+    return jsonResponse(empty("unlinked"), { maxAge: LEGISLATION_MAX_AGE, sMaxAge: LEGISLATION_S_MAX_AGE });
   }
 
   const result = await withCache<CachedLegislation>(
@@ -154,7 +145,7 @@ export const GET: APIRoute = async () => {
 
   // No live data and nothing cached to fall back on. Short edge TTL so the
   // next visitor retries rather than inheriting this minute's bad luck.
-  if (!result) return json(empty("degraded"), 60, 60);
+  if (!result) return jsonResponse(empty("degraded"), { maxAge: 60, sMaxAge: 60 });
 
   // The PUC dockets come from this deploy, not from the cache entry — they're
   // our own content and shouldn't be pinned to whenever the bills were fetched.
@@ -166,6 +157,9 @@ export const GET: APIRoute = async () => {
   };
 
   return result.stale
-    ? json(payload, 60, 300)
-    : json(payload, LEGISLATION_MAX_AGE, LEGISLATION_S_MAX_AGE);
+    ? jsonResponse(payload, { maxAge: 60, sMaxAge: 300 })
+    : jsonResponse(payload, {
+        maxAge: LEGISLATION_MAX_AGE,
+        sMaxAge: LEGISLATION_S_MAX_AGE,
+      });
 };

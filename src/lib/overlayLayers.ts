@@ -161,8 +161,9 @@ async function readArchive(layer: MapLayerMeta): Promise<ArchiveInfo> {
     // (`padus4_1combined_statemn` for an archive whose layer is
     // `protected-lands`, and so on), so the fallback could only ever have
     // produced a fill against a source-layer that doesn't exist: a checked box
-    // over an empty map. Treating it as unreadable is what the registry's own
-    // comments say should happen.
+    // over an empty map, which is the failure the registry says a layer should
+    // never be allowed to reach. Reporting it as unavailable is the same
+    // treatment a missing archive gets, for the same reason.
     throw new Error('PMTiles archive declares no vector layers');
   }
 
@@ -186,10 +187,12 @@ function unavailableReason(error: unknown): LayerUnavailableReason {
 // --- What we know about each archive ---
 //
 // Facts about a file, not about the map drawing it, so they sit beside the
-// `PMTiles` instances and outlive any one map. An Astro client-side navigation
-// tears the map down and builds a fresh controller; `PMTiles.getMetadata()`
-// re-fetches its bytes on every call, so per-controller caches would mean
-// re-reading all four archives on every such navigation.
+// `PMTiles` instances and outlive any one map. `initMap` builds a fresh
+// controller every time it runs, and `PMTiles.getMetadata()` re-fetches its
+// bytes on every call (it caches the header, not the metadata section), so
+// per-controller caches would re-read all four archives per map. Today that's
+// one map per page load; it also covers the `astro:page-load` re-init that
+// domReady.ts keeps a listener for.
 const archiveInfo = new Map<string, ArchiveInfo>();
 const archiveReads = new Map<string, Promise<ArchiveInfo | null>>();
 const unavailableArchives = new Map<string, LayerUnavailableReason>();
@@ -352,31 +355,31 @@ export function createOverlayLayers(
    * it can't honour.
    *
    * The announcement happens per controller, not once per archive, because the
-   * sidebar it's aimed at is re-rendered by client-side navigation while the
-   * read is remembered. Announcing only on the first read would leave a
-   * freshly-rendered row offering a toggle over a dataset that isn't there.
+   * read is remembered across a re-init while the sidebar row it's aimed at may
+   * not be. Announcing only on the very first read would leave a re-rendered
+   * row offering a toggle over a dataset that isn't there.
    */
-  const readAndApply = (id: string): Promise<void> => {
+  const readAndApply = async (id: string): Promise<void> => {
     const layer = LAYER_BY_ID.get(id);
-    if (!layer) return Promise.resolve();
+    if (!layer) return;
 
-    return readArchiveOnce(layer).then((archive) => {
-      if (archive) {
-        apply();
-        return;
-      }
-
-      wanted.delete(layer.id);
+    // Awaiting the memoized promise, so concurrent callers share one read.
+    const archive = await readArchiveOnce(layer);
+    if (archive) {
       apply();
-      document.dispatchEvent(
-        new CustomEvent<LayerUnavailableDetail>(LAYER_UNAVAILABLE_EVENT, {
-          detail: {
-            id: layer.id,
-            reason: unavailableArchives.get(layer.id) ?? 'unreadable',
-          },
-        }),
-      );
-    });
+      return;
+    }
+
+    wanted.delete(layer.id);
+    apply();
+    document.dispatchEvent(
+      new CustomEvent<LayerUnavailableDetail>(LAYER_UNAVAILABLE_EVENT, {
+        detail: {
+          id: layer.id,
+          reason: unavailableArchives.get(layer.id) ?? 'unreadable',
+        },
+      }),
+    );
   };
 
   return {
