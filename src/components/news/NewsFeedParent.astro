@@ -444,6 +444,36 @@ const RANGE_OPTIONS = [
     isNewsCollapsed = readStoredFlag(STORAGE_KEY);
     openSheet = null;
 
+    /**
+     * Keeps the map's control stack clear of the right-hand rail.
+     *
+     * MapLibre's zoom buttons, its attribution, and MapThemeSelector.astro's
+     * layers button all anchor to --map-ctrl-right (see global.css), which was
+     * a flat 10px — the map container's own right edge. This panel is docked to
+     * that same edge at `md:w-96` and sits above them at z-30, so with the news
+     * rail showing, which is its default, every one of those controls was
+     * underneath it: not merely hard to see but unclickable, at every desktop
+     * width. Collapsing the rail was the only way to reach the basemap picker
+     * or the zoom buttons, and nothing said so.
+     *
+     * Written from here, and only here, because this island is the one that
+     * knows whether the corner is occupied: it tracks its own collapsed state
+     * *and* the marker selection that slides the facility panel — the same
+     * width — into the same edge. A second writer would be the two-owners
+     * problem MobileToolbar.astro's --map-controls-bottom note describes.
+     */
+    function publishControlEdge(occupied: boolean): void {
+      const style = document.documentElement.style;
+      if (occupied) {
+        style.setProperty(
+          "--map-ctrl-right",
+          "calc(var(--map-rail-w) + var(--map-ctrl-edge))",
+        );
+      } else {
+        style.removeProperty("--map-ctrl-right");
+      }
+    }
+
     function updatePanelDOM(): void {
       // On a phone this panel is one of three that share a slot, and the
       // toolbar decides which. `hidden` beats the `flex` in the class list
@@ -452,8 +482,15 @@ const RANGE_OPTIONS = [
       if (!desktopMql!.matches) {
         root!.classList.toggle("hidden", openSheet !== "news");
         toggleBtn?.classList.add("hidden");
+        // A sheet docks to the bottom edge above the toolbar, not to the right
+        // one, so the corner is the map's again.
+        publishControlEdge(false);
         return;
       }
+
+      // Either surface holds the right edge at the same width — see
+      // `publishControlEdge`.
+      publishControlEdge(isMarkerSelected || !isNewsCollapsed);
 
       // Desktop owns its own visibility again; anything the phone layout put
       // on this element has to come back off, or the rail stays gone at a
