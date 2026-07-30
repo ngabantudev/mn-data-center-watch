@@ -103,7 +103,11 @@ const SWATCHES: Record<
 
 <script>
   import { onReady } from "~/lib/domReady";
-  import { LAYER_UNAVAILABLE_EVENT, type LayerUnavailableDetail } from "~/data/mapLayers";
+  import {
+    LAYER_UNAVAILABLE_EVENT,
+    type LayerUnavailableDetail,
+    type LayerUnavailableReason,
+  } from "~/data/mapLayers";
 
   function setupLayerToggles() {
     const toggles = document.querySelectorAll<HTMLInputElement>(
@@ -127,15 +131,26 @@ const SWATCHES: Record<
 
   // An overlay whose tile archive isn't published (or is unreachable) would
   // otherwise sit checked over an empty map with no explanation. The map tells
-  // us once, and the row says so and stops offering the toggle.
+  // us once, and the row says so and stops offering the toggle. Since the map
+  // now reads every archive during idle time after load rather than on first
+  // click, a row that can't work says so before anyone waits on it.
   //
+  // Two sentences, because they aren't the same fact: a dataset we haven't
+  // uploaded is a gap in this map, while one we failed to fetch is a fault that
+  // a reload might clear. Reporting the second as the first would tell a
+  // visitor a public dataset doesn't exist yet.
+  const UNAVAILABLE_TEXT: Record<LayerUnavailableReason, string> = {
+    missing: "Dataset not published yet.",
+    unreadable: "Couldn't load this dataset — try reloading.",
+  };
+
   // Registered at module scope rather than inside setupLayerToggles(): that
   // function re-runs on every `astro:page-load`, and this listener is on
   // `document`, which survives the navigation — re-registering would stack a
   // fresh copy per page view. It resolves the toggle by query at fire time, so
   // it stays correct across re-renders without being re-bound.
   document.addEventListener(LAYER_UNAVAILABLE_EVENT, (event) => {
-    const { id } = (event as CustomEvent<LayerUnavailableDetail>).detail;
+    const { id, reason } = (event as CustomEvent<LayerUnavailableDetail>).detail;
     const toggle = document.querySelector<HTMLInputElement>(
       `.environmental-layer-toggle[data-layer-id="${id}"]`,
     );
@@ -148,7 +163,7 @@ const SWATCHES: Record<
       .closest("label")
       ?.querySelector<HTMLElement>("[data-layer-status]");
     if (status) {
-      status.textContent = "Dataset not published yet.";
+      status.textContent = UNAVAILABLE_TEXT[reason];
       status.classList.remove("hidden");
     }
   });
