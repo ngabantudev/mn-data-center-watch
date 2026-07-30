@@ -12,6 +12,8 @@
 // on the map. The only thing the sidebar still owns is its icon and Tailwind
 // swatch classes — see FilterLayer.astro for why those can't live here.
 
+import { indexBy } from '~/lib/collections';
+
 /**
  * Which sidebar section an overlay belongs to.
  *
@@ -93,6 +95,13 @@ export interface MapLayerMeta {
 export const CITY_BOUNDARIES_LAYER_ID = 'city-boundaries';
 
 /**
+ * Named for the same reason: `~/lib/protectedLands.ts` reads this layer's
+ * features apart from every other overlay's, because this archive alone carries
+ * a full attribute record per polygon.
+ */
+export const PROTECTED_LANDS_LAYER_ID = 'protected-lands';
+
+/**
  * Attribute in the city-boundaries archive holding each city's federal GNIS
  * feature id — a stable number, unlike `FEATURE_NAME`, which repeats across
  * counties. It is what the moratorium tint matches on.
@@ -101,7 +110,7 @@ export const CITY_GNIS_FIELD = 'GNIS_FEATURE_ID';
 
 export const MAP_LAYER_META: MapLayerMeta[] = [
   {
-    id: 'protected-lands',
+    id: PROTECTED_LANDS_LAYER_ID,
     group: 'climate',
     toggleId: 'mf-toggle-protected',
     apiKey: 'showProtectedLands',
@@ -230,6 +239,17 @@ export const outlineLayerIdFor = (id: string): string => `${id}-outline`;
 /** The overlays in one sidebar section, in registry order. */
 export const layersInGroup = (group: MapLayerGroup): MapLayerMeta[] =>
   MAP_LAYER_META.filter((layer) => layer.group === group);
+
+/**
+ * The registry keyed by id, for the two callers that hold an id and want the
+ * layer: the overlay controller resolving a toggle, and the protected-lands card
+ * reading that layer's own colours so a card matches the shape under it.
+ */
+export const MAP_LAYER_BY_ID = indexBy(
+  MAP_LAYER_META,
+  (layer) => layer.id,
+  (layer) => layer,
+);
 
 /** Fired on `document` when a layer's archive can't be read. */
 export const LAYER_UNAVAILABLE_EVENT = 'maplayerunavailable';

@@ -47,6 +47,7 @@ import maplibregl from 'maplibre-gl';
 import { PMTiles, Protocol } from 'pmtiles';
 import {
   LAYER_UNAVAILABLE_EVENT,
+  MAP_LAYER_BY_ID,
   MAP_LAYER_META,
   layerIdFor,
   outlineLayerIdFor,
@@ -57,7 +58,6 @@ import {
   type MapLayerMeta,
 } from '~/data/mapLayers';
 
-const LAYER_BY_ID = new Map(MAP_LAYER_META.map((l) => [l.id, l]));
 // Keyed by fill id alone, which is what `visibleLayerIds()` hands the hit test
 // — a border layer is drawn but never queried.
 const LAYER_BY_MAP_LAYER_ID = new Map(
@@ -121,11 +121,17 @@ interface ArchiveInfo {
  *
  * Deliberately strict, and this is a bug fix. The old version fell back to "the
  * first string-typed field", which is how the protected-lands layer labelled
- * every area on the map `#70a170`: that archive is a KML conversion whose only
- * string attributes are `description` (empty for every feature), `fill`,
- * `stroke` and `styleUrl`. A dataset with no name attribute has no names in it,
- * and the honest thing is to say what the region *is* rather than to read out
- * whichever column happened to be a string — see `regionLabel`.
+ * every area on the map `#70a170`: that archive is a KML conversion whose string
+ * attributes are `fill`, `stroke`, `styleUrl` and `description`. A dataset with
+ * no name attribute has no names in it, and the honest thing is to say what the
+ * region *is* rather than to read out whichever column happened to be a string
+ * — see `regionLabel`.
+ *
+ * That layer now reaches `regionLabel` only as a fallback. Its `description` is
+ * a KML balloon holding the whole PAD-US record per polygon — a table to be
+ * parsed, not a name to be read — so `~/lib/protectedLands.ts` claims those
+ * features first, and the layer label is what's left if a balloon ever arrives
+ * in a shape that parser doesn't recognise.
  */
 const NAME_FIELDS = new Set([
   'name',
@@ -519,7 +525,7 @@ export function createOverlayLayers(
    * row offering a toggle over a dataset that isn't there.
    */
   const readAndApply = async (id: string): Promise<void> => {
-    const layer = LAYER_BY_ID.get(id);
+    const layer = MAP_LAYER_BY_ID[id];
     if (!layer) return;
 
     // Awaiting the memoized promise, so concurrent callers share one read.
