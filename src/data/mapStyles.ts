@@ -20,9 +20,16 @@ export const MAP_STYLE_OPTIONS: MapStyleOption[] = [
  * decision, so the chrome and the map can't end up mismatched. The user can
  * still pick any basemap afterwards; that choice sticks until the next time
  * they change theme.
+ *
+ * Light pairs with Liberty. Fiord, which it used to pair with, is a muted
+ * *dark* basemap — its background is #45516E — so under the mn.gov off-white
+ * chrome the light theme opened onto a dark map. Liberty's #f8f4f0 sits under
+ * that chrome as one surface, and it keeps roads and place names detailed
+ * enough to place a site by, which is what these overlays are read against.
+ * Positron stays in the list for anyone who wants the minimal light basemap.
  */
 export const THEME_BASEMAP: Record<SiteTheme, string> = {
-  light: 'fiord',
+  light: 'liberty',
   dark: 'dark',
 };
 
