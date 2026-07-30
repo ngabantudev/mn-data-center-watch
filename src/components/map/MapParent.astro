@@ -7,6 +7,7 @@ import MapDetailParent from "~/components/map/MapDetailParent.astro";
 import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
+import MobileToolbar from "~/components/mobile/MobileToolbar.astro";
 
 // One build-time snapshot for the news rail's first paint. Spread rather than
 // unpacked, so this call site doesn't re-list the payload's fields by hand.
@@ -34,6 +35,14 @@ const news = await fetchLocalNews();
        questions ("what are we fighting for" vs "what do I do about this
        site"), so they stay separate surfaces. -->
   <CampaignBanner />
+
+  <!--
+    Phone chrome, and the controller for every panel above it. Rendered last so
+    its bar and scrim sit over the panels in DOM order as well as by z-index.
+    Below 768px only — see ~/lib/mobileSheet.ts for what it owns and what it
+    deliberately doesn't.
+  -->
+  <MobileToolbar />
 
   <div class="relative w-full h-full">
     <div id="map" class="absolute inset-0 w-full h-full bg-canvas"></div>

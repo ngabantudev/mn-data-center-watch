@@ -17,7 +17,7 @@ import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
 import FilterSize from "~/components/filter/FilterSize.astro";
-import { ChevronDown, SlidersHorizontal } from "lucide-astro";
+import { SlidersHorizontal } from "lucide-astro";
 
 // Takes no props: it read the whole dataset from `clientProjects` even when it
 // declared `newsItems` and `errorMessage`, which it never once referenced. The
@@ -41,32 +41,26 @@ const totalCount = clientProjects.length;
 ---
 
 <!--
-  `max-h-[55dvh]` on the phone layout: this card is anchored to the bottom edge
-  and grows upward as accordions open, and "Largest Centers" alone is a 15rem
-  scroller. Without a cap the card ran up past the top of the screen and out
-  under the campaign banner. Capped, `#mf-content` scrolls inside it instead.
+  Desktop: the left rail, unchanged. Phone: the `filters` sheet above
+  MobileToolbar.astro — `.mobile-sheet` (global.css) restates the position, so
+  the utilities here are the desktop ones only.
 -->
 <div
   id="map-filters"
-  class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 max-h-[55dvh] md:max-h-none bg-panel backdrop-blur-md border border-hair md:border-r md:border-l-0 md:border-t-0 md:border-b-0 shadow-2xl shadow-(color:--shadow-panel) flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0 rounded-2xl md:rounded-none"
+  class="mobile-sheet absolute z-10 pointer-events-auto font-sans top-0 bottom-0 left-0 right-auto w-auto md:w-72 bg-panel backdrop-blur-md border border-hair md:border-r md:border-l-0 md:border-t-0 md:border-b-0 shadow-2xl shadow-(color:--shadow-panel) flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0 rounded-2xl md:rounded-none"
 >
   <!--
-    The phone header, and the only collapse control this panel has ever had
-    that works. FilterHeader below is `hidden md:flex`, so the trigger it used
-    to carry was unreachable at every width — see the note in that file.
+    The phone header. It is a title and a readout, not a control: the toolbar's
+    Filters tab is what opens and closes this now, so the collapse chevron this
+    carried is gone with the collapse it drove.
 
-    It doubles as the readout for `#mf-count`, which the dispatcher has been
-    writing "Showing N of M" into since it was written: the element it looked
-    for did not exist anywhere in the markup, so the one number that tells a
-    reader their filters did something was being computed and dropped on the
-    floor on every change.
+    It is also where `#mf-count` finally lands. The dispatcher has been writing
+    "Showing N of M" into it since it was written and the element did not exist
+    anywhere in the markup — so the one number telling a reader their filters
+    did something was computed and dropped on the floor on every change.
   -->
-  <button
-    id="mf-header-trigger"
-    type="button"
-    aria-expanded="true"
-    aria-controls="mf-content"
-    class="band bg-panel md:hidden w-full flex items-center gap-2.5 px-3.5 py-2.5 min-h-12 text-left border-b border-hair shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+  <div
+    class="band bg-panel md:hidden w-full flex items-center gap-2.5 px-3.5 py-2.5 min-h-12 border-b border-hair shrink-0"
   >
     <span
       class="flex items-center justify-center w-7 h-7 rounded-lg bg-hover shrink-0"
@@ -82,25 +76,35 @@ const totalCount = clientProjects.length;
         Showing {totalCount} of {totalCount}
       </span>
     </span>
-    <ChevronDown
-      id="mf-header-chevron"
-      size={16}
-      class="shrink-0 text-ink-3 transition-transform duration-200"
-    />
-  </button>
+    <!-- See ~/lib/mobileSheet.ts. -->
+    <button
+      type="button"
+      data-sheet-close
+      aria-label="Close filters panel"
+      class="w-8 h-8 -mr-1 flex items-center justify-center rounded-full text-ink-3 active:bg-hover transition-colors shrink-0"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6L6 18M6 6l12 12"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"></path>
+      </svg>
+    </button>
+  </div>
 
   <FilterHeader totalCount={totalCount} />
 
-  <!--
-    `max-md:hidden` in the served markup, removed by the script on its first
-    run. The page is prerendered and this panel ships collapsed on phones, so
-    without it a phone paints the full accordion stack for a frame and then
-    watches it shrink to a 48px bar. From that first run on, the plain `hidden`
-    class is the only thing driving this — see `applyCollapsedState`.
-  -->
   <div
     id="mf-content"
-    class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar max-md:hidden"
+    class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
   >
     <FilterStatus countsByStatus={countsByStatus} />
 
@@ -158,13 +162,9 @@ const totalCount = clientProjects.length;
   import { onReady } from "~/lib/domReady";
   import { countVisible, type FilterCriteria } from "~/lib/projectFilters";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
+  import { isMobile, onSheetChange } from "~/lib/mobileSheet";
 
   const STORAGE_KEY = "mapFiltersCollapsed";
-  const MOBILE_QUERY = "(max-width: 767px)";
-  const FILTERS_BOTTOM_OFFSET = 16;
-  const CONTROLS_GAP_ABOVE_FILTERS = 12;
-
-  const isMobile = (): boolean => window.matchMedia(MOBILE_QUERY).matches;
 
   let filterCleanups: (() => void)[] = [];
 
@@ -176,8 +176,6 @@ const totalCount = clientProjects.length;
       filterCleanups.pop()?.();
     }
 
-    const headerTrigger = document.getElementById("mf-header-trigger");
-    const content = document.getElementById("mf-content") as HTMLElement | null;
     const countLabel = document.getElementById(
       "mf-count",
     ) as HTMLElement | null;
@@ -202,64 +200,37 @@ const totalCount = clientProjects.length;
     ) as HTMLInputElement | null;
     const toggleBtn = document.getElementById("mf-toggle") as HTMLButtonElement | null;
     const toggleIcon = document.getElementById("mf-toggle-icon") as SVGElement | null;
-    // By id, not `headerTrigger.querySelector("svg")` — the trigger now leads
-    // with an icon chip, and a positional lookup would rotate that instead.
-    const headerChevron = document.getElementById("mf-header-chevron");
 
     const totalCount = clientProjects.length;
 
-    // Hand the content over to `applyCollapsedState` — see the note on the
-    // element. Removed unconditionally and before any state is read, so a
-    // stored "expanded" can't be defeated by a class the markup shipped with.
-    content?.classList.remove("max-md:hidden");
+    /** Desktop pull-tab state. Persisted. */
+    let collapsed = readStoredFlag(STORAGE_KEY);
+    /** Phone only: which sheet the toolbar says is open. */
+    let openSheet: string | null = null;
 
-    // Ships collapsed on a phone, expanded on desktop. The sidebar is the whole
-    // left rail there and hiding it by default would be hiding the legend; on a
-    // 390px screen the same content is a card over the map, and five open
-    // accordion headers is most of what's left after the banner and news card.
-    let collapsed = readStoredFlag(STORAGE_KEY, isMobile());
-
-    /** True while a facility sheet is open — mobile only; see below. */
-    let markerSelected = false;
-
-    function updateControlsOffset(): void {
-      // Desktop keeps MapLibre's own inset: the sidebar is on the opposite
-      // edge and never competes for this corner.
-      if (!isMobile()) {
-        document.documentElement.style.removeProperty("--map-controls-bottom");
-        return;
-      }
-      // While a facility sheet is open this card is `display: none`, so
-      // measuring it reports 0 — which would drop the control stack to the
-      // bottom edge (a transition the reader watches, behind a sheet that
-      // covers it anyway) and raise it again on close. Leave it where it was.
-      if (markerSelected) return;
-      const filtersHeight = root!.getBoundingClientRect().height;
-      const offset =
-        FILTERS_BOTTOM_OFFSET + filtersHeight + CONTROLS_GAP_ABOVE_FILTERS;
-      document.documentElement.style.setProperty(
-        "--map-controls-bottom",
-        `${offset}px`,
-      );
-    }
-
-    function applyCollapsedState(): void {
+    /**
+     * This panel's visibility, at both widths.
+     *
+     * On a phone it is one of three sheets sharing a slot and the toolbar
+     * decides which — so all this does is show or hide, and `hidden` beats the
+     * `flex` in the class list because Tailwind emits it later in the utilities
+     * layer.
+     *
+     * There used to be a good deal more here: a mobile collapse with its own
+     * chevron and stored flag, a `display` override for when a facility sheet
+     * covered this card, a ResizeObserver measuring the card's changing height,
+     * and a writer for --map-controls-bottom that lifted MapLibre's zoom stack
+     * clear of it. None of it survives the move: this panel no longer sits in
+     * that corner, and MobileToolbar.astro — a fixed bar whose height is the
+     * same for every panel — is the single writer of that variable now.
+     */
+    function applyPanelState(): void {
       if (isMobile()) {
-        // The facility sheet owns the bottom of a phone screen while it's open
-        // — up to 80dvh of it, at a higher z-index than this card. Stacking a
-        // filters card behind a sheet nobody can see it through is the overlap
-        // this avoids; the sheet closing brings it straight back.
-        root!.style.display = markerSelected ? "none" : "";
-        root!.classList.remove("-translate-x-full");
-        root!.classList.add("translate-x-0");
-        content?.classList.toggle("hidden", collapsed);
-        headerTrigger?.setAttribute("aria-expanded", String(!collapsed));
-        headerChevron?.classList.toggle("-rotate-90", collapsed);
+        root!.classList.toggle("hidden", openSheet !== "filters");
         return;
       }
 
-      root!.style.display = "";
-      content?.classList.remove("hidden");
+      root!.classList.remove("hidden");
       if (collapsed) {
         root!.classList.add("-translate-x-full");
         root!.classList.remove("translate-x-0");
@@ -273,21 +244,18 @@ const totalCount = clientProjects.length;
       }
     }
 
-    function handleResize() {
-      applyCollapsedState();
-      updateControlsOffset();
-    }
-
-    const controlsResizeObserver = new ResizeObserver(() =>
-      updateControlsOffset(),
+    filterCleanups.push(
+      onSheetChange((open) => {
+        openSheet = open;
+        applyPanelState();
+      }),
     );
-    controlsResizeObserver.observe(root);
-    window.addEventListener("resize", handleResize);
 
-    filterCleanups.push(() => {
-      controlsResizeObserver.disconnect();
-      window.removeEventListener("resize", handleResize);
-    });
+    const handleResize = () => applyPanelState();
+    window.addEventListener("resize", handleResize);
+    filterCleanups.push(() =>
+      window.removeEventListener("resize", handleResize),
+    );
 
     // Exclusive Accordion Logic
     const accordionSections = document.querySelectorAll(
@@ -327,8 +295,6 @@ const totalCount = clientProjects.length;
           contentWrapper.classList.add("grid-rows-[1fr]");
           trigger.querySelector("svg")?.classList.remove("-rotate-90");
         }
-
-        setTimeout(updateControlsOffset, 200);
       };
 
       trigger.addEventListener("click", onTriggerClick);
@@ -337,35 +303,11 @@ const totalCount = clientProjects.length;
       );
     });
 
-    // The trigger is `md:hidden`, so this is unreachable above 768px and needs
-    // no width guard of its own — the desktop pull-tab below is that width's
-    // control.
-    const onHeaderTriggerClick = () => {
-      collapsed = !collapsed;
-      writeStoredFlag(STORAGE_KEY, collapsed);
-      applyCollapsedState();
-      updateControlsOffset();
-    };
-    headerTrigger?.addEventListener("click", onHeaderTriggerClick);
-    filterCleanups.push(() =>
-      headerTrigger?.removeEventListener("click", onHeaderTriggerClick),
-    );
-
-    const onMarkerSelect = (event: Event) => {
-      const detail = (event as CustomEvent<{ project: unknown } | null>).detail;
-      markerSelected = !!detail?.project;
-      applyCollapsedState();
-      updateControlsOffset();
-    };
-    document.addEventListener("mapmarkerselect", onMarkerSelect);
-    filterCleanups.push(() =>
-      document.removeEventListener("mapmarkerselect", onMarkerSelect),
-    );
-
+    /** Desktop pull-tab. The phone's Filters tab lives on the toolbar. */
     const onToggleClick = () => {
       collapsed = !collapsed;
       writeStoredFlag(STORAGE_KEY, collapsed);
-      applyCollapsedState();
+      applyPanelState();
     };
     toggleBtn?.addEventListener("click", onToggleClick);
     filterCleanups.push(() =>
@@ -452,7 +394,7 @@ const totalCount = clientProjects.length;
       );
     });
 
-    applyCollapsedState();
+    applyPanelState();
   }
 
   onReady(initMapFilters);
