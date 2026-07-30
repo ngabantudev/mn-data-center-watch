@@ -133,6 +133,7 @@ const SITE_THEMES = [
 
 <script>
   import {
+    clearStoredMapStyleId,
     getInitialMapStyleId,
     getMapStyleIdForTheme,
     getMapStyleUrlById,
@@ -200,13 +201,19 @@ const SITE_THEMES = [
 
     function selectTheme(theme: SiteTheme): void {
       // Theme and basemap move together: picking Light also drops the map to
-      // its paired basemap, and likewise for Dark. Persisted so a reload
-      // comes back to the same pairing; picking a basemap by hand afterwards
-      // overwrites it and holds until the next theme switch.
+      // its paired basemap, and likewise for Dark.
+      //
+      // This *clears* any hand-picked basemap rather than persisting the one it
+      // just applied. It used to store it, which looked equivalent — a reload
+      // came back to the same map either way — but wasn't: `getInitialMapStyleId`
+      // reads a stored id as a deliberate override that outranks the pairing, so
+      // every visitor who had ever clicked a theme was pinned to whatever the
+      // pairing happened to be that day, and repointing `THEME_BASEMAP` later
+      // could never reach them. Nothing is lost by not writing it, because the
+      // pairing is recoverable from the stored *theme* (see mapStyles.ts).
       setTheme(theme);
-      const styleId = getMapStyleIdForTheme(theme);
-      storeMapStyleId(styleId);
-      applyStyle(styleId);
+      clearStoredMapStyleId();
+      applyStyle(getMapStyleIdForTheme(theme));
     }
 
     function setOpen(next: boolean): void {

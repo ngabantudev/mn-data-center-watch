@@ -1,6 +1,6 @@
 // src/data/mapStyles.ts
-import { getStoredTheme, type SiteTheme } from '~/lib/siteTheme';
-import { readStored, writeStored } from '~/lib/storage';
+import { DEFAULT_SITE_THEME, getStoredTheme, type SiteTheme } from '~/lib/siteTheme';
+import { readStored, removeStored, writeStored } from '~/lib/storage';
 
 export interface MapStyleOption {
   id: string;
@@ -38,8 +38,17 @@ export const THEME_BASEMAP: Record<SiteTheme, string> = {
  * Set only when the user picks a basemap by hand. Its absence is meaningful:
  * it's what lets the theme pairing above apply, and once it's set the pairing
  * stops overriding the choice.
+ *
+ * DELIBERATELY A NEW KEY. The old one, `mapStyleId`, was also written every time
+ * someone switched *theme* — the selector persisted the paired basemap as if it
+ * were a hand-pick — so a stored value there cannot be told apart from a
+ * deliberate choice. Which made the pairing above unchangeable in practice:
+ * every visitor who had ever clicked "Light" had `fiord` pinned, so repointing
+ * light at Liberty did nothing for them. Renaming the key drops those ambiguous
+ * values exactly once. From here the key means only what this comment says, and
+ * changing a pairing takes effect for everyone who hasn't overridden it.
  */
-export const MAP_STYLE_STORAGE_KEY = 'mapStyleId';
+export const MAP_STYLE_STORAGE_KEY = 'mapBasemapChoice';
 
 const isKnownStyleId = (value: string): value is string =>
   MAP_STYLE_OPTIONS.some((o) => o.id === value);
@@ -54,11 +63,26 @@ export function storeMapStyleId(id: string): void {
   writeStored(MAP_STYLE_STORAGE_KEY, id);
 }
 
+/**
+ * Drops a hand-picked basemap, handing control back to the theme pairing.
+ * What a theme switch does instead of persisting the pairing it just applied:
+ * the pairing is already recoverable from the stored *theme*, so writing it here
+ * as well only made a later change to `THEME_BASEMAP` unreachable.
+ */
+export function clearStoredMapStyleId(): void {
+  removeStored(MAP_STYLE_STORAGE_KEY);
+}
+
+/** Basemap for an id we don't recognise: the one the default theme pairs with. */
+export const DEFAULT_MAP_STYLE_ID = THEME_BASEMAP[DEFAULT_SITE_THEME];
+
 export function getMapStyleUrlById(id: string): string {
-  return (
-    MAP_STYLE_OPTIONS.find((option) => option.id === id)?.url ??
-    MAP_STYLE_OPTIONS[0].url
-  );
+  const byId = (wanted: string) =>
+    MAP_STYLE_OPTIONS.find((option) => option.id === wanted)?.url;
+  // Was `MAP_STYLE_OPTIONS[0].url`, which tied the fallback to array order and
+  // so resolved to Fiord — a *dark* basemap — for a site whose default theme is
+  // light. Reordering the picker menu would silently have changed it, too.
+  return byId(id) ?? byId(DEFAULT_MAP_STYLE_ID) ?? MAP_STYLE_OPTIONS[0].url;
 }
 
 /** Default basemap id for a theme, for callers that haven't got a stored choice. */

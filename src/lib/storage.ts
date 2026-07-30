@@ -39,6 +39,17 @@ export function writeStored(key: string, value: string): void {
 }
 
 /**
+ * Forgets a key. Distinct from writing an empty value: for keys whose *absence*
+ * is what means something — `mapStyleId` being unset is what lets the site
+ * theme's basemap pairing apply — clearing is the only way back to that state.
+ */
+export function removeStored(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
+/**
  * The three collapsible panels each persist one boolean, and each had invented
  * its own encoding: the filters and news rails wrote `"true"`/`"false"`, the
  * campaign banner `"1"`/`"0"`. Reading accepts both so nobody's panel forgets
