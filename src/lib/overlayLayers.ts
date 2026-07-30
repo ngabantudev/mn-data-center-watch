@@ -289,6 +289,12 @@ export interface OverlayLayers {
   warmArchives(): void;
   /** Map layer ids currently on the map and visible, for hit-testing. */
   visibleLayerIds(): string[];
+  /**
+   * Visible companion ids. Kept apart from `visibleLayerIds()` because the two
+   * are hit-tested for different answers: a base fill names its region through
+   * `regionLabel`, while a companion belongs to whoever supplied it.
+   */
+  visibleCompanionIds(): string[];
   /** What to call the overlay region a queried feature belongs to. */
   regionLabel(feature: maplibregl.MapGeoJSONFeature): string | null;
 }
@@ -313,8 +319,9 @@ export function createOverlayLayers(
   }
 
   let styleReady = false;
-  /** Memoized `visibleLayerIds()`, dropped by every `apply()`. */
+  /** Memoized id lists, dropped by every `apply()`. */
   let visibleIds: string[] | null = null;
+  let visibleCompanions: string[] | null = null;
 
   /**
    * The layer a new fill goes under: the next overlay in registry order that's
@@ -469,6 +476,7 @@ export function createOverlayLayers(
   const apply = (): void => {
     if (!styleReady) return;
     visibleIds = null;
+    visibleCompanions = null;
 
     for (const [index, layer] of MAP_LAYER_META.entries()) {
       const layerId = layerIdFor(layer.id);
@@ -547,6 +555,7 @@ export function createOverlayLayers(
     detachFromStyle: () => {
       styleReady = false;
       visibleIds = null;
+      visibleCompanions = null;
     },
 
     setVisible: (id, visible) => {
@@ -610,6 +619,13 @@ export function createOverlayLayers(
         ? (visibleIds ??= MAP_LAYER_META.filter(
             (l) => wanted.has(l.id) && map.getLayer(layerIdFor(l.id)),
           ).map((l) => layerIdFor(l.id)))
+        : [],
+
+    visibleCompanionIds: () =>
+      styleReady
+        ? (visibleCompanions ??= companions
+            .filter((c) => wantedCompanions.has(c.id) && map.getLayer(c.id))
+            .map((c) => c.id))
         : [],
 
     regionLabel: (feature) => {

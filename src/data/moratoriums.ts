@@ -93,10 +93,10 @@ export interface Jurisdiction {
   name: string;
   county: string;
   /**
-   * The city's centre, where its dot and label sit. NOT city hall and not the
-   * site of any project — the ordinance applies across the whole boundary,
-   * which is what the shaded polygon shows. The popup says so, because a dot
-   * on a map reads as a location claim unless it is told not to.
+   * The city's centre. Used only to place its name label — it is not city hall
+   * and not the site of any project, and nothing is drawn here that would
+   * suggest otherwise. The ordinance applies across the whole boundary, which
+   * is what the shaded polygon shows.
    */
   coordinates: LatLngTuple;
   status: MoratoriumStatus;
@@ -486,7 +486,7 @@ export function getPosture(
   if (status === 'in-effect') {
     // A term that has run out is not still in effect just because nobody has
     // edited this file. The ordinance expires on its own date, and so does the
-    // green dot.
+    // green shading on the map.
     const expiry = timeline.expiresOn ? Date.parse(`${timeline.expiresOn}T23:59:59Z`) : NaN;
     return Number.isFinite(expiry) && expiry < asOf.getTime() ? 'expired' : 'in-effect';
   }

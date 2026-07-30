@@ -53,10 +53,13 @@ const news = await fetchLocalNews();
   import { createOverlayLayers } from "~/lib/overlayLayers";
   import {
     createMoratoriumLayer,
+    jurisdictionForFeature,
+    moratoriumPopupHtml,
     MORATORIUM_API_KEY,
     MORATORIUM_LAYER_IDS,
     MORATORIUM_TINT,
   } from "~/lib/moratoriumLayer";
+  import type { PosturedJurisdiction } from "~/data/moratoriums";
   import {
     DEFAULT_CRITERIA,
     matchesProject,
@@ -759,6 +762,8 @@ const news = await fetchLocalNews();
     // `map.getLayer`, and they matter: MapLibre fires an error and returns
     // *nothing* if any requested layer isn't in the style.
     let envPopup: maplibregl.Popup | null = null;
+    /** Town whose hover card is currently up, so it isn't re-anchored per frame. */
+    let hoveredJurisdictionId: string | null = null;
 
     /**
      * What the pointer is over, resolved once.
@@ -773,20 +778,20 @@ const news = await fetchLocalNews();
       | { kind: "idle" }
       | { kind: "none" }
       | { kind: "marker" }
-      | { kind: "moratorium"; feature: maplibregl.MapGeoJSONFeature }
+      | { kind: "moratorium"; jurisdiction: PosturedJurisdiction }
       | { kind: "overlay"; label: string };
 
     const IDLE: Hit = { kind: "idle" };
     const NO_HIT: Hit = { kind: "none" };
 
-    /** Point geometry of a moratorium feature — always a Point, by construction. */
-    const featureCoords = (
-      feature: maplibregl.MapGeoJSONFeature,
-    ): [number, number] =>
-      (feature.geometry as { coordinates: [number, number] }).coordinates;
-
     const hitTest = (point: maplibregl.Point): Hit => {
-      const moratoriumIds = moratoriums.visibleLayerIds();
+      // A town can be reported by either of two layers — the shaded boundary,
+      // which belongs to the overlay controller's source, or its name label.
+      // Both mean the same thing here.
+      const moratoriumIds = [
+        ...overlays.visibleCompanionIds(),
+        ...moratoriums.visibleLayerIds(),
+      ];
       const overlayIds = overlays.visibleLayerIds();
       // Nothing switched on that this test can answer for. The marker layer
       // alone doesn't count: its own handlers cover it, and querying for it
@@ -800,12 +805,13 @@ const news = await fetchLocalNews();
       ];
 
       // Topmost-first, which is also the order these are stacked: markers over
-      // moratorium dots over overlay fills.
+      // the moratorium shading over the plain city fills beneath it.
       const [top] = map.queryRenderedFeatures(point, { layers });
       if (!top) return NO_HIT;
       if (top.layer.id === MARKER_LAYER_ID) return { kind: "marker" };
       if (moratoriumIds.includes(top.layer.id)) {
-        return { kind: "moratorium", feature: top };
+        const jurisdiction = jurisdictionForFeature(top);
+        return jurisdiction ? { kind: "moratorium", jurisdiction } : NO_HIT;
       }
       const label = overlays.regionLabel(top);
       return label ? { kind: "overlay", label } : NO_HIT;
@@ -843,6 +849,7 @@ const news = await fetchLocalNews();
       // this handler owns" — see the `Hit` union for why `idle` and `none`
       // aren't the same answer.
       const hit = hitTest(event.point);
+      if (hit.kind !== "moratorium") hoveredJurisdictionId = null;
       if (hit.kind === "idle" || hit.kind === "marker") return;
 
       if (hit.kind === "none") {
@@ -861,11 +868,16 @@ const news = await fetchLocalNews();
       });
 
       if (hit.kind === "moratorium") {
-        // Anchored on the town, not the cursor: this card is read, so it must
-        // not drift with the pointer the way a one-word region label can.
-        const html = moratoriums.popupHtml(hit.feature, "hover");
-        if (html) {
-          envPopup.setLngLat(featureCoords(hit.feature)).setHTML(html).addTo(map);
+        // Placed once, where the pointer entered the city, and left there for
+        // as long as it stays inside it. A card this size re-anchored on every
+        // mousemove would shudder across the screen the whole way over a
+        // polygon — and unlike the one-word region label, this one is read.
+        if (hoveredJurisdictionId !== hit.jurisdiction.id) {
+          hoveredJurisdictionId = hit.jurisdiction.id;
+          envPopup
+            .setLngLat(event.lngLat)
+            .setHTML(moratoriumPopupHtml(hit.jurisdiction, "hover"))
+            .addTo(map);
         }
         return;
       }
@@ -904,12 +916,11 @@ const news = await fetchLocalNews();
         // the hover one is the disposable half.
         envPopup?.remove();
         envPopup = null;
+        hoveredJurisdictionId = null;
 
-        const html = moratoriums.popupHtml(hit.feature, "detail");
-        if (!html) return;
         new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
-          .setLngLat(featureCoords(hit.feature))
-          .setHTML(html)
+          .setLngLat(e.lngLat)
+          .setHTML(moratoriumPopupHtml(hit.jurisdiction, "detail"))
           .addTo(map);
         return;
       }

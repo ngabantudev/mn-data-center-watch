@@ -13,7 +13,7 @@
 // attach/detach around a basemap swap, synchronous show/hide, and ids handed to
 // the map's one hit test — so it reads the same from MapParent.
 //
-// TWO THINGS ARE DRAWN, and the split is deliberate.
+// TWO THINGS ARE DRAWN, and neither of them is a marker.
 //
 //   1. The city's own boundary, shaded in its posture's colour. This is the
 //      honest rendering: a moratorium is an ordinance over a jurisdiction, and
@@ -27,12 +27,20 @@
 //      would shade the wrong city with nothing on screen to reveal it. Every
 //      id in the registry was read out of this archive.
 //
-//   2. A dot with the town's name. It is a *label anchor*, not a location
-//      claim — it sits at the city centre, and is neither city hall nor any
-//      project site. It stays because a small city's polygon is a few pixels
-//      at statewide zoom, which is exactly the zoom someone scans the state at.
-//      Both popups say what it is, because an unexplained dot on a map reads
-//      as an address.
+//   2. The town's name, centred on that boundary — a place label, the way any
+//      basemap names a city, and nothing else.
+//
+// There was a dot here, and it is gone. It sat at the city's centre, which is
+// not city hall and not a project site, so on a map already covered in
+// facility markers it made a location claim we could not support. The shaded
+// boundary makes the true claim instead, and hovering it opens the record.
+//
+// THE LABEL IS NOT DECORATION, and this is why it survived the dot. The map
+// opens at z6, where these polygons are 3–6 px across — Carver is 3.5 px, and
+// North Mankato 3.3 px. A shape that small cannot be found, let alone hovered.
+// The label is ~60 px of hoverable text at the same zoom, so it is both how you
+// see that a town has acted and how you ask what it did. It carries no claim a
+// centred city name doesn't already make.
 
 import maplibregl from 'maplibre-gl';
 import { CITY_BOUNDARIES_LAYER_ID, CITY_GNIS_FIELD } from '~/data/mapLayers';
@@ -49,22 +57,38 @@ import {
 } from '~/data/moratoriums';
 
 const SOURCE_ID = 'moratoriums';
-const CIRCLE_LAYER_ID = 'moratoriums-circles';
 const LABEL_LAYER_ID = 'moratoriums-labels';
 
 /**
- * Bottom-first, and the order they stack in — the label rides above the dot.
- * Exported because MapParent stacks the PMTiles fills beneath these.
+ * This controller's own map layers. Exported because MapParent stacks the
+ * PMTiles fills beneath them and hands them to the map's hit test.
  */
-export const MORATORIUM_LAYER_IDS = [CIRCLE_LAYER_ID, LABEL_LAYER_ID];
+export const MORATORIUM_LAYER_IDS = [LABEL_LAYER_ID];
 
 /** Key this layer's toggle sends on the `mapfilterchange` event. */
 export const MORATORIUM_API_KEY = 'showMoratoriums';
 
 // One clock for the whole page load. `getPosture` takes `asOf` precisely so the
-// dots and the sidebar's counts can't disagree about whether a term has run
+// map and the sidebar's counts can't disagree about whether a term has run
 // out — see the note on that function.
 const POSTURED = posturedJurisdictions();
+
+/**
+ * Two ways a hit test can hand us a town, because two layers can report one:
+ * the shaded boundary, whose features come out of the tile archive and carry
+ * `GNIS_FEATURE_ID`, and the label, which is ours and carries its index.
+ */
+const BY_GNIS = new Map(POSTURED.map((j) => [j.gnisFeatureId, j]));
+
+export function jurisdictionForFeature(
+  feature: maplibregl.MapGeoJSONFeature,
+): PosturedJurisdiction | null {
+  const index = feature.properties?.jurisdictionIndex;
+  if (typeof index === 'number') return POSTURED[index] ?? null;
+
+  const gnis = feature.properties?.[CITY_GNIS_FIELD];
+  return typeof gnis === 'number' ? (BY_GNIS.get(gnis) ?? null) : null;
+}
 
 const geoJson = {
   type: 'FeatureCollection' as const,
@@ -238,21 +262,35 @@ function buildDetailHtml(jurisdiction: PosturedJurisdiction): string {
       ${block('Development', development)}
       ${block('Contested', jurisdiction.contest ? `<p class="text-[11px] text-neutral-600 leading-snug">${escape(jurisdiction.contest)}</p>` : null)}
       ${block('Sources', `<ul class="flex flex-col gap-1">${sources}</ul>`)}
-
-      <p class="mt-2 pt-2 border-t border-neutral-100 text-[10px] text-neutral-500 leading-snug">
-        The shaded boundary is the city the ordinance applies across. This dot
-        marks the city centre — it is not city hall, and not a project site.
-      </p>
     </div>
   `;
 }
 
 /**
- * Rendered cards, keyed `variant:index`. At module scope rather than per
+ * Rendered cards, keyed `variant:id`. At module scope rather than per
  * controller: the registry these are built from is fixed for the page's
- * lifetime, so a card survives the map being torn down and rebuilt.
+ * lifetime, so a card survives the map being torn down and rebuilt — and the
+ * hover card would otherwise be reassembled on every frame the pointer moves
+ * across a city.
  */
 const popupCache = new Map<string, string>();
+
+/** The card for a town, built at most once per variant. */
+export function moratoriumPopupHtml(
+  jurisdiction: PosturedJurisdiction,
+  variant: 'hover' | 'detail',
+): string {
+  const key = `${variant}:${jurisdiction.id}`;
+  let html = popupCache.get(key);
+  if (html === undefined) {
+    html =
+      variant === 'hover'
+        ? buildHoverHtml(jurisdiction)
+        : buildDetailHtml(jurisdiction);
+    popupCache.set(key, html);
+  }
+  return html;
+}
 
 export interface MoratoriumLayerOptions {
   /** Map layer ids this layer must stay beneath, bottom-first. */
@@ -267,11 +305,6 @@ export interface MoratoriumLayer {
   setVisible(visible: boolean): void;
   /** Layer ids currently on the map and visible, for the map's hit test. */
   visibleLayerIds(): string[];
-  /** Popup markup for a feature this layer returned from a hit test. */
-  popupHtml(
-    feature: maplibregl.MapGeoJSONFeature,
-    variant: 'hover' | 'detail',
-  ): string | null;
 }
 
 export function createMoratoriumLayer(
@@ -290,26 +323,6 @@ export function createMoratoriumLayer(
 
     map.addLayer(
       {
-        id: CIRCLE_LAYER_ID,
-        type: 'circle',
-        source: SOURCE_ID,
-        layout: { visibility: 'visible' },
-        paint: {
-          'circle-color': POSTURE_COLOR as any,
-          // Fixed radius, unlike the project markers: a moratorium has no
-          // magnitude to encode. It scales only enough to stay tappable as
-          // you zoom in.
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 5, 11, 10],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.92,
-        },
-      } as maplibregl.CircleLayerSpecification,
-      before,
-    );
-
-    map.addLayer(
-      {
         id: LABEL_LAYER_ID,
         type: 'symbol',
         source: SOURCE_ID,
@@ -317,18 +330,27 @@ export function createMoratoriumLayer(
           visibility: 'visible',
           'text-field': ['get', 'name'],
           'text-font': ['Open Sans Bold'],
-          'text-size': 10,
-          'text-anchor': 'top',
-          'text-offset': [0, 0.9],
-          // Town names collide at statewide zoom — Mankato and North Mankato
-          // are four miles apart. Letting MapLibre drop one is right for a
-          // label and wrong for a dot, which is why only this layer allows it.
+          'text-size': 11,
+          // Centred on the city, with no offset — which is what makes this a
+          // place label rather than the caption of a marker that is no longer
+          // there.
+          'text-anchor': 'center',
+          // Town names collide at statewide zoom: Mankato and North Mankato
+          // are four miles apart, and at z6 their polygons are 6 px and 3 px
+          // wide. Dropping one is the right call for a label — the shading
+          // underneath still shows both towns have acted.
           'text-allow-overlap': false,
+          // Widens the hit target well past the glyphs, which is the whole
+          // reason this layer is hoverable: it stands in for a 3-px polygon.
+          'text-padding': 4,
         },
         paint: {
           'text-color': '#ffffff',
-          'text-halo-color': '#000000',
-          'text-halo-width': 1.5,
+          // Haloed in the town's own posture colour rather than flat black, so
+          // a name carries its answer even where the shading beneath it is too
+          // small to see. Widened to keep white text legible against it.
+          'text-halo-color': POSTURE_COLOR as any,
+          'text-halo-width': 1.8,
         },
       } as maplibregl.SymbolLayerSpecification,
       before,
@@ -344,12 +366,10 @@ export function createMoratoriumLayer(
     if (!styleReady) return;
     visibleIds = null;
 
-    // Both layers arrive and leave together, so the circle's presence answers
-    // for the pair.
-    if (!map.getLayer(CIRCLE_LAYER_ID)) {
+    if (!map.getLayer(LABEL_LAYER_ID)) {
       // Nothing to hide, and nothing worth building until it's asked for: a
       // visitor who never opens the Politics section never pays for this
-      // source or its two layers.
+      // source or its layer.
       if (wanted) add();
       return;
     }
@@ -383,27 +403,5 @@ export function createMoratoriumLayer(
       styleReady && wanted
         ? (visibleIds ??= MORATORIUM_LAYER_IDS.filter((id) => map.getLayer(id)))
         : [],
-
-    popupHtml: (feature, variant) => {
-      const index = feature.properties?.jurisdictionIndex;
-      const jurisdiction =
-        typeof index === 'number' ? POSTURED[index] : undefined;
-      if (!jurisdiction) return null;
-
-      // Built at most once per town per variant. The registry is fixed for the
-      // page's lifetime, so a card that has been assembled once will never
-      // differ — and the hover card is otherwise reassembled on every frame the
-      // pointer moves across a dot.
-      const key = `${variant}:${index}`;
-      let html = popupCache.get(key);
-      if (html === undefined) {
-        html =
-          variant === 'hover'
-            ? buildHoverHtml(jurisdiction)
-            : buildDetailHtml(jurisdiction);
-        popupCache.set(key, html);
-      }
-      return html;
-    },
   };
 }
