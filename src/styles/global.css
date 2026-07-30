@@ -365,9 +365,31 @@
 html, body {
   margin: 0;
   padding: 0;
-  width: 100vw;
-  height: 100vh;
+  /*
+    `100%`/`100dvh`, not `100vw`/`100vh`.
+
+    `100vw` includes the width of a classic scrollbar, which on a desktop
+    Windows browser is ~15px of horizontal overflow on an element the next rule
+    then clips — the panels docked to the right edge were being pushed under it.
+
+    `100vh` on a phone is the *largest* viewport, i.e. the height the page has
+    only once the address bar has retracted. With `overflow: hidden` there is no
+    scroll to retract it, so the last ~60–100px of this box sits permanently
+    behind the browser chrome. Everything docked to the bottom edge lives there:
+    the filters card, the zoom buttons, the attribution. `dvh` tracks the
+    viewport that is actually visible, which is what the map section
+    (`h-dvh`) has always used.
+  */
+  width: 100%;
+  height: 100dvh;
   overflow: hidden;
+  /*
+    A drag that starts on the map is a pan, not a page gesture. Without this,
+    dragging down from the top of the map fires pull-to-refresh on Android
+    Chrome and the rubber-band on iOS, both of which take the gesture away
+    mid-pan.
+  */
+  overscroll-behavior: none;
 }
 
 #map {
@@ -527,9 +549,29 @@ html, body {
 }
 
 /* The block sets its own width; the default 14/16 padding plus a 286px child
-   would otherwise push past the mobile viewport cap. */
+   would otherwise push past the mobile viewport cap.
+
+   Note this popup is desktop-only now — on a phone MapParent.astro parks the
+   same block in the facility sheet rather than floating it over the sheet (see
+   `openCampaignPopup`). The rule stays scoped to the class rather than being
+   wrapped in a media query, because the class is what carries the contract. */
 .campaign-popup .maplibregl-popup-content {
   padding: 12px 13px !important;
+}
+
+/*
+  A protected-lands or moratorium record can run to a dozen lines, and on a
+  phone it opens anchored to wherever the tap landed — so a tall one runs off
+  the top of the screen, where nothing can scroll it back. The `max-height: 500px`
+  rule above only catches landscape. Cap it by viewport height instead and let
+  the card scroll inside itself; the close button rides on the popup rather than
+  the content, so it stays reachable either way.
+*/
+@media (max-width: 767px) {
+  .map-record-popup .maplibregl-popup-content {
+    max-height: 55dvh;
+    overflow-y: auto;
+  }
 }
 
 /* On short viewports the rule above turns every popup into a 220px scroller.

@@ -4,7 +4,14 @@
 // The masthead plus the four headline totals, over the whole dataset rather
 // than the current filter — this is the scale of the buildout, not a readout of
 // what's on screen (that's the "Showing N of M" line in MapFilterParent).
-import { ChevronDown } from "lucide-astro";
+//
+// Desktop only, and presentational only. It used to render a `<button
+// id="mf-header-trigger">` carrying a `md:hidden` chevron — inside a block that
+// is itself `hidden md:flex`, so the chevron could never be on screen at any
+// width, and the button's own handler was a no-op above 768px. Between them the
+// sidebar had no working collapse on a phone and a dead control on the desktop.
+// The real trigger now lives in MapFilterParent.astro, where it can be
+// `md:hidden` without being nested inside a desktop-only block.
 import { clientProjects } from "~/data/dataCenters";
 import { countBy } from "~/lib/collections";
 import { parseMW } from "~/lib/projectMetrics";
@@ -73,26 +80,14 @@ const STATS: Array<{
   band, so neither needs a `dark:` twin.
 -->
 <div class="band bg-panel w-full hidden md:flex flex-col border-b border-hair">
-  <button
-    id="mf-header-trigger"
-    type="button"
-    aria-expanded="true"
-    aria-controls="mf-content"
-    class="w-full flex items-center justify-between px-4 py-4 shrink-0 min-w-0 text-left appearance-none cursor-pointer md:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-  >
-    <div class="flex-1 min-w-0 pr-2 py-1">
-      <span class="block text-xs md:text-sm font-semibold tracking-[0.25em] text-accent uppercase leading-none mb-2">
-        Data Center Watch
-      </span>
-      <h1 class="text-3xl md:text-4xl font-black tracking-tight text-ink uppercase leading-none">
-        Minnesota
-      </h1>
-    </div>
-    <ChevronDown
-      size={20}
-      class="md:hidden text-ink/70 transition-transform duration-200 shrink-0 ml-auto"
-    />
-  </button>
+  <div class="w-full px-4 py-4 shrink-0 min-w-0">
+    <span class="block text-sm font-semibold tracking-[0.25em] text-accent uppercase leading-none mb-2">
+      Data Center Watch
+    </span>
+    <h1 class="text-4xl font-black tracking-tight text-ink uppercase leading-none">
+      Minnesota
+    </h1>
+  </div>
 
   <div class="grid grid-cols-2 gap-3 px-4 pb-4">
     {

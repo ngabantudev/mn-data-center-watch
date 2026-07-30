@@ -137,8 +137,16 @@ import {
     ></div>
 
     <!-- One scroll container for all three groups below, so the panel keeps a
-         predictable height however many bills the search turns up. -->
-    <div class="max-h-80 overflow-y-auto">
+         predictable height however many bills the search turns up.
+
+         The cap is viewport-relative on mobile. A flat 20rem list plus this
+         panel's own fixed chrome (intro, the three-count strip, the chamber
+         pills, the action row) and the pill above it comes to ~34rem, which
+         runs off the bottom of a 667px phone — and this bar is `fixed`, so
+         what runs off is unreachable rather than merely below the fold.
+         45dvh keeps the whole panel inside the viewport at every phone size
+         while still showing three or four bills before scrolling. -->
+    <div class="max-h-[min(45dvh,20rem)] md:max-h-80 overflow-y-auto">
       <!-- Blindspots: bills that moved without saying "data center" in their
            title. Rendered above the main list because they are the ones a
            search for "data center bills" would never surface. -->
@@ -339,6 +347,11 @@ import {
   } from "~/lib/legislation";
 
   const STORAGE_KEY = "cb-expanded";
+
+  /** Announced on every expand/collapse. NewsFeedParent.astro listens: on a
+   *  phone its card sits in the row this panel expands into. */
+  const BANNER_EVENT = "campaignbannertoggle";
+  const MOBILE_QUERY = "(max-width: 767px)";
 
   /** Decimal places kept from a coordinate before it leaves the browser —
    *  ~1km, matching COORD_PRECISION in ~/pages/api/legislators.ts. Districts
@@ -912,7 +925,23 @@ import {
       toggle.setAttribute("aria-expanded", String(next));
       // Private-mode storage failures can't break the toggle — see storage.ts.
       writeStoredFlag(STORAGE_KEY, next);
-      if (next) load();
+      document.dispatchEvent(
+        new CustomEvent(BANNER_EVENT, { detail: { expanded: next } }),
+      );
+
+      if (!next) return;
+      load();
+
+      // On a phone this panel and the facility sheet are both near-full-height
+      // surfaces, and they open from opposite edges into the same screen. The
+      // reverse direction already works by accident — tapping a marker is a
+      // click outside this banner, which the handler below collapses it on —
+      // so this is the half that was missing. Desktop has room for both.
+      if (window.matchMedia(MOBILE_QUERY).matches) {
+        document.dispatchEvent(
+          new CustomEvent("mapmarkerselect", { detail: null }),
+        );
+      }
     }
 
     toggle.addEventListener("click", () => {

@@ -22,6 +22,11 @@ const RANGE_OPTIONS = [
   occupies the first row on small screens, where this card would otherwise sit
   directly under the status bar. Desktop is unaffected — md:top-0 still pins
   this to the full-height right rail, and the banner is inset clear of it.
+
+  That row is shared, though, and the script below is what keeps it from being
+  contested: on a phone this card steps aside entirely (display:none) whenever
+  the campaign banner is expanded over it or a facility sheet is open, so two
+  cards never stack at the top of a 390px screen.
 -->
 <div
   id="news-feed-panel"
@@ -54,12 +59,18 @@ const RANGE_OPTIONS = [
     Date Range Selector. `.band-sub` is the portal's dark footer grey: a third
     surface between the navy header and the off-white list, which is what keeps
     the range pills reading as chrome rather than as the first article.
+
+    Desktop only. Four 9px pills in a row are all well under the 44px touch
+    target a phone needs, and the mobile card is a one-headline ticker rather
+    than a reader — nobody scopes a date range on it. The buttons stay in the
+    DOM at every width because the script drives the *default* window through
+    the same code path; they're just not offered as controls on a phone.
   -->
   <div
     id="nf-range-group"
     role="group"
     aria-label="News date range"
-    class="band-sub bg-panel flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
+    class="band-sub bg-panel hidden md:flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
   >
     {
       RANGE_OPTIONS.map((opt) => (
@@ -163,13 +174,31 @@ const RANGE_OPTIONS = [
     }
   </div>
 
-  <!-- Mobile Close Action -->
+  <!--
+    Mobile Close Action. A full-width bar at 44px, which is the floor for a
+    touch target — it was an 18px-tall strip of 9px type, and it also didn't
+    do anything (see `updatePanelDOM` below for what it does now).
+  -->
   <div class="block md:hidden border-t border-hair shrink-0">
     <button
       id="nf-mobile-close"
       type="button"
-      class="w-full py-1.5 text-center text-[9px] font-bold uppercase tracking-wider text-ink-4 hover:text-ink transition-colors"
+      class="w-full min-h-11 flex items-center justify-center gap-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-ink-3 active:bg-hover hover:text-ink transition-colors"
     >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6L6 18M6 6l12 12"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"></path>
+      </svg>
       Dismiss
     </button>
   </div>
@@ -223,12 +252,36 @@ const RANGE_OPTIONS = [
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
   const DAY_MS = 24 * 60 * 60 * 1000;
+  const ROTATE_MS = 5000;
+  /** Raised by CampaignBanner.astro. Both live at the top of a phone screen. */
+  const BANNER_EVENT = "campaignbannertoggle";
 
   let isMarkerSelected = false;
+  /** Desktop only: the pull-tab's persisted state. */
   let isNewsCollapsed = false;
+  /**
+   * Mobile only: the Dismiss button's state, and deliberately NOT persisted.
+   *
+   * Dismissing shares nothing with the desktop pull-tab beyond the word
+   * "collapsed", and it used to share the storage key and the handler — which
+   * is how the button came to do nothing at all on a phone: `setCollapsed(true)`
+   * wrote the flag and then called `updatePanelDOM`, whose mobile branch
+   * unconditionally re-showed the panel and returned before ever reading it.
+   *
+   * Kept to the session on purpose. This is a breaking-news ticker; a dismissal
+   * that outlived the visit would mean a reader who tapped X once never saw MN
+   * coverage again, and there is no affordance on the phone layout to bring it
+   * back. Reloading is the way back, which is what "Dismiss" implies.
+   */
+  let isNewsDismissed = false;
+  /** Whether the campaign banner is expanded over this card's row. */
+  let isBannerExpanded = false;
   let newsCleanups: (() => void)[] = [];
   let currentDays = 7;
   let carouselCleanup: (() => void) | null = null;
+  /** Start/stop for the current carousel's auto-rotate, or null if there is none. */
+  let carouselTimer: { start: () => void; stop: () => void } | null = null;
+  let desktopMql: MediaQueryList | null = null;
 
   // Every article ever fetched this session, keyed by normalized
   // title+source (see dedupeKey below) — not by url. Google News RSS
@@ -307,9 +360,14 @@ const RANGE_OPTIONS = [
   }
 
   /** The carousel track. Every mobile state is one of these, so the class list
-   *  that makes it scroll-snap is written once rather than at each of them. */
-  function carouselHTML(inner: string, withId = false): string {
-    return `<div ${withId ? 'id="nf-carousel" ' : ""}class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full">${inner}</div>`;
+   *  that makes it scroll-snap is written once rather than at each of them.
+   *
+   *  The id is unconditional. It used to be opt-in, and the error/empty states
+   *  opted out — which meant `initCarousel` couldn't find the track it was
+   *  meant to be tearing down, so switching to a range with no results left the
+   *  previous range's 5s interval running forever, scrolling a detached node. */
+  function carouselHTML(inner: string): string {
+    return `<div id="nf-carousel" class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full">${inner}</div>`;
   }
 
   function renderNews(newsItems: NewsItem[], errorMessage: string | null): void {
@@ -336,22 +394,26 @@ const RANGE_OPTIONS = [
     if (state) {
       desktopArea.innerHTML = state.desktop;
       mobileWrap.innerHTML = carouselHTML(state.mobile);
-      return;
+    } else {
+      desktopArea.innerHTML = newsItems.map(desktopItemHTML).join("");
+      mobileWrap.innerHTML = `
+        ${carouselHTML(newsItems.map(mobileItemHTML).join(""))}
+        <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
+          ${newsItems.map((_, i) => `<div class="news-dot w-1 h-1 rounded-full bg-ink-4 transition-colors" data-index="${i}"></div>`).join("")}
+        </div>`;
     }
 
-    desktopArea.innerHTML = newsItems.map(desktopItemHTML).join("");
-    mobileWrap.innerHTML = `
-      ${carouselHTML(newsItems.map(mobileItemHTML).join(""), true)}
-      <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
-        ${newsItems.map((_, i) => `<div class="news-dot w-1 h-1 rounded-full bg-ink-4 transition-colors" data-index="${i}"></div>`).join("")}
-      </div>`;
-
+    // Unconditional, including for the error and empty states: this is what
+    // discards the previous render's listener and interval, and those states
+    // are exactly when there is no new one to replace them.
     initCarousel();
+    syncCarousel();
   }
 
   function initCarousel(): void {
     carouselCleanup?.();
     carouselCleanup = null;
+    carouselTimer = null;
 
     const carousel = document.getElementById("nf-carousel") as HTMLDivElement | null;
     const dots = document.querySelectorAll<HTMLDivElement>(".news-dot");
@@ -359,47 +421,81 @@ const RANGE_OPTIONS = [
 
     let currentIndex = 0;
     const totalItems = carousel.children.length;
-    let autoRotateInterval: number;
+    let interval: number | null = null;
 
-    function updateDots(index: number) {
+    const updateDots = (index: number) => {
       dots.forEach((dot, i) => {
         dot.classList.toggle("bg-accent", i === index);
         dot.classList.toggle("bg-ink-4", i !== index);
       });
-    }
+    };
 
-    function nextSlide() {
+    const nextSlide = () => {
       currentIndex = (currentIndex + 1) % totalItems;
-      carousel!.scrollTo({ left: carousel!.offsetWidth * currentIndex, behavior: "smooth" });
+      carousel.scrollTo({
+        left: carousel.offsetWidth * currentIndex,
+        behavior: "smooth",
+      });
       updateDots(currentIndex);
-    }
+    };
 
-    function startAutoRotate() {
-      autoRotateInterval = window.setInterval(nextSlide, 5000);
-    }
+    const stop = () => {
+      if (interval === null) return;
+      clearInterval(interval);
+      interval = null;
+    };
 
-    function resetAutoRotate() {
-      clearInterval(autoRotateInterval);
-      startAutoRotate();
-    }
+    // A single article has nothing to rotate to, and the error and empty
+    // states are a single article's worth of markup — so the common failure
+    // case stops asking for a smooth-scroll every five seconds forever.
+    const start = () => {
+      stop();
+      if (totalItems > 1) interval = window.setInterval(nextSlide, ROTATE_MS);
+    };
 
     const onCarouselScroll = () => {
       const index = Math.round(carousel.scrollLeft / carousel.offsetWidth);
-      if (index !== currentIndex) {
-        currentIndex = index;
-        updateDots(currentIndex);
-        resetAutoRotate();
-      }
+      if (index === currentIndex) return;
+      currentIndex = index;
+      updateDots(currentIndex);
+      // Only re-arm if it was already running — a scroll that arrives while
+      // the card is off-screen must not start the timer behind its back.
+      if (interval !== null) start();
     };
-    carousel.addEventListener("scroll", onCarouselScroll);
+    carousel.addEventListener("scroll", onCarouselScroll, { passive: true });
 
     updateDots(0);
-    startAutoRotate();
+    carouselTimer = { start, stop };
 
     carouselCleanup = () => {
       carousel.removeEventListener("scroll", onCarouselScroll);
-      clearInterval(autoRotateInterval);
+      stop();
+      carouselTimer = null;
     };
+  }
+
+  /**
+   * The auto-rotate runs only when someone can actually see it.
+   *
+   * It used to start on every render at every width and never stop: the
+   * carousel is `md:hidden`, so on desktop this was a permanent 5s timer
+   * smooth-scrolling an element with `display: none`, and on mobile it kept
+   * going while the card was dismissed or the tab was in the background.
+   */
+  function carouselShouldRun(): boolean {
+    return (
+      !desktopMql?.matches &&
+      !isNewsDismissed &&
+      !isMarkerSelected &&
+      !isBannerExpanded &&
+      document.visibilityState === "visible"
+    );
+  }
+
+  function syncCarousel(): void {
+    if (!carouselTimer) return;
+    if (carouselShouldRun()) carouselTimer.start();
+    else carouselTimer.stop();
   }
 
   // `bg-accent-soft`, not `bg-accent/10`: the campaign banner's chamber pills are
@@ -518,20 +614,42 @@ const RANGE_OPTIONS = [
     });
     updateRangeButtons(root);
 
-    const desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
+    desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
 
     isMarkerSelected = false;
+    isNewsDismissed = false;
     isNewsCollapsed = readStoredFlag(STORAGE_KEY);
 
+    // Read from the banner's own button rather than waiting for its event.
+    // The banner restores an expanded state at init, and whether that dispatch
+    // lands before or after this listener is registered is a question about
+    // bundled script order — not something this card should depend on.
+    isBannerExpanded =
+      document
+        .getElementById("cb-toggle")
+        ?.getAttribute("aria-expanded") === "true";
+
     function updatePanelDOM(): void {
-      const isDesktop = desktopMql.matches;
+      const isDesktop = desktopMql!.matches;
 
       if (!isDesktop) {
+        // One card, one row, and three things that can claim it. `display:
+        // none` rather than the desktop slide-out: a translated card is still
+        // a full-size box over the map, and on a phone that box covers the
+        // markers the sheet underneath is about.
+        const hide = isNewsDismissed || isMarkerSelected || isBannerExpanded;
+        root!.style.display = hide ? "none" : "";
         root!.classList.remove("translate-x-full");
         root!.classList.add("translate-x-0");
         toggleBtn?.classList.add("hidden");
+        syncCarousel();
         return;
       }
+
+      // Crossing back to desktop has to undo the line above, or the rail stays
+      // gone at a width where nothing can bring it back.
+      root!.style.display = "";
+      syncCarousel();
 
       if (isMarkerSelected) {
         root!.classList.add("translate-x-full");
@@ -553,19 +671,23 @@ const RANGE_OPTIONS = [
       }
     }
 
-    function setCollapsed(next: boolean): void {
-      isNewsCollapsed = next;
+    /** Desktop pull-tab. Persisted, because a rail someone slid shut should
+     *  stay shut — and it can always be slid back open. */
+    const onToggleClick = () => {
+      isNewsCollapsed = !isNewsCollapsed;
       writeStoredFlag(STORAGE_KEY, isNewsCollapsed);
       updatePanelDOM();
-    }
-
-    const onToggleClick = () => setCollapsed(!isNewsCollapsed);
+    };
     toggleBtn?.addEventListener("click", onToggleClick);
     newsCleanups.push(() =>
       toggleBtn?.removeEventListener("click", onToggleClick),
     );
 
-    const onCloseClick = () => setCollapsed(true);
+    /** Mobile Dismiss. Session-scoped — see `isNewsDismissed`. */
+    const onCloseClick = () => {
+      isNewsDismissed = true;
+      updatePanelDOM();
+    };
     closeBtn?.addEventListener("click", onCloseClick);
     newsCleanups.push(() =>
       closeBtn?.removeEventListener("click", onCloseClick),
@@ -583,17 +705,35 @@ const RANGE_OPTIONS = [
       document.removeEventListener("mapmarkerselect", onMarkerSelect),
     );
 
+    const onBannerToggle = (event: Event) => {
+      const detail = (event as CustomEvent<{ expanded: boolean }>).detail;
+      isBannerExpanded = !!detail?.expanded;
+      updatePanelDOM();
+    };
+    document.addEventListener(BANNER_EVENT, onBannerToggle);
+    newsCleanups.push(() =>
+      document.removeEventListener(BANNER_EVENT, onBannerToggle),
+    );
+
     const onMediaChange = () => updatePanelDOM();
     desktopMql.addEventListener("change", onMediaChange);
     newsCleanups.push(() =>
-      desktopMql.removeEventListener("change", onMediaChange),
+      desktopMql!.removeEventListener("change", onMediaChange),
     );
 
-    updatePanelDOM();
+    const onVisibilityChange = () => syncCarousel();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    newsCleanups.push(() =>
+      document.removeEventListener("visibilitychange", onVisibilityChange),
+    );
 
-    // Mobile carousel (server-rendered items on first mount, re-run after range changes)
+    // Mobile carousel (server-rendered items on first mount, re-run after range
+    // changes). Wired before the first `updatePanelDOM`, which is what decides
+    // whether it is allowed to run.
     initCarousel();
     newsCleanups.push(() => carouselCleanup?.());
+
+    updatePanelDOM();
 
     // Refresh from the live route on mount.
     //

@@ -76,7 +76,32 @@ const news = await fetchLocalNews();
   const MINNESOTA_CENTER: [number, number] = [-93.265, 44.9778];
   const MOBILE_ZOOM = 6.8;
   const DESKTOP_ZOOM = 6;
-  const DEFAULT_ZOOM = window.innerWidth < 768 ? MOBILE_ZOOM : DESKTOP_ZOOM;
+  const MOBILE_BREAKPOINT = 768;
+
+  /**
+   * Read per call, not captured once at module scope.
+   *
+   * Three things below branch on it — whether the campaign block floats in a
+   * popup, how far the camera lifts a selected marker, and whether the hover
+   * hit-test runs at all — and all three have to follow a rotation or a resized
+   * window. Only the initial zoom and MapLibre's `cooperativeGestures` are read
+   * once, because both are constructor arguments.
+   */
+  const isPhone = (): boolean => window.innerWidth < MOBILE_BREAKPOINT;
+
+  const DEFAULT_ZOOM = isPhone() ? MOBILE_ZOOM : DESKTOP_ZOOM;
+
+  /**
+   * How far up the screen a selected marker is lifted on a phone, as a
+   * fraction of viewport height.
+   *
+   * The facility sheet covers the bottom of the map there (up to 80dvh), so
+   * flying a marker to the centre of the *map container* buries it under the
+   * panel that just opened to describe it. This puts it in the strip that
+   * stays visible above the sheet. Desktop needs none of it — the detail rail
+   * is a side panel and the map's centre is still map.
+   */
+  const PHONE_SELECT_LIFT = 0.28;
 
   let mapInstance: maplibregl.Map | null = null;
   let mapCleanups: (() => void)[] = [];
@@ -206,7 +231,7 @@ const news = await fetchLocalNews();
       // Added by hand below instead, so it lands *after* the zoom buttons in
       // the bottom-right stack — see the note there.
       attributionControl: false,
-      cooperativeGestures: window.innerWidth < 768,
+      cooperativeGestures: isPhone(),
     });
     mapInstance = map;
 
@@ -305,19 +330,27 @@ const news = await fetchLocalNews();
       return MARKER_MIN_R + t * (MARKER_MAX_R - MARKER_MIN_R);
     };
 
-    /** Parks the block back in its hidden host so its listeners and any
-     *  half-typed input survive the popup being torn down. */
+    /** Returns the block to its hidden host, wherever it currently is — the
+     *  popup on desktop, the detail sheet's slot on a phone. Its listeners
+     *  survive the move, which is the whole reason the node is reparented
+     *  rather than rebuilt. */
+    const parkCampaignBlock = (): void => {
+      const block = getCampaignBlock();
+      if (block) document.getElementById("mcta-host")?.appendChild(block);
+    };
+
     const closeCampaignPopup = (): void => {
-      const popup = campaignPopup;
-      if (!popup) return;
       // Nulled *before* remove(), because remove() fires MapLibre's own
       // "close" event — the handler below reads this to tell a programmatic
       // close (already mid-deselect) from the user hitting the X (which still
       // has to trigger one).
+      const popup = campaignPopup;
       campaignPopup = null;
-      popup.remove();
-      const block = getCampaignBlock();
-      if (block) document.getElementById("mcta-host")?.appendChild(block);
+      popup?.remove();
+      // Unconditional, unlike the popup teardown above: on a phone there is no
+      // popup to close and the block is parked in the sheet instead, so an
+      // early return when `campaignPopup` was null would strand it there.
+      parkCampaignBlock();
     };
 
     const openCampaignPopup = (
@@ -335,6 +368,22 @@ const news = await fetchLocalNews();
         // facility. Nothing here promises a follow-up from us — the block is
         // links out to public processes, by design (see MapDetailCta.astro).
         context.textContent = `Organizing near ${project.name}.`;
+      }
+
+      // On a phone, no popup at all.
+      //
+      // The detail sheet opens on the same selection and covers the bottom of
+      // the screen, while this popup anchors over the marker — which the fly-to
+      // above has just put near the middle. At `z-index: 51` against the
+      // sheet's `z-40` the result was a 286px card floating on top of the panel
+      // describing the same facility, with two close affordances for one
+      // selection. The block goes into the sheet's own slot instead, below the
+      // record it belongs to, and `#mdp-content` being its sibling is what lets
+      // it stay there across the next open (see MapDetailParent.astro).
+      const ctaSlot = document.getElementById("mdp-cta");
+      if (isPhone() && ctaSlot) {
+        ctaSlot.appendChild(block);
+        return;
       }
 
       // Clear the marker *and* its legal-hold ring, which is the widest thing
@@ -366,7 +415,7 @@ const news = await fetchLocalNews();
         // the reference first precisely so this doesn't re-enter deselection.
         if (!campaignPopup) return;
         campaignPopup = null;
-        document.getElementById("mcta-host")?.appendChild(block);
+        parkCampaignBlock();
         document.dispatchEvent(
           new CustomEvent("mapmarkerselect", { detail: null }),
         );
@@ -667,6 +716,13 @@ const news = await fetchLocalNews();
         map.flyTo({
           center: coords,
           zoom: Math.max(map.getZoom(), 11),
+          // Negative y is up the screen: this places the marker above the
+          // container's centre so the sheet doesn't open over it. See
+          // PHONE_SELECT_LIFT. The deselect below flies back with no offset,
+          // which restores the plain centring along with the saved view.
+          offset: isPhone()
+            ? [0, -window.innerHeight * PHONE_SELECT_LIFT]
+            : [0, 0],
           essential: true,
         });
         openCampaignPopup(project, coords);
@@ -721,7 +777,7 @@ const news = await fetchLocalNews();
         const isSelected =
           feature.properties.projectIndex === selectedProjectIndex;
 
-        if (window.innerWidth >= 768 && !isSelected) {
+        if (!isPhone() && !isSelected) {
           if (activePopup) activePopup.remove();
           const project = clientProjects[feature.properties.projectIndex];
           activePopup = new maplibregl.Popup({
@@ -906,7 +962,6 @@ const news = await fetchLocalNews();
       }
 
       map.getCanvas().style.cursor = "pointer";
-      if (window.innerWidth < 768) return;
 
       envPopup ??= new maplibregl.Popup({
         closeButton: false,
@@ -932,6 +987,13 @@ const news = await fetchLocalNews();
     };
 
     map.on("mousemove", (e) => {
+      // Nothing downstream of here has an effect on a phone: there is no
+      // cursor to restyle and no room for a label that tracks one, so
+      // `handleHover` used to run a full `queryRenderedFeatures` over every
+      // switched-on overlay and then throw the answer away one line later.
+      // Browsers still synthesise mousemove from touch, so this fired on the
+      // exact devices least able to afford it.
+      if (isPhone()) return;
       pendingMove = e;
       if (moveFrame === null) moveFrame = requestAnimationFrame(handleHover);
     });
