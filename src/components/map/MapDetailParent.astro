@@ -8,8 +8,10 @@
 // Styling mirrors MapFilterParent.astro: a `.band` header with an accent icon
 // chip over a --panel body, hairline borders throughout. Desktop: a right-edge
 // sidebar (MapFilterParent.astro is the left-edge counterpart).
-// Mobile: a bottom sheet that overlays MapFilterParent.astro while open —
-// tapping outside, hitting Escape, or clicking empty map all close it.
+// Mobile: a bottom sheet, and while it's open it is the only panel on screen —
+// MapFilterParent.astro steps aside and NewsFeedParent.astro hides, rather than
+// the sheet being stacked on top of them. Tapping outside, hitting Escape, or
+// clicking empty map all close it.
 import { Building2 } from 'lucide-astro';
 ---
 
@@ -23,7 +25,7 @@ import { Building2 } from 'lucide-astro';
 <div
   id="map-detail-panel"
   class="hidden pointer-events-auto font-sans absolute z-40
-         bottom-0 inset-x-0 max-h-[70vh] rounded-t-2xl translate-y-full
+         bottom-0 inset-x-0 max-h-[80dvh] rounded-t-2xl translate-y-full
          md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto md:w-96 md:max-h-none md:rounded-none md:translate-y-0 md:translate-x-full
          bg-panel backdrop-blur-md border border-hair md:border-r-0
          shadow-2xl shadow-(color:--shadow-panel) flex-col overflow-hidden transition-transform duration-300 ease-out"
@@ -55,7 +57,25 @@ import { Building2 } from 'lucide-astro';
     </button>
   </div>
 
-  <div id="mdp-content" class="flex-1 overflow-y-auto p-3"></div>
+  <!--
+    One scroller, two children that are filled by different owners.
+
+    `#mdp-content` is rewritten wholesale on every open (`innerHTML`), so
+    anything that has to survive that has to be its sibling rather than its
+    child — which is what `#mdp-cta` is. MapParent.astro parks the campaign
+    action block there on phones instead of floating it in a MapLibre popup
+    over this sheet; see the note on `openCampaignPopup`.
+
+    The white surface is not decoration: that block is styled fixed
+    dark-on-white for the popup it normally lives in (see MapDetailCta.astro),
+    so on the dark theme it would be near-black type on a near-black panel
+    anywhere else. `empty:hidden` keeps the box from appearing as a bare white
+    strip when no block is parked in it — which is always, on desktop.
+  -->
+  <div id="mdp-scroll" class="flex-1 min-h-0 overflow-y-auto p-3">
+    <div id="mdp-content"></div>
+    <div id="mdp-cta" class="md:hidden empty:hidden mt-3 rounded-xl border border-neutral-200 bg-white p-3"></div>
+  </div>
 </div>
 
 <script>
@@ -64,12 +84,24 @@ import { Building2 } from 'lucide-astro';
   import { hydrateRatepayerWidget } from '~/lib/ratepayerWidget';
   import type { Project } from '~/data/dataCenters';
 
+  // `onReady` re-runs init after every Astro navigation (see domReady.ts), and
+  // two of the listeners below are on `document`, which outlives one. Dropping
+  // the previous set first is what keeps a second run from stacking a duplicate
+  // that would open this panel twice per selection — every other island on the
+  // page already does this.
+  let detailCleanups: (() => void)[] = [];
+
   function initDetailPanel(): void {
     const panel = document.getElementById('map-detail-panel');
+    const scroller = document.getElementById('mdp-scroll');
     const content = document.getElementById('mdp-content');
     const closeBtn = document.getElementById('mdp-close');
     const titleEl = document.getElementById('mdp-title');
-    if (!panel || !content) return;
+    if (!panel || !content || !scroller) return;
+
+    while (detailCleanups.length > 0) {
+      detailCleanups.pop()?.();
+    }
 
     function open(project: Project): void {
       content!.innerHTML = buildDetailHtml(project);
@@ -83,8 +115,9 @@ import { Building2 } from 'lucide-astro';
       panel!.classList.add('flex');
       // Every open starts at the top — the status and power figures are the
       // point, and a retained scroll position from the last facility would
-      // drop the reader mid-record.
-      content!.scrollTop = 0;
+      // drop the reader mid-record. On the scroller, not on `#mdp-content`,
+      // which no longer scrolls itself now that the CTA slot shares the pane.
+      scroller!.scrollTop = 0;
       // Next frame so the transition actually animates in from the hidden state.
       requestAnimationFrame(() => {
         panel!.classList.remove('translate-y-full', 'md:translate-x-full');
@@ -100,24 +133,36 @@ import { Building2 } from 'lucide-astro';
       if (titleEl) titleEl.textContent = '\u00A0';
     }
 
-    document.addEventListener('mapmarkerselect', (event) => {
+    const onMarkerSelect = (event: Event) => {
       const detail = (event as CustomEvent<{ project: Project } | null>).detail;
       if (detail?.project) {
         open(detail.project);
       } else {
         close();
       }
-    });
+    };
+    document.addEventListener('mapmarkerselect', onMarkerSelect);
+    detailCleanups.push(() =>
+      document.removeEventListener('mapmarkerselect', onMarkerSelect),
+    );
 
-    closeBtn?.addEventListener('click', () => {
+    const onCloseClick = () => {
       document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
-    });
+    };
+    closeBtn?.addEventListener('click', onCloseClick);
+    detailCleanups.push(() =>
+      closeBtn?.removeEventListener('click', onCloseClick),
+    );
 
-    document.addEventListener('keydown', (e) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !panel!.classList.contains('hidden')) {
         document.dispatchEvent(new CustomEvent('mapmarkerselect', { detail: null }));
       }
-    });
+    };
+    document.addEventListener('keydown', onKeyDown);
+    detailCleanups.push(() =>
+      document.removeEventListener('keydown', onKeyDown),
+    );
   }
 
   onReady(initDetailPanel);

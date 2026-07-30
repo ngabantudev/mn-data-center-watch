@@ -70,9 +70,16 @@ const ACTIONS = [
 <!-- Parked here at render time; MapParent.astro moves #mcta-block in and out
      of the popup. `hidden` keeps it out of the page while it's parked. -->
 <div id="mcta-host" hidden>
+  <!--
+    Two homes, two widths. On desktop this is a MapLibre popup, which sizes to
+    its content — so it needs the explicit 286px it has always had. On a phone
+    it is parked in the facility sheet's `#mdp-cta` slot (see MapParent.astro),
+    where a fixed 286px would leave a ragged white gutter down one side of a
+    full-width panel.
+  -->
   <div
     id="mcta-block"
-    class="font-sans w-71.5 max-w-full select-text text-neutral-900"
+    class="font-sans w-full md:w-71.5 max-w-full select-text text-neutral-900"
   >
     <div class="flex items-start gap-2 mb-2">
       <div class="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50 border border-emerald-200 shrink-0 mt-0.5">
