@@ -22,10 +22,12 @@ import {
   impactForProject,
   type RatepayerImpact,
 } from './ratepayerImpact';
-import { parseMW } from './projectMetrics';
+import { projectMW } from './projectMetrics';
 
-/** Root selector — used by the drawer to find widgets to hydrate. */
-export const RATEPAYER_ROOT_SELECTOR = '[data-ratepayer]';
+/** Root selector, shared by the markup below and the hydrator at the bottom.
+ *  Module-private: the drawer calls `hydrateRatepayerWidget(root)` and never
+ *  queries for widgets itself. */
+const RATEPAYER_ROOT_SELECTOR = '[data-ratepayer]';
 
 /**
  * Upper bound of the share-of-state meter. The largest site on the map draws
@@ -149,7 +151,7 @@ function buildUtilityHtml(impact: RatepayerImpact, fields: Record<string, string
 export function buildRatepayerWidgetHtml(project: Project): string {
   const impact = impactForProject(project);
   const f = impactFields(impact);
-  const mw = parseMW(project.powerCapacityMW) || 5;
+  const mw = projectMW(project);
 
   return `
     <section data-ratepayer

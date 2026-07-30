@@ -57,6 +57,7 @@ import { Building2 } from 'lucide-astro';
 </div>
 
 <script>
+  import { onReady } from '~/lib/domReady';
   import { buildDetailHtml } from '~/lib/mapMarkers';
   import { hydrateRatepayerWidget } from '~/lib/ratepayerWidget';
   import type { Project } from '~/data/dataCenters';
@@ -117,10 +118,5 @@ import { Building2 } from 'lucide-astro';
     });
   }
 
-  document.addEventListener('astro:page-load', initDetailPanel);
-  if (document.readyState !== 'loading') {
-    initDetailPanel();
-  } else {
-    document.addEventListener('DOMContentLoaded', initDetailPanel);
-  }
+  onReady(initDetailPanel);
 </script>

@@ -79,8 +79,6 @@ export const LEGAL_META_BY_STATUS = indexBy(
   (m) => m,
 );
 
-export const LEGAL_HEX = indexBy(LEGAL_STATUS_META, (m) => m.legalStatus, (m) => m.hex);
-
 /** The subset that the "isolate legal holds" toggle matches. */
 export const HOLD_STATUSES: LegalStatus[] = LEGAL_STATUS_META.filter((m) => m.isHold).map(
   (m) => m.legalStatus,

@@ -2,7 +2,7 @@
 //
 // Single source of truth for the site's light/dark chrome theme. The actual
 // colors live in global.css (:root vs .dark); this module only decides which
-// of those two is active and tells the rest of the app when it changes.
+// of those two is active.
 //
 // Note the split of responsibilities with mapStyles.ts: this picks the *UI
 // chrome* theme, mapStyles.ts picks the *basemap*. They're paired on first
@@ -14,9 +14,6 @@ export type SiteTheme = 'light' | 'dark';
 
 export const SITE_THEME_STORAGE_KEY = 'siteTheme';
 export const DEFAULT_SITE_THEME: SiteTheme = 'light';
-
-/** Fired on `document` whenever the theme changes, with `{ theme }`. */
-export const SITE_THEME_EVENT = 'sitethemechange';
 
 /** `<meta name="theme-color">` value per theme, so mobile browser chrome matches. */
 export const THEME_COLOR: Record<SiteTheme, string> = {
@@ -43,13 +40,11 @@ export function getActiveTheme(): SiteTheme {
 }
 
 /**
- * Applies `theme` to <html>, persists it, and notifies listeners. The class
- * toggle is what actually swaps every token in global.css, so this one call
- * restyles the whole UI.
+ * Applies `theme` to <html> and persists it. The class toggle is what actually
+ * swaps every token in global.css, so this one call restyles the whole UI.
  */
 export function setTheme(theme: SiteTheme): void {
-  const root = document.documentElement;
-  root.classList.toggle('dark', theme === 'dark');
+  document.documentElement.classList.toggle('dark', theme === 'dark');
 
   const meta = document.querySelector('meta[name="theme-color"]');
   meta?.setAttribute('content', THEME_COLOR[theme]);
@@ -57,8 +52,4 @@ export function setTheme(theme: SiteTheme): void {
   try {
     localStorage.setItem(SITE_THEME_STORAGE_KEY, theme);
   } catch {}
-
-  document.dispatchEvent(
-    new CustomEvent<{ theme: SiteTheme }>(SITE_THEME_EVENT, { detail: { theme } }),
-  );
 }

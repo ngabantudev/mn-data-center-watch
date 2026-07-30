@@ -100,7 +100,7 @@ import {
 
     <!-- One scroll container for all three groups below, so the panel keeps a
          predictable height however many bills the search turns up. -->
-    <div id="cb-scroll" class="max-h-80 overflow-y-auto">
+    <div class="max-h-80 overflow-y-auto">
       <!-- Blindspots: bills that moved without saying "data center" in their
            title. Rendered above the main list because they are the ones a
            search for "data center bills" would never surface. -->
@@ -269,6 +269,7 @@ import {
     STAGE_META_BY_STAGE,
     STAGES_IN_ORDER,
   } from "~/data/billStageMeta";
+  import { MN_LEG_DIRECTORY_URL } from "~/data/legislation";
   import {
     CHAMBER_LABEL,
     composeRepEmail,
@@ -285,7 +286,6 @@ import {
   } from "~/lib/legislation";
 
   const STORAGE_KEY = "cb-expanded";
-  const DIRECTORY_URL = "https://www.leg.mn.gov/leg/legdir";
 
   /** Decimal places kept from a coordinate before it leaves the browser —
    *  ~1km, matching COORD_PRECISION in ~/pages/api/legislators.ts. Districts
@@ -689,7 +689,7 @@ import {
         // Not every member publishes an address — some only have a contact
         // form. Prefer the member's own form, then their Open States page,
         // rather than rendering a dead mailto.
-        link.href = rep.contactUrl ?? rep.url ?? DIRECTORY_URL;
+        link.href = rep.contactUrl ?? rep.url ?? MN_LEG_DIRECTORY_URL;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
       }
@@ -708,7 +708,7 @@ import {
         "font-semibold text-accent underline",
         "Look yours up at leg.mn.gov",
       ) as HTMLAnchorElement;
-      a.href = DIRECTORY_URL;
+      a.href = MN_LEG_DIRECTORY_URL;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
       p.append(a);

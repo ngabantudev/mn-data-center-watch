@@ -8,10 +8,31 @@
 // that disagreed on decimals, which could desync the slider bounds from
 // the map's actual filter comparison.
 
+import type { Project } from "~/data/dataCenters";
+
+/**
+ * Capacity assumed for a project whose `powerCapacityMW` string can't be
+ * parsed. Keeps such a site visible at the smallest marker size, and gives the
+ * ratepayer widget a real (if minimal) reading, rather than collapsing it to a
+ * zero-radius dot and a column of dashes.
+ */
+const UNPARSEABLE_MW_FALLBACK = 5;
+
 /** Extracts the first numeric value (decimal-aware) from a MW string. */
 export function parseMW(val: string | undefined): number {
   if (!val) return 0;
   const cleaned = val.replace(/,/g, "");
   const match = cleaned.match(/\d+(\.\d+)?/);
   return match ? parseFloat(match[0]) : 0;
+}
+
+/**
+ * A project's capacity for every consumer that needs a usable number: the map
+ * features, the sidebar's tier counts, and the ratepayer calculator. The
+ * `|| fallback` used to be written out at each of those four call sites, each
+ * with its own comment explaining the same 5 — which is exactly how the
+ * fallback drifts.
+ */
+export function projectMW(project: Project): number {
+  return parseMW(project.powerCapacityMW) || UNPARSEABLE_MW_FALLBACK;
 }

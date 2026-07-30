@@ -1,7 +1,6 @@
 ---
 // src/components/map/MapParent.astro
 import { fetchLocalNews } from "~/lib/newsFeed";
-import "~/styles/mapPins.css";
 import MapFilterParent from "~/components/map/MapFilterParent.astro";
 import NewsFeedParent from "../news/NewsFeedParent.astro";
 import MapDetailParent from "~/components/map/MapDetailParent.astro";
@@ -9,7 +8,9 @@ import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
 
-const { newsItems, errorMessage } = await fetchLocalNews();
+// One build-time snapshot for the news rail's first paint. Spread rather than
+// unpacked, so this call site doesn't re-list the payload's fields by hand.
+const news = await fetchLocalNews();
 ---
 
 <section
@@ -18,7 +19,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
 >
   <MapThemeSelector />
 
-  <MapFilterParent newsItems={newsItems} errorMessage={errorMessage} />
+  <MapFilterParent />
 
   <MapDetailParent />
 
@@ -26,7 +27,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
        moves that node into a popup over the selected marker. -->
   <MapDetailCta />
 
-  <NewsFeedParent newsItems={newsItems} errorMessage={errorMessage} />
+  <NewsFeedParent {...news} />
 
   <!-- Statewide legislative demands. Page-level and independent of marker
        selection, unlike MapDetailCta above — the two answer different
@@ -53,6 +54,7 @@ const { newsItems, errorMessage } = await fetchLocalNews();
     layerIdFor,
     sourceIdFor,
   } from "~/data/mapLayers";
+  import { onReady } from "~/lib/domReady";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
   import {
     DEFAULT_CRITERIA,
@@ -72,8 +74,6 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   const MOBILE_ZOOM = 6.8;
   const DESKTOP_ZOOM = 6;
   const DEFAULT_ZOOM = window.innerWidth < 768 ? MOBILE_ZOOM : DESKTOP_ZOOM;
-
-  let isMarkerSelected = false;
 
   let mapInstance: maplibregl.Map | null = null;
   let mapCleanups: (() => void)[] = [];
@@ -102,13 +102,21 @@ const { newsItems, errorMessage } = await fetchLocalNews();
   // Scaling keeps the halo visually identical at every site size.
   const MARKER_MIN_R = 6;
   const MARKER_MAX_R = 24;
+  // The capacity range the radius ramp spans, in MW: the smallest site on the
+  // map and the largest. Named because two things interpolate over it — the
+  // MapLibre expression below and `markerRadiusPx` in JS — and a popup offset
+  // computed against a different domain than the marker it clears is a bug you
+  // only see at one end of the dataset.
+  const MARKER_MW_MIN = 5;
+  const MARKER_MW_MAX = 1900;
+
   const radiusExpr = (scale: number): unknown[] => [
     "interpolate",
     ["linear"],
     ["sqrt", ["get", "parsedMW"]],
-    Math.sqrt(5),
+    Math.sqrt(MARKER_MW_MIN),
     MARKER_MIN_R * scale,
-    Math.sqrt(1900),
+    Math.sqrt(MARKER_MW_MAX),
     MARKER_MAX_R * scale,
   ];
 
@@ -234,6 +242,10 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       console.error("[MapLibre ERROR]", e.error?.message ?? e, e);
     });
 
+    // Per-map, like every other piece of interaction state below. This was the
+    // one that sat at module scope, where it survived a client-side navigation
+    // that had already thrown away the map it described.
+    let isMarkerSelected = false;
     let previousView: { center: maplibregl.LngLat; zoom: number } | null = null;
     let activePopup: maplibregl.Popup | null = null;
     let hoverStateId: number | null = null;
@@ -259,8 +271,8 @@ const { newsItems, errorMessage } = await fetchLocalNews();
      * zoom level.
      */
     const markerRadiusPx = (parsedMW: number): number => {
-      const lo = Math.sqrt(5);
-      const hi = Math.sqrt(1900);
+      const lo = Math.sqrt(MARKER_MW_MIN);
+      const hi = Math.sqrt(MARKER_MW_MAX);
       const t = Math.min(Math.max((Math.sqrt(parsedMW) - lo) / (hi - lo), 0), 1);
       return MARKER_MIN_R + t * (MARKER_MAX_R - MARKER_MIN_R);
     };
@@ -288,7 +300,6 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       if (!block) return;
 
       closeCampaignPopup();
-      block.dataset.project = project.name;
 
       const context = document.getElementById("mcta-context");
       if (context) {
@@ -775,16 +786,6 @@ const { newsItems, errorMessage } = await fetchLocalNews();
       document.removeEventListener("mapfilterchange", handleFilterChange),
     );
 
-    map.on("click", (e) => {
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: ["data-centers-circles"],
-      });
-      if (!features.length)
-        document.dispatchEvent(
-          new CustomEvent("mapmarkerselect", { detail: null }),
-        );
-    });
-
     const handleMarkerSelect = (event: Event) => {
       const detail = (
         event as CustomEvent<{
@@ -902,84 +903,73 @@ const { newsItems, errorMessage } = await fetchLocalNews();
         map.getLayer(id),
       );
 
-    map.on("mousemove", (e) => {
+    /** True when a data-center marker is under `point`. Both handlers below
+     *  yield to the marker's own hover/click rather than competing with it. */
+    const isOverMarker = (point: maplibregl.Point): boolean =>
+      map.queryRenderedFeatures(point, { layers: ["data-centers-circles"] })
+        .length > 0;
+
+    /**
+     * Name of the overlay region under `point`, or null. The topmost feature
+     * wins where layers overlap. Callers are expected to have yielded to a
+     * marker already; this only asks about overlays.
+     */
+    const envLabelAt = (point: maplibregl.Point): string | null => {
       const layerIds = getVisibleEnvLayerIds();
-      if (layerIds.length === 0) return;
+      if (layerIds.length === 0) return null;
 
-      // Yield to the data-center marker's own hover handler if a marker
-      // is directly under the cursor, so the two popups don't compete.
-      const markerHit = map.queryRenderedFeatures(e.point, {
-        layers: ["data-centers-circles"],
-      });
-      if (markerHit.length > 0) return;
+      const [feature] = map.queryRenderedFeatures(point, { layers: layerIds });
+      if (!feature) return null;
+      return getEnvLabel(feature.layer.id.replace(/-layer$/, ""), feature);
+    };
 
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: layerIds,
-      });
+    /** The label bubble, shared by the hover popup and the click popup — which
+     *  differ only in whether they persist and carry a close button. */
+    const envLabelHtml = (label: string): string => `<strong>${label}</strong>`;
 
-      if (features.length === 0) {
-        if (envPopup) {
-          envPopup.remove();
-          envPopup = null;
-        }
+    map.on("mousemove", (e) => {
+      // Nothing to hit-test against, so leave the cursor and the marker layer's
+      // own hover handling entirely alone.
+      if (getVisibleEnvLayerIds().length === 0 || isOverMarker(e.point)) return;
+
+      const label = envLabelAt(e.point);
+      if (!label) {
+        envPopup?.remove();
+        envPopup = null;
         map.getCanvas().style.cursor = "";
         return;
       }
 
       map.getCanvas().style.cursor = "pointer";
+      if (window.innerWidth < 768) return;
 
-      // Topmost feature under the cursor if layers overlap.
-      const feature = features[0];
-      const configLayerId = feature.layer.id.replace(/-layer$/, "");
-      const label = getEnvLabel(configLayerId, feature);
+      envPopup ??= new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+      });
+      envPopup.setLngLat(e.lngLat).setHTML(envLabelHtml(label)).addTo(map);
+    });
 
-      if (window.innerWidth >= 768) {
-        if (!envPopup) {
-          envPopup = new maplibregl.Popup({
-            closeButton: false,
-            closeOnClick: false,
-          });
-        }
-        envPopup
+    // One handler for a click anywhere that isn't a marker: clear the selection,
+    // and name the overlay region if the tap landed on one. This was two separate
+    // listeners that between them ran the same hit-test three times — and, being
+    // independent, each had to re-derive "did this land on a marker" for itself.
+    map.on("click", (e) => {
+      if (isOverMarker(e.point)) return; // the marker's own handler owns this tap
+
+      document.dispatchEvent(
+        new CustomEvent("mapmarkerselect", { detail: null }),
+      );
+
+      const label = envLabelAt(e.point);
+      if (label) {
+        new maplibregl.Popup({ closeButton: true })
           .setLngLat(e.lngLat)
-          .setHTML(`<strong>${label}</strong>`)
+          .setHTML(envLabelHtml(label))
           .addTo(map);
       }
     });
-
-    map.on("click", (e) => {
-      const layerIds = getVisibleEnvLayerIds();
-      if (layerIds.length === 0) return;
-
-      const markerHit = map.queryRenderedFeatures(e.point, {
-        layers: ["data-centers-circles"],
-      });
-      if (markerHit.length > 0) return; // marker click handler owns this tap
-
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: layerIds,
-      });
-      if (features.length === 0) return;
-
-      const feature = features[0];
-      const configLayerId = feature.layer.id.replace(/-layer$/, "");
-      const label = getEnvLabel(configLayerId, feature);
-
-      new maplibregl.Popup({ closeButton: true })
-        .setLngLat(e.lngLat)
-        .setHTML(`<strong>${label}</strong>`)
-        .addTo(map);
-    });
   }
 
-  document.addEventListener("astro:page-load", () => {
-    initMap();
-  });
-  if (document.readyState !== "loading") {
-    initMap();
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
-      initMap();
-    });
-  }
+  onReady(initMap);
 </script>

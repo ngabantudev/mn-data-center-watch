@@ -1,11 +1,9 @@
 ---
 // src/components/news/NewsFeedParent.astro
-import type { NewsItem } from "~/lib/newsFeed";
+import type { NewsPayload } from "~/lib/newsFeed";
 import { Newspaper } from "lucide-astro";
 
-interface Props {
-  newsItems: NewsItem[];
-  errorMessage: string | null;
+interface Props extends NewsPayload {
   initialDays?: number;
 }
 
@@ -32,7 +30,6 @@ const RANGE_OPTIONS = [
 >
   <!-- Desktop Header -->
   <div
-    id="nf-header-row"
     class="hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-hair shrink-0"
   >
     <div
@@ -74,7 +71,11 @@ const RANGE_OPTIONS = [
     />
   </div>
 
-  <!-- Mobile Notification (Carousel) -->
+  <!--
+    Mobile Notification (Carousel). The wrapper's contents are re-rendered
+    wholesale by `renderNews` below; the classes on #nf-carousel and #nf-dots are
+    mirrored there, since a client-side re-render can't reuse this markup.
+  -->
   <div id="nf-mobile-wrap" class="md:hidden relative w-full flex flex-col">
     <div
       id="nf-carousel"
@@ -199,13 +200,15 @@ const RANGE_OPTIONS = [
 </div>
 
 <script
+  is:inline
   type="application/json"
   id="nf-initial-data"
   set:html={JSON.stringify({ newsItems, errorMessage }).replace(/</g, "\\u003c")}
 />
 
 <script>
-  import type { NewsItem } from "~/lib/newsFeed";
+  import { onReady } from "~/lib/domReady";
+  import type { NewsItem, NewsPayload } from "~/lib/newsFeed";
 
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
@@ -258,10 +261,7 @@ const RANGE_OPTIONS = [
       );
   }
 
-  function readInitialPayload(): {
-    newsItems: NewsItem[];
-    errorMessage: string | null;
-  } {
+  function readInitialPayload(): NewsPayload {
     const el = document.getElementById("nf-initial-data");
     if (!el?.textContent) return { newsItems: [], errorMessage: null };
     try {
@@ -306,28 +306,42 @@ const RANGE_OPTIONS = [
       </article>`;
   }
 
+  /** The carousel track. Every mobile state is one of these, so the class list
+   *  that makes it scroll-snap is written once rather than at each of them. */
+  function carouselHTML(inner: string, withId = false): string {
+    return `<div ${withId ? 'id="nf-carousel" ' : ""}class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full">${inner}</div>`;
+  }
+
   function renderNews(newsItems: NewsItem[], errorMessage: string | null): void {
     const desktopArea = document.getElementById("nf-content-area");
     const mobileWrap = document.getElementById("nf-mobile-wrap");
     if (!desktopArea || !mobileWrap) return;
 
-    if (errorMessage) {
-      desktopArea.innerHTML = `<div class="p-3 bg-red-500/10 text-red-300 rounded-lg text-xs border border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`;
-      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><div class="p-4 text-red-300 text-xs w-full text-center">${escapeHtml(errorMessage)}</div></div>`;
-      return;
-    }
+    // Error and empty are the same shape — a single message on each surface —
+    // and were three near-identical pairs of innerHTML assignments. The wording
+    // differs per state and per surface (the phone has less room to explain
+    // itself), which is the only thing that varies.
+    const state = errorMessage
+      ? {
+          desktop: `<div class="p-3 bg-red-500/10 text-red-300 rounded-lg text-xs border border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`,
+          mobile: `<div class="p-4 text-red-300 text-xs w-full text-center">${escapeHtml(errorMessage)}</div>`,
+        }
+      : newsItems.length === 0
+        ? {
+            desktop: `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`,
+            mobile: `<p class="text-ink-4 text-xs w-full text-center p-4">No updates found.</p>`,
+          }
+        : null;
 
-    if (newsItems.length === 0) {
-      desktopArea.innerHTML = `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`;
-      mobileWrap.innerHTML = `<div class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"><p class="text-ink-4 text-xs w-full text-center p-4">No updates found.</p></div>`;
+    if (state) {
+      desktopArea.innerHTML = state.desktop;
+      mobileWrap.innerHTML = carouselHTML(state.mobile);
       return;
     }
 
     desktopArea.innerHTML = newsItems.map(desktopItemHTML).join("");
     mobileWrap.innerHTML = `
-      <div id="nf-carousel" class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full">
-        ${newsItems.map(mobileItemHTML).join("")}
-      </div>
+      ${carouselHTML(newsItems.map(mobileItemHTML).join(""), true)}
       <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
         ${newsItems.map((_, i) => `<div class="news-dot w-1 h-1 rounded-full bg-ink-4 transition-colors" data-index="${i}"></div>`).join("")}
       </div>`;
@@ -388,16 +402,18 @@ const RANGE_OPTIONS = [
     };
   }
 
+  // `bg-accent-soft`, not `bg-accent/10`: the campaign banner's chamber pills are
+  // the same affordance (its comment says so) and use the token, so this had
+  // drifted to a differently-mixed wash of the same colour.
+  const PILL_ON = ["text-accent", "border-accent/30", "bg-accent-soft"];
+  const PILL_OFF = ["text-ink-4", "border-hair"];
+
   function updateRangeButtons(root: HTMLElement): void {
-    const buttons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
-    buttons.forEach((btn) => {
+    root.querySelectorAll<HTMLButtonElement>(".nf-range-btn").forEach((btn) => {
       const isActive = Number(btn.dataset.days) === currentDays;
       btn.setAttribute("aria-pressed", String(isActive));
-      btn.classList.toggle("text-accent", isActive);
-      btn.classList.toggle("border-accent/30", isActive);
-      btn.classList.toggle("bg-accent/10", isActive);
-      btn.classList.toggle("text-ink-4", !isActive);
-      btn.classList.toggle("border-hair", !isActive);
+      btn.classList.add(...(isActive ? PILL_ON : PILL_OFF));
+      btn.classList.remove(...(isActive ? PILL_OFF : PILL_ON));
     });
   }
 
@@ -429,10 +445,7 @@ const RANGE_OPTIONS = [
     try {
       const res = await fetch(`/api/news?days=${days}`);
       if (!res.ok) throw new Error("Request failed");
-      const data = (await res.json()) as {
-        newsItems: NewsItem[];
-        errorMessage: string | null;
-      };
+      const data = (await res.json()) as NewsPayload;
       if (data.errorMessage) {
         lastFetchError = data.errorMessage;
       } else {
@@ -605,20 +618,5 @@ const RANGE_OPTIONS = [
     void showRange(root, currentDays, { silent: hasPaintedItems });
   }
 
-  document.addEventListener("astro:page-load", initNewsFeed);
-  if (document.readyState !== "loading") {
-    initNewsFeed();
-  } else {
-    document.addEventListener("DOMContentLoaded", initNewsFeed);
-  }
+  onReady(initNewsFeed);
 </script>
-
-<style>
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-</style>

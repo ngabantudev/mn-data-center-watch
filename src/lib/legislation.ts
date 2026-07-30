@@ -149,8 +149,9 @@ export const CHAMBER_LABEL: Record<Chamber, string> = {
 // Stage labels and colors live in ~/data/billStageMeta.ts, alongside the other
 // status registries and the contrast measurements that justify their hexes.
 
-/** Long party names are unreadable in a 10px line. */
-export function shortParty(party: string): string {
+/** Long party names are unreadable in a 10px line. Only `sponsorLine` needs
+ *  this — nothing outside renders a bare party. */
+function shortParty(party: string): string {
   if (/democratic-farmer-labor/i.test(party)) return "DFL";
   if (/republican/i.test(party)) return "R";
   if (/democrat/i.test(party)) return "D";

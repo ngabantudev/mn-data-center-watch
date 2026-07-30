@@ -124,6 +124,8 @@ const ACTIONS = [
 </div>
 
 <script>
+  import { onReady } from '~/lib/domReady';
+
   function initCampaignCta(): void {
     const block = document.getElementById('mcta-block');
     if (!block) return;
@@ -135,10 +137,5 @@ const ACTIONS = [
     block.addEventListener('mousedown', (e) => e.stopPropagation());
   }
 
-  document.addEventListener('astro:page-load', initCampaignCta);
-  if (document.readyState !== 'loading') {
-    initCampaignCta();
-  } else {
-    document.addEventListener('DOMContentLoaded', initCampaignCta);
-  }
+  onReady(initCampaignCta);
 </script>

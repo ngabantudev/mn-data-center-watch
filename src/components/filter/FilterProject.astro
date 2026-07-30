@@ -5,13 +5,12 @@ import type { Project } from "~/data/dataCenters";
 
 interface Props {
   largestProjects: Project[];
-  openByDefault?: boolean;
 }
 
 const { largestProjects } = Astro.props;
 ---
 
-<AccordionSection id="projects" title="Largest Centers">
+<AccordionSection title="Largest Centers">
   <div
     class="px-3.5 md:px-4 pb-4 max-h-60 overflow-y-auto hide-scrollbar space-y-0.5 pt-2"
   >

@@ -31,7 +31,7 @@ import {
   MN_HOUSEHOLD_MWH_PER_YEAR,
   MN_TOTAL_HOUSEHOLDS,
 } from '~/data/mnRatepayerBaseline';
-import { parseMW } from './projectMetrics';
+import { projectMW } from './projectMetrics';
 
 export interface RatepayerImpact {
   /** Nameplate capacity used for the calculation. */
@@ -134,17 +134,14 @@ export function computeImpactForMW(
   };
 }
 
-/**
- * Same fallback as `toFeatureProps` in projectFilters.ts: a capacity string we
- * can't parse becomes 5 MW rather than zero, so the site still gets a real
- * (if minimal) reading instead of a widget full of dashes.
- */
+/** Capacity comes from `projectMW`, so the unparseable-string fallback is the
+ *  same number the map and the filters use. */
 export function impactForProject(
   project: Project,
   loadFactor: number = DEFAULT_LOAD_FACTOR,
 ): RatepayerImpact {
   return computeImpactForMW(
-    parseMW(project.powerCapacityMW) || 5,
+    projectMW(project),
     project.servingUtilityId,
     loadFactor,
   );
