@@ -59,6 +59,11 @@ const news = await fetchLocalNews();
     MORATORIUM_LAYER_IDS,
     MORATORIUM_TINT,
   } from "~/lib/moratoriumLayer";
+  import {
+    protectedLandForFeature,
+    protectedLandPopupHtml,
+    type ProtectedLand,
+  } from "~/lib/protectedLands";
   import type { PosturedJurisdiction } from "~/data/moratoriums";
   import {
     DEFAULT_CRITERIA,
@@ -762,8 +767,8 @@ const news = await fetchLocalNews();
     // `map.getLayer`, and they matter: MapLibre fires an error and returns
     // *nothing* if any requested layer isn't in the style.
     let envPopup: maplibregl.Popup | null = null;
-    /** Town whose hover card is currently up, so it isn't re-anchored per frame. */
-    let hoveredJurisdictionId: string | null = null;
+    /** Region whose hover card is currently up, so it isn't re-anchored per frame. */
+    let hoveredCardKey: string | null = null;
 
     /**
      * What the pointer is over, resolved once.
@@ -773,12 +778,17 @@ const news = await fetchLocalNews();
      * so it must not touch the cursor at all — the marker layer's own
      * mouseenter/mouseleave own it. `none` means we looked and the pointer is
      * over bare map, which is when a stale label popup has to be cleared.
+     *
+     * `overlay` is the plain case — a region with a name and nothing else we
+     * know about it. `protected` is the one overlay whose archive carries a
+     * whole record per polygon, so it gets a card rather than a word.
      */
     type Hit =
       | { kind: "idle" }
       | { kind: "none" }
       | { kind: "marker" }
       | { kind: "moratorium"; jurisdiction: PosturedJurisdiction }
+      | { kind: "protected"; site: ProtectedLand }
       | { kind: "overlay"; label: string };
 
     const IDLE: Hit = { kind: "idle" };
@@ -813,8 +823,43 @@ const news = await fetchLocalNews();
         const jurisdiction = jurisdictionForFeature(top);
         return jurisdiction ? { kind: "moratorium", jurisdiction } : NO_HIT;
       }
+      // Claimed before `regionLabel`, which would answer for this feature with
+      // the layer's own label — the words "Protected Lands" over any of 17,000
+      // named places. Returns null for every other overlay's features.
+      const site = protectedLandForFeature(top);
+      if (site) return { kind: "protected", site };
+
       const label = overlays.regionLabel(top);
       return label ? { kind: "overlay", label } : NO_HIT;
+    };
+
+    /**
+     * A hit that opens a *card* rather than a one-word label, plus the key that
+     * says whether the card already up is the same one.
+     *
+     * Cards are placed once, where the pointer entered the region, and left
+     * there while it stays inside: something this size re-anchored every frame
+     * would shudder across the screen the whole way over a polygon, and unlike
+     * a region's name a card is read rather than glanced at.
+     *
+     * The markup is a thunk because the key alone settles whether it's needed —
+     * a protected-lands card is assembled from a parsed attribute table, and
+     * building one per frame to throw away is what the key exists to avoid.
+     */
+    const hoverCard = (hit: Hit): { key: string; html: () => string } | null => {
+      if (hit.kind === "moratorium") {
+        return {
+          key: `moratorium:${hit.jurisdiction.id}`,
+          html: () => moratoriumPopupHtml(hit.jurisdiction, "hover"),
+        };
+      }
+      if (hit.kind === "protected") {
+        return {
+          key: `protected:${hit.site.id}`,
+          html: () => protectedLandPopupHtml(hit.site, "hover"),
+        };
+      }
+      return null;
     };
 
     /**
@@ -849,7 +894,8 @@ const news = await fetchLocalNews();
       // this handler owns" — see the `Hit` union for why `idle` and `none`
       // aren't the same answer.
       const hit = hitTest(event.point);
-      if (hit.kind !== "moratorium") hoveredJurisdictionId = null;
+      const card = hoverCard(hit);
+      if (!card) hoveredCardKey = null;
       if (hit.kind === "idle" || hit.kind === "marker") return;
 
       if (hit.kind === "none") {
@@ -867,25 +913,22 @@ const news = await fetchLocalNews();
         closeOnClick: false,
       });
 
-      if (hit.kind === "moratorium") {
-        // Placed once, where the pointer entered the city, and left there for
-        // as long as it stays inside it. A card this size re-anchored on every
-        // mousemove would shudder across the screen the whole way over a
-        // polygon — and unlike the one-word region label, this one is read.
-        if (hoveredJurisdictionId !== hit.jurisdiction.id) {
-          hoveredJurisdictionId = hit.jurisdiction.id;
-          envPopup
-            .setLngLat(event.lngLat)
-            .setHTML(moratoriumPopupHtml(hit.jurisdiction, "hover"))
-            .addTo(map);
+      if (card) {
+        if (hoveredCardKey !== card.key) {
+          hoveredCardKey = card.key;
+          envPopup.setLngLat(event.lngLat).setHTML(card.html()).addTo(map);
         }
         return;
       }
 
-      envPopup
-        .setLngLat(event.lngLat)
-        .setDOMContent(envLabelNode(hit.label))
-        .addTo(map);
+      // A one-word label is cheap enough to follow the cursor, and following it
+      // is what makes clear which shape under the pointer is being named.
+      if (hit.kind === "overlay") {
+        envPopup
+          .setLngLat(event.lngLat)
+          .setDOMContent(envLabelNode(hit.label))
+          .addTo(map);
+      }
     };
 
     map.on("mousemove", (e) => {
@@ -911,16 +954,27 @@ const news = await fetchLocalNews();
         new CustomEvent("mapmarkerselect", { detail: null }),
       );
 
-      if (hit.kind === "moratorium") {
+      if (hit.kind === "moratorium" || hit.kind === "protected") {
         // The hover card and the full record at the same spot would stack, and
         // the hover one is the disposable half.
         envPopup?.remove();
         envPopup = null;
-        hoveredJurisdictionId = null;
+        hoveredCardKey = null;
 
-        new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
+        new maplibregl.Popup({
+          closeButton: true,
+          maxWidth: "320px",
+          // Opts back into the close button global.css hides, the way the
+          // campaign popup does — a card that persists until dismissed needs a
+          // way to dismiss it, and on a phone there is no hover to leave.
+          className: "map-record-popup",
+        })
           .setLngLat(e.lngLat)
-          .setHTML(moratoriumPopupHtml(hit.jurisdiction, "detail"))
+          .setHTML(
+            hit.kind === "moratorium"
+              ? moratoriumPopupHtml(hit.jurisdiction, "detail")
+              : protectedLandPopupHtml(hit.site, "detail"),
+          )
           .addTo(map);
         return;
       }

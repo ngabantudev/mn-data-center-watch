@@ -45,6 +45,11 @@
 import maplibregl from 'maplibre-gl';
 import { CITY_BOUNDARIES_LAYER_ID, CITY_GNIS_FIELD } from '~/data/mapLayers';
 import type { CompanionLayerSpec } from '~/lib/overlayLayers';
+// Escaping and the titled block, shared with the protected-lands card. Nothing
+// in the moratorium registry is meant to be markup — unlike a project's
+// `businessImpact`, which is authored as HTML — so a stray angle bracket in an
+// ordinance summary should render as one.
+import { escapeHtml, popupBlock } from '~/lib/popupHtml';
 import {
   MORATORIUM_ISSUE_URL,
   POSTURE_BY_ID,
@@ -154,22 +159,6 @@ export const MORATORIUM_TINT: CompanionLayerSpec = {
   },
 };
 
-/**
- * Third-party-safe by default. Nothing in the registry is meant to be markup —
- * unlike a project's `businessImpact`, which is authored as HTML — so a stray
- * angle bracket in an ordinance summary should render as one.
- */
-const HTML_ENTITIES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-const escape = (value: string): string =>
-  value.replace(/[&<>"']/g, (c) => HTML_ENTITIES[c]!);
-
 /** The posture pill both popups open with. */
 const postureChip = (posture: MoratoriumPosture): string => {
   const meta = POSTURE_BY_ID[posture];
@@ -177,7 +166,7 @@ const postureChip = (posture: MoratoriumPosture): string => {
     <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
           style="background-color: ${meta.hex}1f; color: ${meta.hex}">
       <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${meta.hex}"></span>
-      ${escape(meta.label)}
+      ${escapeHtml(meta.label)}
     </span>
   `;
 };
@@ -188,11 +177,11 @@ function buildHoverHtml(jurisdiction: PosturedJurisdiction): string {
   return `
     <div class="p-0.5 text-neutral-900 font-sans w-56 select-text">
       ${postureChip(jurisdiction.posture)}
-      <h3 class="font-bold text-[13px] text-neutral-900 leading-snug mt-1.5">${escape(jurisdiction.name)}</h3>
-      <p class="text-[10px] text-neutral-400 font-medium">${escape(jurisdiction.county)}</p>
+      <h3 class="font-bold text-[13px] text-neutral-900 leading-snug mt-1.5">${escapeHtml(jurisdiction.name)}</h3>
+      <p class="text-[10px] text-neutral-400 font-medium">${escapeHtml(jurisdiction.county)}</p>
       ${
         timeline
-          ? `<p class="mt-1 text-[11px] text-neutral-600 leading-snug">${escape(timeline)}</p>`
+          ? `<p class="mt-1 text-[11px] text-neutral-600 leading-snug">${escapeHtml(timeline)}</p>`
           : ''
       }
       <p class="mt-1.5 text-[10px] text-neutral-500 leading-snug">Shaded area = the city this applies across.</p>
@@ -209,17 +198,6 @@ const DEVELOPMENT_LABEL: Record<DevelopmentStatus, string> = {
   unknown: 'Not sourced yet',
 };
 
-/** A labelled block, omitted entirely when there is nothing sourced to put in it. */
-const block = (title: string, body: string | null): string =>
-  body
-    ? `
-      <div class="mt-2 pt-2 border-t border-neutral-100">
-        <span class="block text-[9px] text-neutral-400 font-bold uppercase tracking-wider mb-1">${title}</span>
-        ${body}
-      </div>
-    `
-    : '';
-
 /** Click: the whole record, with the sources every date in it came from. */
 function buildDetailHtml(jurisdiction: PosturedJurisdiction): string {
   const timeline = timelineSentence(jurisdiction);
@@ -234,7 +212,7 @@ function buildDetailHtml(jurisdiction: PosturedJurisdiction): string {
       : `<p class="text-[11px] font-semibold text-neutral-800">${DEVELOPMENT_LABEL[jurisdiction.development]}</p>
          ${
            jurisdiction.developmentNote
-             ? `<p class="mt-0.5 text-[11px] text-neutral-600 leading-snug">${escape(jurisdiction.developmentNote)}</p>`
+             ? `<p class="mt-0.5 text-[11px] text-neutral-600 leading-snug">${escapeHtml(jurisdiction.developmentNote)}</p>`
              : ''
          }`;
 
@@ -242,9 +220,9 @@ function buildDetailHtml(jurisdiction: PosturedJurisdiction): string {
     .map(
       (source) => `
         <li>
-          <a href="${escape(source.url)}" target="_blank" rel="noopener noreferrer"
+          <a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer"
              class="text-[11px] font-medium text-blue-600 hover:underline leading-snug">
-            ${escape(source.title)} &rarr;
+            ${escapeHtml(source.title)} &rarr;
           </a>
         </li>
       `,
@@ -254,14 +232,14 @@ function buildDetailHtml(jurisdiction: PosturedJurisdiction): string {
   return `
     <div class="p-0.5 text-neutral-900 font-sans w-72 select-text">
       ${postureChip(jurisdiction.posture)}
-      <h3 class="font-bold text-[15px] text-neutral-900 leading-snug mt-1.5">${escape(jurisdiction.name)}</h3>
-      <p class="text-[10px] text-neutral-400 font-medium">${escape(jurisdiction.county)}</p>
+      <h3 class="font-bold text-[15px] text-neutral-900 leading-snug mt-1.5">${escapeHtml(jurisdiction.name)}</h3>
+      <p class="text-[10px] text-neutral-400 font-medium">${escapeHtml(jurisdiction.county)}</p>
 
-      ${block('Timeline', timeline ? `<p class="text-[11px] font-semibold text-neutral-800 leading-snug">${escape(timeline)}</p>` : null)}
-      ${block('What It Covers', jurisdiction.scope ? `<p class="text-[11px] text-neutral-600 leading-snug">${escape(jurisdiction.scope)}</p>` : null)}
-      ${block('Development', development)}
-      ${block('Contested', jurisdiction.contest ? `<p class="text-[11px] text-neutral-600 leading-snug">${escape(jurisdiction.contest)}</p>` : null)}
-      ${block('Sources', `<ul class="flex flex-col gap-1">${sources}</ul>`)}
+      ${popupBlock('Timeline', timeline ? `<p class="text-[11px] font-semibold text-neutral-800 leading-snug">${escapeHtml(timeline)}</p>` : null)}
+      ${popupBlock('What It Covers', jurisdiction.scope ? `<p class="text-[11px] text-neutral-600 leading-snug">${escapeHtml(jurisdiction.scope)}</p>` : null)}
+      ${popupBlock('Development', development)}
+      ${popupBlock('Contested', jurisdiction.contest ? `<p class="text-[11px] text-neutral-600 leading-snug">${escapeHtml(jurisdiction.contest)}</p>` : null)}
+      ${popupBlock('Sources', `<ul class="flex flex-col gap-1">${sources}</ul>`)}
     </div>
   `;
 }
