@@ -17,9 +17,13 @@ export type SiteTheme = 'light' | 'dark';
 export const SITE_THEME_STORAGE_KEY = 'siteTheme';
 export const DEFAULT_SITE_THEME: SiteTheme = 'light';
 
-/** `<meta name="theme-color">` value per theme, so mobile browser chrome matches. */
+/**
+ * `<meta name="theme-color">` value per theme, so mobile browser chrome matches.
+ * The light value is the band colour (the flag's Night Sky Blue), not --canvas:
+ * what sits under the browser chrome on a phone is a panel header, not the map.
+ */
 export const THEME_COLOR: Record<SiteTheme, string> = {
-  light: '#003865',
+  light: '#002d5d',
   dark: '#131314',
 };
 
