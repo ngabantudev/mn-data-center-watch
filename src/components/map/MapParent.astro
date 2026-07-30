@@ -859,6 +859,28 @@ const news = await fetchLocalNews();
     const IDLE: Hit = { kind: "idle" };
     const NO_HIT: Hit = { kind: "none" };
 
+    /**
+     * Is this point on a project marker?
+     *
+     * Asked by the map-wide click handler below, which has to yield to the
+     * marker layer's own handler at *every* overlay state — and this is the one
+     * question `hitTest` cannot answer for it. That test returns `idle` before
+     * it looks at anything, whenever no overlay is switched on, which is the
+     * state the map opens in and the state most visitors never leave.
+     *
+     * So a marker tap read as a tap on bare map, and MapLibre runs both
+     * listeners for one click, in the order they were registered: the marker's
+     * handler dispatched the selection, and this handler dispatched a deselect
+     * immediately after it. The detail panel opened and shut again, and the
+     * camera flew to the site and straight back out.
+     *
+     * One layer, and only on click, so this doesn't reintroduce the per-frame
+     * marker query the hover path was written to avoid.
+     */
+    const isMarkerAt = (point: maplibregl.Point): boolean =>
+      !!map.getLayer(MARKER_LAYER_ID) &&
+      map.queryRenderedFeatures(point, { layers: [MARKER_LAYER_ID] }).length > 0;
+
     const hitTest = (point: maplibregl.Point): Hit => {
       // A town can be reported by either of two layers — the shaded boundary,
       // which belongs to the overlay controller's source, or its name label.
@@ -1018,8 +1040,12 @@ const news = await fetchLocalNews();
     // listeners that between them ran the same hit-test three times — and, being
     // independent, each had to re-derive "did this land on a marker" for itself.
     map.on("click", (e) => {
+      // The marker's own handler owns this tap. Tested directly rather than
+      // through `hitTest`, which cannot see markers while every overlay is off
+      // — see `isMarkerAt`.
+      if (isMarkerAt(e.point)) return;
+
       const hit = hitTest(e.point);
-      if (hit.kind === "marker") return; // the marker's own handler owns this tap
 
       document.dispatchEvent(
         new CustomEvent("mapmarkerselect", { detail: null }),
