@@ -18,28 +18,34 @@ const RANGE_OPTIONS = [
 ---
 
 <!--
-  Mobile top offset (top-16, not top-3): the CampaignBanner's collapsed pill
-  occupies the first row on small screens, where this card would otherwise sit
-  directly under the status bar. Desktop is unaffected — md:top-0 still pins
-  this to the full-height right rail, and the banner is inset clear of it.
+  One list, both layouts.
 
-  That row is shared, though, and the script below is what keeps it from being
-  contested: on a phone this card steps aside entirely (display:none) whenever
-  the campaign banner is expanded over it or a facility sheet is open, so two
-  cards never stack at the top of a 390px screen.
+  Desktop: the full-height right rail it has always been.
+
+  Phone: the `news` sheet above MobileToolbar.astro — `.mobile-sheet` in
+  global.css restates the position, so the desktop utilities below are the only
+  ones this element needs. There used to be a second, separate mobile UI here: a
+  floating card at the top of the screen containing a snap-scrolling carousel of
+  headlines, its own dot indicator, its own auto-rotate timer and its own
+  dismiss button. All of it is gone. It existed because a 122px card at the top
+  of a phone could only ever show one headline at a time; a sheet shows the same
+  list the desktop rail does, and the one thing the card genuinely did better —
+  putting a headline in front of someone who never asked for one — is now the
+  toolbar's ticker line, which costs 28px instead of 122 and needs no timer.
 -->
 <div
   id="news-feed-panel"
   data-initial-days={initialDays}
-  class="fixed md:absolute top-16 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-panel/90 md:bg-panel backdrop-blur-xl md:backdrop-blur-md border border-hair md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-(color:--shadow-panel) md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
+  class="mobile-sheet absolute top-0 bottom-0 right-0 left-auto z-30 pointer-events-auto font-sans bg-panel backdrop-blur-md border border-hair md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-(color:--shadow-panel) md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
 >
   <!--
-    Desktop Header. Same navy band as the filter sidebar's masthead (see
-    global.css), so the two rails are headed identically and the article list
-    below reads as the portal's off-white body.
+    Header. Same navy band as the filter sidebar's masthead (see global.css), so
+    the two rails are headed identically and the article list below reads as the
+    portal's off-white body. Shown at every width now that the phone layout uses
+    this same panel rather than a card of its own.
   -->
   <div
-    class="band bg-panel hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-hair shrink-0"
+    class="band bg-panel flex items-center gap-2.5 px-4 py-3.5 border-b border-hair shrink-0"
   >
     <div
       class="flex items-center justify-center w-7 h-7 rounded-lg bg-hover shrink-0"
@@ -53,6 +59,33 @@ const RANGE_OPTIONS = [
         Related MN Coverage
       </h4>
     </div>
+    <!--
+      `data-sheet-close` is the toolbar's documented way to be asked to close
+      the open sheet without this panel needing to know what a sheet is — see
+      ~/lib/mobileSheet.ts. The scrim and the tab itself both close it too; this
+      is the affordance that says so.
+    -->
+    <button
+      type="button"
+      data-sheet-close
+      aria-label="Close news panel"
+      class="md:hidden w-8 h-8 -mr-1 flex items-center justify-center rounded-full text-ink-3 active:bg-hover transition-colors shrink-0"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6L6 18M6 6l12 12"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"></path>
+      </svg>
+    </button>
   </div>
 
   <!--
@@ -60,23 +93,21 @@ const RANGE_OPTIONS = [
     surface between the navy header and the off-white list, which is what keeps
     the range pills reading as chrome rather than as the first article.
 
-    Desktop only. Four 9px pills in a row are all well under the 44px touch
-    target a phone needs, and the mobile card is a one-headline ticker rather
-    than a reader — nobody scopes a date range on it. The buttons stay in the
-    DOM at every width because the script drives the *default* window through
-    the same code path; they're just not offered as controls on a phone.
+    Offered at every width again. These were hidden on phones because four 9px
+    pills wedged into a 122px notification card were unhittable; in a sheet
+    there is room to give them a real target height.
   -->
   <div
     id="nf-range-group"
     role="group"
     aria-label="News date range"
-    class="band-sub bg-panel hidden md:flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
+    class="band-sub bg-panel flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
   >
     {
       RANGE_OPTIONS.map((opt) => (
         <button
           type="button"
-          class="nf-range-btn text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors text-ink-4 border-hair hover:text-ink"
+          class="nf-range-btn text-[9px] font-bold uppercase tracking-wider px-3 min-h-8 md:min-h-0 md:py-1 rounded-full border transition-colors text-ink-4 border-hair hover:text-ink"
           data-days={opt.days}
           aria-pressed={opt.days === initialDays ? "true" : "false"}
         >
@@ -90,60 +121,9 @@ const RANGE_OPTIONS = [
     />
   </div>
 
-  <!--
-    Mobile Notification (Carousel). The wrapper's contents are re-rendered
-    wholesale by `renderNews` below; the classes on #nf-carousel and #nf-dots are
-    mirrored there, since a client-side re-render can't reuse this markup.
-  -->
-  <div id="nf-mobile-wrap" class="md:hidden relative w-full flex flex-col">
-    <div
-      id="nf-carousel"
-      class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full"
-    >
-      {
-        errorMessage ? (
-          <div class="p-4 text-red-700 dark:text-red-300 text-xs w-full text-center">
-            {errorMessage}
-          </div>
-        ) : newsItems.length === 0 ? (
-          <p class="text-ink-4 text-xs w-full text-center p-4">
-            No updates found.
-          </p>
-        ) : (
-          newsItems.map((item) => (
-            <article class="w-full shrink-0 snap-center p-3 flex flex-col justify-center">
-              <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-0.5">
-                Breaking News
-              </span>
-              <h3 class="text-xs font-medium text-ink-2 leading-snug line-clamp-2">
-                <a href={item.url} target="_blank" rel="noopener noreferrer">
-                  {item.title}
-                </a>
-              </h3>
-            </article>
-          ))
-        )
-      }
-    </div>
-
-    {
-      newsItems.length > 0 && !errorMessage && (
-        <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
-          {newsItems.map((_, i) => (
-            <div
-              class="news-dot w-1 h-1 rounded-full bg-ink-4 transition-colors"
-              data-index={i}
-            />
-          ))}
-        </div>
-      )
-    }
-  </div>
-
-  <!-- Desktop List Content -->
   <div
     id="nf-content-area"
-    class="hidden md:block overflow-y-auto p-4 space-y-4 hide-scrollbar flex-1"
+    class="overflow-y-auto p-4 space-y-4 hide-scrollbar flex-1 min-h-0"
   >
     {
       errorMessage ? (
@@ -172,35 +152,6 @@ const RANGE_OPTIONS = [
         ))
       )
     }
-  </div>
-
-  <!--
-    Mobile Close Action. A full-width bar at 44px, which is the floor for a
-    touch target — it was an 18px-tall strip of 9px type, and it also didn't
-    do anything (see `updatePanelDOM` below for what it does now).
-  -->
-  <div class="block md:hidden border-t border-hair shrink-0">
-    <button
-      id="nf-mobile-close"
-      type="button"
-      class="w-full min-h-11 flex items-center justify-center gap-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-ink-3 active:bg-hover hover:text-ink transition-colors"
-    >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M18 6L6 18M6 6l12 12"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"></path>
-      </svg>
-      Dismiss
-    </button>
   </div>
 
   <!-- Desktop pull-tab toggle -->
@@ -248,39 +199,19 @@ const RANGE_OPTIONS = [
     type NewsPayload,
   } from "~/lib/newsFeed";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
+  import { onSheetChange, type SheetId } from "~/lib/mobileSheet";
 
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const ROTATE_MS = 5000;
-  /** Raised by CampaignBanner.astro. Both live at the top of a phone screen. */
-  const BANNER_EVENT = "campaignbannertoggle";
 
   let isMarkerSelected = false;
   /** Desktop only: the pull-tab's persisted state. */
   let isNewsCollapsed = false;
-  /**
-   * Mobile only: the Dismiss button's state, and deliberately NOT persisted.
-   *
-   * Dismissing shares nothing with the desktop pull-tab beyond the word
-   * "collapsed", and it used to share the storage key and the handler — which
-   * is how the button came to do nothing at all on a phone: `setCollapsed(true)`
-   * wrote the flag and then called `updatePanelDOM`, whose mobile branch
-   * unconditionally re-showed the panel and returned before ever reading it.
-   *
-   * Kept to the session on purpose. This is a breaking-news ticker; a dismissal
-   * that outlived the visit would mean a reader who tapped X once never saw MN
-   * coverage again, and there is no affordance on the phone layout to bring it
-   * back. Reloading is the way back, which is what "Dismiss" implies.
-   */
-  let isNewsDismissed = false;
-  /** Whether the campaign banner is expanded over this card's row. */
-  let isBannerExpanded = false;
+  /** Phone only: which sheet the toolbar says is open. */
+  let openSheet: SheetId | null = null;
   let newsCleanups: (() => void)[] = [];
   let currentDays = 7;
-  let carouselCleanup: (() => void) | null = null;
-  /** Start/stop for the current carousel's auto-rotate, or null if there is none. */
-  let carouselTimer: { start: () => void; stop: () => void } | null = null;
   let desktopMql: MediaQueryList | null = null;
 
   // Every article ever fetched this session, keyed by normalized
@@ -338,7 +269,7 @@ const RANGE_OPTIONS = [
     return div.innerHTML;
   }
 
-  function desktopItemHTML(item: NewsItem): string {
+  function itemHTML(item: NewsItem): string {
     return `
       <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
         <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-1">${escapeHtml(item.source)}</span>
@@ -349,153 +280,46 @@ const RANGE_OPTIONS = [
       </article>`;
   }
 
-  function mobileItemHTML(item: NewsItem): string {
-    return `
-      <article class="w-full shrink-0 snap-center p-3 flex flex-col justify-center">
-        <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-0.5">Breaking News</span>
-        <h3 class="text-xs font-medium text-ink-2 leading-snug line-clamp-2">
-          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
-        </h3>
-      </article>`;
-  }
-
-  /** The carousel track. Every mobile state is one of these, so the class list
-   *  that makes it scroll-snap is written once rather than at each of them.
+  /**
+   * The toolbar's one-line ticker (MobileToolbar.astro).
    *
-   *  The id is unconditional. It used to be opt-in, and the error/empty states
-   *  opted out — which meant `initCarousel` couldn't find the track it was
-   *  meant to be tearing down, so switching to a range with no results left the
-   *  previous range's 5s interval running forever, scrolling a detached node. */
-  function carouselHTML(inner: string): string {
-    return `<div id="nf-carousel" class="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar w-full">${inner}</div>`;
+   * This is the whole of what the deleted mobile news card did that a tab
+   * cannot: put a headline in front of someone who never went looking for one.
+   * `textContent`, not innerHTML — the title is third-party RSS.
+   *
+   * Hidden whenever there is nothing to say, so an outage or an empty window
+   * costs no height rather than showing an empty bar.
+   */
+  function renderTicker(newsItems: NewsItem[]): void {
+    const ticker = document.getElementById("mt-ticker");
+    const text = document.getElementById("mt-ticker-text");
+    if (!ticker || !text) return;
+
+    const lead = newsItems[0];
+    if (!lead) {
+      ticker.classList.add("hidden");
+      ticker.classList.remove("flex");
+      text.textContent = "";
+      return;
+    }
+    text.textContent = lead.title;
+    ticker.classList.remove("hidden");
+    ticker.classList.add("flex");
   }
 
   function renderNews(newsItems: NewsItem[], errorMessage: string | null): void {
-    const desktopArea = document.getElementById("nf-content-area");
-    const mobileWrap = document.getElementById("nf-mobile-wrap");
-    if (!desktopArea || !mobileWrap) return;
+    const area = document.getElementById("nf-content-area");
+    if (!area) return;
 
-    // Error and empty are the same shape — a single message on each surface —
-    // and were three near-identical pairs of innerHTML assignments. The wording
-    // differs per state and per surface (the phone has less room to explain
-    // itself), which is the only thing that varies.
-    const state = errorMessage
-      ? {
-          desktop: `<div class="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs border border-red-500/30 dark:border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`,
-          mobile: `<div class="p-4 text-red-700 dark:text-red-300 text-xs w-full text-center">${escapeHtml(errorMessage)}</div>`,
-        }
-      : newsItems.length === 0
-        ? {
-            desktop: `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`,
-            mobile: `<p class="text-ink-4 text-xs w-full text-center p-4">No updates found.</p>`,
-          }
-        : null;
-
-    if (state) {
-      desktopArea.innerHTML = state.desktop;
-      mobileWrap.innerHTML = carouselHTML(state.mobile);
+    if (errorMessage) {
+      area.innerHTML = `<div class="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs border border-red-500/30 dark:border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`;
+    } else if (newsItems.length === 0) {
+      area.innerHTML = `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`;
     } else {
-      desktopArea.innerHTML = newsItems.map(desktopItemHTML).join("");
-      mobileWrap.innerHTML = `
-        ${carouselHTML(newsItems.map(mobileItemHTML).join(""))}
-        <div id="nf-dots" class="flex justify-center gap-1.5 pb-2">
-          ${newsItems.map((_, i) => `<div class="news-dot w-1 h-1 rounded-full bg-ink-4 transition-colors" data-index="${i}"></div>`).join("")}
-        </div>`;
+      area.innerHTML = newsItems.map(itemHTML).join("");
     }
 
-    // Unconditional, including for the error and empty states: this is what
-    // discards the previous render's listener and interval, and those states
-    // are exactly when there is no new one to replace them.
-    initCarousel();
-    syncCarousel();
-  }
-
-  function initCarousel(): void {
-    carouselCleanup?.();
-    carouselCleanup = null;
-    carouselTimer = null;
-
-    const carousel = document.getElementById("nf-carousel") as HTMLDivElement | null;
-    const dots = document.querySelectorAll<HTMLDivElement>(".news-dot");
-    if (!carousel || carousel.children.length === 0) return;
-
-    let currentIndex = 0;
-    const totalItems = carousel.children.length;
-    let interval: number | null = null;
-
-    const updateDots = (index: number) => {
-      dots.forEach((dot, i) => {
-        dot.classList.toggle("bg-accent", i === index);
-        dot.classList.toggle("bg-ink-4", i !== index);
-      });
-    };
-
-    const nextSlide = () => {
-      currentIndex = (currentIndex + 1) % totalItems;
-      carousel.scrollTo({
-        left: carousel.offsetWidth * currentIndex,
-        behavior: "smooth",
-      });
-      updateDots(currentIndex);
-    };
-
-    const stop = () => {
-      if (interval === null) return;
-      clearInterval(interval);
-      interval = null;
-    };
-
-    // A single article has nothing to rotate to, and the error and empty
-    // states are a single article's worth of markup — so the common failure
-    // case stops asking for a smooth-scroll every five seconds forever.
-    const start = () => {
-      stop();
-      if (totalItems > 1) interval = window.setInterval(nextSlide, ROTATE_MS);
-    };
-
-    const onCarouselScroll = () => {
-      const index = Math.round(carousel.scrollLeft / carousel.offsetWidth);
-      if (index === currentIndex) return;
-      currentIndex = index;
-      updateDots(currentIndex);
-      // Only re-arm if it was already running — a scroll that arrives while
-      // the card is off-screen must not start the timer behind its back.
-      if (interval !== null) start();
-    };
-    carousel.addEventListener("scroll", onCarouselScroll, { passive: true });
-
-    updateDots(0);
-    carouselTimer = { start, stop };
-
-    carouselCleanup = () => {
-      carousel.removeEventListener("scroll", onCarouselScroll);
-      stop();
-      carouselTimer = null;
-    };
-  }
-
-  /**
-   * The auto-rotate runs only when someone can actually see it.
-   *
-   * It used to start on every render at every width and never stop: the
-   * carousel is `md:hidden`, so on desktop this was a permanent 5s timer
-   * smooth-scrolling an element with `display: none`, and on mobile it kept
-   * going while the card was dismissed or the tab was in the background.
-   */
-  function carouselShouldRun(): boolean {
-    return (
-      !desktopMql?.matches &&
-      !isNewsDismissed &&
-      !isMarkerSelected &&
-      !isBannerExpanded &&
-      document.visibilityState === "visible"
-    );
-  }
-
-  function syncCarousel(): void {
-    if (!carouselTimer) return;
-    if (carouselShouldRun()) carouselTimer.start();
-    else carouselTimer.stop();
+    renderTicker(errorMessage ? [] : newsItems);
   }
 
   // `bg-accent-soft`, not `bg-accent/10`: the campaign banner's chamber pills are
@@ -590,6 +414,9 @@ const RANGE_OPTIONS = [
     } else {
       mergeItems(initialPayload.newsItems);
     }
+    renderTicker(
+      initialPayload.errorMessage ? [] : initialPayload.newsItems,
+    );
 
     const toggleBtn = document.getElementById(
       "nf-toggle",
@@ -597,9 +424,6 @@ const RANGE_OPTIONS = [
     const toggleIcon = document.getElementById(
       "nf-toggle-icon",
     ) as SVGElement | null;
-    const closeBtn = document.getElementById(
-      "nf-mobile-close",
-    ) as HTMLButtonElement | null;
 
     const rangeButtons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
     rangeButtons.forEach((btn) => {
@@ -617,39 +441,24 @@ const RANGE_OPTIONS = [
     desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
 
     isMarkerSelected = false;
-    isNewsDismissed = false;
     isNewsCollapsed = readStoredFlag(STORAGE_KEY);
-
-    // Read from the banner's own button rather than waiting for its event.
-    // The banner restores an expanded state at init, and whether that dispatch
-    // lands before or after this listener is registered is a question about
-    // bundled script order — not something this card should depend on.
-    isBannerExpanded =
-      document
-        .getElementById("cb-toggle")
-        ?.getAttribute("aria-expanded") === "true";
+    openSheet = null;
 
     function updatePanelDOM(): void {
-      const isDesktop = desktopMql!.matches;
-
-      if (!isDesktop) {
-        // One card, one row, and three things that can claim it. `display:
-        // none` rather than the desktop slide-out: a translated card is still
-        // a full-size box over the map, and on a phone that box covers the
-        // markers the sheet underneath is about.
-        const hide = isNewsDismissed || isMarkerSelected || isBannerExpanded;
-        root!.style.display = hide ? "none" : "";
-        root!.classList.remove("translate-x-full");
-        root!.classList.add("translate-x-0");
+      // On a phone this panel is one of three that share a slot, and the
+      // toolbar decides which. `hidden` beats the `flex` in the class list
+      // above (Tailwind emits it later in the utilities layer), which is the
+      // same mechanism the facility panel uses.
+      if (!desktopMql!.matches) {
+        root!.classList.toggle("hidden", openSheet !== "news");
         toggleBtn?.classList.add("hidden");
-        syncCarousel();
         return;
       }
 
-      // Crossing back to desktop has to undo the line above, or the rail stays
-      // gone at a width where nothing can bring it back.
-      root!.style.display = "";
-      syncCarousel();
+      // Desktop owns its own visibility again; anything the phone layout put
+      // on this element has to come back off, or the rail stays gone at a
+      // width where nothing can bring it back.
+      root!.classList.remove("hidden");
 
       if (isMarkerSelected) {
         root!.classList.add("translate-x-full");
@@ -683,16 +492,6 @@ const RANGE_OPTIONS = [
       toggleBtn?.removeEventListener("click", onToggleClick),
     );
 
-    /** Mobile Dismiss. Session-scoped — see `isNewsDismissed`. */
-    const onCloseClick = () => {
-      isNewsDismissed = true;
-      updatePanelDOM();
-    };
-    closeBtn?.addEventListener("click", onCloseClick);
-    newsCleanups.push(() =>
-      closeBtn?.removeEventListener("click", onCloseClick),
-    );
-
     const onMarkerSelect = (event: Event) => {
       const detail = (
         event as CustomEvent<{ project: unknown } | null>
@@ -705,14 +504,11 @@ const RANGE_OPTIONS = [
       document.removeEventListener("mapmarkerselect", onMarkerSelect),
     );
 
-    const onBannerToggle = (event: Event) => {
-      const detail = (event as CustomEvent<{ expanded: boolean }>).detail;
-      isBannerExpanded = !!detail?.expanded;
-      updatePanelDOM();
-    };
-    document.addEventListener(BANNER_EVENT, onBannerToggle);
-    newsCleanups.push(() =>
-      document.removeEventListener(BANNER_EVENT, onBannerToggle),
+    newsCleanups.push(
+      onSheetChange((open) => {
+        openSheet = open;
+        updatePanelDOM();
+      }),
     );
 
     const onMediaChange = () => updatePanelDOM();
@@ -720,18 +516,6 @@ const RANGE_OPTIONS = [
     newsCleanups.push(() =>
       desktopMql!.removeEventListener("change", onMediaChange),
     );
-
-    const onVisibilityChange = () => syncCarousel();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    newsCleanups.push(() =>
-      document.removeEventListener("visibilitychange", onVisibilityChange),
-    );
-
-    // Mobile carousel (server-rendered items on first mount, re-run after range
-    // changes). Wired before the first `updatePanelDOM`, which is what decides
-    // whether it is allowed to run.
-    initCarousel();
-    newsCleanups.push(() => carouselCleanup?.());
 
     updatePanelDOM();
 

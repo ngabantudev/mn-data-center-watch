@@ -22,10 +22,19 @@ import { Building2 } from 'lucide-astro';
   the panel's own `overflow-hidden` *clips* a long facility record instead of
   letting it scroll. Worst on desktop, where `top-0 bottom-0` pins the height.
 -->
+<!--
+  `bottom-(--mobile-toolbar-h)`: the phone layout's toolbar is fixed to the
+  bottom edge, so this sheet docks to the top of it rather than under it. The
+  variable is published by MobileToolbar.astro from its own measured height —
+  it isn't a constant, because the ticker row appears only once there's a
+  headline and the safe-area padding is whatever the device reports. It falls
+  back to 0px, which is what desktop uses and what a phone shows for the frame
+  before the toolbar has measured itself.
+-->
 <div
   id="map-detail-panel"
   class="hidden pointer-events-auto font-sans absolute z-40
-         bottom-0 inset-x-0 max-h-[80dvh] rounded-t-2xl translate-y-full
+         bottom-(--mobile-toolbar-h) inset-x-0 max-h-[78dvh] rounded-t-2xl translate-y-full
          md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto md:w-96 md:max-h-none md:rounded-none md:translate-y-0 md:translate-x-full
          bg-panel backdrop-blur-md border border-hair md:border-r-0
          shadow-2xl shadow-(color:--shadow-panel) flex-col overflow-hidden transition-transform duration-300 ease-out"

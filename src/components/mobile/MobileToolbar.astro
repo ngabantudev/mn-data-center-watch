@@ -1,0 +1,308 @@
+---
+// src/components/mobile/MobileToolbar.astro
+//
+// The phone layout's one piece of permanent chrome, and the controller for
+// every panel that opens above it. Below 768px only; the desktop layout is
+// untouched by this file.
+//
+// WHY THIS EXISTS
+//
+// The phone layout used to carry four independently-positioned floating
+// surfaces — the campaign pill at the top, the news card under it, the filters
+// card at the bottom, and the map controls in the corner — which between them
+// spent roughly 250px of an 844px screen before anyone tapped anything. Worse,
+// each pair of them needed a rule about who yields to whom, and a fifth surface
+// would have needed four more.
+//
+// One bar, one sheet slot. See ~/lib/mobileSheet.ts for the contract; the short
+// version is that this file owns *which* panel is open and each panel owns
+// whether it is showing.
+//
+// NOT A NAV BAR. It looks like one, but a social app's bottom nav switches
+// between destinations and this site has exactly one — the map. These are
+// inspectors over that map, which is why tapping the open tab closes it rather
+// than doing nothing, and why the facility sheet (opened by tapping a marker,
+// not a tab) can take the slot away from all three.
+import { SlidersHorizontal, Landmark, Newspaper } from "lucide-astro";
+
+// Order is deliberate: what's on the map, then what's being done about it, then
+// what's being said about it — narrowing from the reader's own screen outward.
+//
+// `panel` is the id of the element each tab actually shows, so `aria-controls`
+// names something that exists. The panels are not this component's children —
+// they're the same rails the desktop layout uses, repositioned by
+// `.mobile-sheet` — so the ids are listed here rather than generated.
+const TABS = [
+  {
+    id: "filters",
+    label: "Filters",
+    icon: SlidersHorizontal,
+    panel: "map-filters",
+  },
+  { id: "bills", label: "Bills", icon: Landmark, panel: "cb-panel" },
+  { id: "news", label: "News", icon: Newspaper, panel: "news-feed-panel" },
+];
+---
+
+<!--
+  Scrim. Only ever raised for a tab sheet: it is what makes "tap the map to get
+  back to the map" work without every panel needing its own outside-click
+  handler, and it sits below the sheet and above everything else.
+
+  The facility sheet doesn't get one. It is opened by tapping a marker, so the
+  map is what the reader was just aiming at, and dimming it would be dimming the
+  thing the panel is about.
+
+  Light, and with no blur. The obvious choice is a heavy scrim that says
+  "modal", but the sheet most often open here is Filters, and blurring the map
+  someone is in the middle of filtering defeats the point of watching it change.
+  25% keeps the markers readable behind it while still reading as inert. The
+  "Showing N of M" line in the filters header is the other half of that answer —
+  the count updates whether or not the map is legible from here.
+
+  `md:hidden` as well as `hidden`: the script only ever removes `hidden`, and
+  above 768px there are no sheets for this to belong to.
+-->
+<div
+  id="mt-scrim"
+  class="hidden md:hidden fixed inset-0 z-50 bg-black/25"
+  aria-hidden="true"
+>
+</div>
+
+<div
+  id="mobile-toolbar"
+  class="md:hidden fixed inset-x-0 bottom-0 z-60 pointer-events-auto font-sans"
+>
+  <!--
+    The ticker. One headline, no interaction required — which is the only
+    reason it survived the news card it replaces. Behind a tab, news reaches
+    nobody who wasn't already looking for it, and passive surfacing is most of
+    what a watchdog map's news rail is for.
+
+    Filled by NewsFeedParent.astro (see `renderTicker` there), and `hidden`
+    until it has something to say, so a failed fetch costs no height at all.
+  -->
+  <button
+    id="mt-ticker"
+    type="button"
+    class="band-sub bg-panel hidden w-full items-center gap-2 px-4 h-7 border-t border-hair text-left active:bg-hover transition-colors"
+  >
+    <span
+      class="text-[9px] font-bold uppercase tracking-wider text-accent shrink-0"
+      >News</span
+    >
+    <span
+      id="mt-ticker-text"
+      class="text-[10px] text-ink-2 truncate min-w-0 flex-1 leading-none"></span>
+  </button>
+
+  <!--
+    `safe-bottom` (global.css) pads for the iOS home indicator. Without it the
+    tab row's lower third sits under the system gesture area, where a tap is
+    the system's rather than ours.
+  -->
+  <nav
+    class="band bg-panel grid grid-cols-3 border-t border-hair safe-bottom"
+    aria-label="Map panels"
+  >
+    {
+      TABS.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            type="button"
+            class="mt-tab flex flex-col items-center justify-center gap-1 min-h-14 px-2 text-ink-4 active:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:-outline-offset-1"
+            data-sheet={tab.id}
+            aria-expanded="false"
+            aria-controls={tab.panel}
+          >
+            <Icon size={18} stroke-width={2} />
+            <span class="text-[9px] font-bold uppercase tracking-wider leading-none">
+              {tab.label}
+            </span>
+          </button>
+        );
+      })
+    }
+  </nav>
+</div>
+
+<script>
+  import { onReady } from "~/lib/domReady";
+  import {
+    SHEET_EVENT,
+    isMobile,
+    type SheetChangeDetail,
+    type SheetId,
+  } from "~/lib/mobileSheet";
+
+  /** Gap between the toolbar and MapLibre's control stack above it. */
+  const CONTROLS_GAP = 12;
+
+  const TAB_ON = ["text-accent"];
+  const TAB_OFF = ["text-ink-4"];
+
+  let toolbarCleanups: (() => void)[] = [];
+
+  function initMobileToolbar(): void {
+    const root = document.getElementById("mobile-toolbar");
+    const scrim = document.getElementById("mt-scrim");
+    if (!root || !scrim) return;
+
+    while (toolbarCleanups.length > 0) {
+      toolbarCleanups.pop()?.();
+    }
+
+    const tabs = Array.from(
+      root.querySelectorAll<HTMLButtonElement>(".mt-tab"),
+    );
+    const ticker = document.getElementById(
+      "mt-ticker",
+    ) as HTMLButtonElement | null;
+
+    // The single piece of state this whole layout turns on.
+    let activeSheet: SheetId | null = null;
+
+    function publish(): void {
+      for (const tab of tabs) {
+        const on = tab.dataset.sheet === activeSheet;
+        tab.setAttribute("aria-expanded", String(on));
+        tab.classList.add(...(on ? TAB_ON : TAB_OFF));
+        tab.classList.remove(...(on ? TAB_OFF : TAB_ON));
+      }
+      scrim!.classList.toggle("hidden", activeSheet === null);
+      document.dispatchEvent(
+        new CustomEvent<SheetChangeDetail>(SHEET_EVENT, {
+          detail: { open: activeSheet },
+        }),
+      );
+    }
+
+    /**
+     * The only writer of `activeSheet`.
+     *
+     * Opening a tab sheet clears any marker selection, because the facility
+     * panel wants the same slot and is taller than it. That is the one
+     * cross-surface rule left in the layout, and it is stated once, here,
+     * rather than once per pair of panels.
+     */
+    function setSheet(next: SheetId | null): void {
+      if (activeSheet === next) return;
+      activeSheet = next;
+      publish();
+      if (next !== null) {
+        document.dispatchEvent(
+          new CustomEvent("mapmarkerselect", { detail: null }),
+        );
+      }
+    }
+
+    for (const tab of tabs) {
+      const onClick = () => {
+        const id = tab.dataset.sheet as SheetId | undefined;
+        if (!id) return;
+        // Tapping the open tab closes it. These are inspectors, not
+        // destinations — there is always somewhere to go back to (the map),
+        // and a tab that no-ops when already selected would strand a reader
+        // who opened it by mistake.
+        setSheet(activeSheet === id ? null : id);
+      };
+      tab.addEventListener("click", onClick);
+      toolbarCleanups.push(() => tab.removeEventListener("click", onClick));
+    }
+
+    const onTickerClick = () => setSheet("news");
+    ticker?.addEventListener("click", onTickerClick);
+    toolbarCleanups.push(() =>
+      ticker?.removeEventListener("click", onTickerClick),
+    );
+
+    const onScrimClick = () => setSheet(null);
+    scrim.addEventListener("click", onScrimClick);
+    toolbarCleanups.push(() => scrim.removeEventListener("click", onScrimClick));
+
+    // Any panel can carry its own close button by marking it `data-sheet-close`
+    // — see ~/lib/mobileSheet.ts. Delegated from `document` so a panel never
+    // needs a reference to this controller, and so a panel whose contents are
+    // re-rendered doesn't have to re-register anything.
+    const onDocumentClick = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-sheet-close]")) setSheet(null);
+    };
+    document.addEventListener("click", onDocumentClick);
+    toolbarCleanups.push(() =>
+      document.removeEventListener("click", onDocumentClick),
+    );
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && activeSheet !== null) setSheet(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    toolbarCleanups.push(() =>
+      document.removeEventListener("keydown", onKeyDown),
+    );
+
+    // A marker selection takes the slot: the facility panel is the taller
+    // surface and it is what the reader just asked for.
+    const onMarkerSelect = (event: Event) => {
+      const detail = (event as CustomEvent<{ project: unknown } | null>).detail;
+      if (detail?.project && activeSheet !== null) {
+        activeSheet = null;
+        publish();
+      }
+    };
+    document.addEventListener("mapmarkerselect", onMarkerSelect);
+    toolbarCleanups.push(() =>
+      document.removeEventListener("mapmarkerselect", onMarkerSelect),
+    );
+
+    /**
+     * Publishes the toolbar's own height, which two other things are laid out
+     * against: `.mobile-sheet` docks its bottom edge to it, and MapLibre's
+     * control stack (zoom buttons, attribution, the theme selector) sits above
+     * it via --map-controls-bottom.
+     *
+     * Measured rather than declared, because the height is not a constant: the
+     * ticker row appears only once there is a headline, and the safe-area
+     * padding is whatever the device says it is.
+     *
+     * This is the sole writer of --map-controls-bottom on a phone. It used to
+     * be MapFilterParent.astro, tracking its own card's changing height; that
+     * card no longer sits in this corner and no longer needs to.
+     */
+    function publishHeight(): void {
+      const style = document.documentElement.style;
+      if (!isMobile()) {
+        style.removeProperty("--mobile-toolbar-h");
+        style.removeProperty("--map-controls-bottom");
+        return;
+      }
+      const height = root!.getBoundingClientRect().height;
+      style.setProperty("--mobile-toolbar-h", `${height}px`);
+      style.setProperty(
+        "--map-controls-bottom",
+        `${height + CONTROLS_GAP}px`,
+      );
+    }
+
+    const observer = new ResizeObserver(publishHeight);
+    observer.observe(root);
+    toolbarCleanups.push(() => observer.disconnect());
+
+    const onResize = () => {
+      publishHeight();
+      // Crossing to desktop hands every panel back to its own layout, which
+      // has no concept of an active sheet — leaving one set would show a rail
+      // that the desktop rules had already decided was collapsed.
+      if (!isMobile() && activeSheet !== null) setSheet(null);
+    };
+    window.addEventListener("resize", onResize);
+    toolbarCleanups.push(() => window.removeEventListener("resize", onResize));
+
+    publishHeight();
+    publish();
+  }
+
+  onReady(initMobileToolbar);
+</script>

@@ -34,15 +34,11 @@ import {
 ---
 
 <!--
-  Placement: horizontally centred on the screen, at the top, at every width.
-  Mobile already was (`left-4 right-4 mx-auto`); desktop wasn't — it used
-  `left-76 right-100` with `mx-0`, which anchors the box 19rem from the left edge
-  rather than centring it, so on a 1440px screen it sat at 19–47rem where centre
-  is 31–59rem. Visibly left of centre, and inconsistent with mobile.
-
-  Centring is now `left-1/2` + `-translate-x-1/2` on both, so the two breakpoints
-  agree by construction rather than by two sets of offsets that have to be kept
-  in agreement by hand.
+  Desktop placement: horizontally centred at the top. It used `left-76 right-100`
+  with `mx-0`, which anchors the box 19rem from the left edge rather than
+  centring it — on a 1440px screen it sat at 19–47rem where centre is 31–59rem.
+  `left-1/2` + `-translate-x-1/2` centres it by construction rather than by two
+  sets of offsets kept in agreement by hand.
 
   The width clamp is what keeps that safe. This bar sits at z-55, above both
   rails (18rem filters left, 24rem news right, flush to their edges), so a fixed
@@ -60,17 +56,14 @@ import {
   but resolved to a 4rem-wide pill there, which is not better. 13rem is where the
   collapsed label still reads.
 
-  `md:max-w-md` looks redundant beside the clamp's own 28rem cap and is not:
-  `max-w-sm` above it applies at every width, so without this the desktop bar
-  would be capped at the mobile 24rem and the clamp could never reach 28rem.
-
-  Vertical placement is unchanged: on mobile the news card owns the very top, so
-  NewsFeedParent.astro drops to top-16 to leave this collapsed pill the first
-  row — see the note there.
+  On a phone this wrapper isn't positioned at all — the panel inside it is a
+  `.mobile-sheet` (fixed, above the toolbar), and the pill that used to open it
+  is gone. The pill spent 34px permanently parked at the top of the screen to do
+  what the toolbar's Bills tab now does for free.
 -->
 <div
   id="campaign-banner"
-  class="fixed md:absolute top-3 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm md:w-[clamp(13rem,calc(100vw-50rem),28rem)] md:max-w-md z-55 pointer-events-auto font-sans"
+  class="contents md:block md:absolute md:top-3 md:left-1/2 md:-translate-x-1/2 md:w-[clamp(13rem,calc(100vw-50rem),28rem)] z-55 pointer-events-auto font-sans"
 >
   <!--
     `band` on all three surfaces below (pill, panel, modal): this banner stays on
@@ -86,7 +79,7 @@ import {
     type="button"
     aria-expanded="false"
     aria-controls="cb-panel"
-    class="band group w-full flex items-center gap-2 px-3.5 py-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+    class="band group hidden md:flex w-full items-center gap-2 px-3.5 py-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
   >
     <Landmark size={14} class="shrink-0 text-accent" />
     <span
@@ -100,15 +93,54 @@ import {
     />
   </button>
 
+  <!--
+    Ships `hidden`; `setExpanded` swaps that for `flex` (see the script below),
+    which is how MapDetailParent.astro handles the same question.
+
+    Writing `hidden flex` together in this list would also work — Tailwind emits
+    `.hidden` after `.flex` in the utilities layer, so the toggled class wins —
+    but it is a static conflict between two display utilities, and a Tailwind
+    linter will strip one of them. It stripped `flex` from this element once
+    already.
+
+    Being a flex column is load-bearing rather than decorative, and only on a
+    phone: `.mobile-sheet` caps this panel at 62dvh, so the bill list has to be
+    the part that gives. Laid out as a block, `flex-1 min-h-0` on that scroller
+    resolves against nothing and the take-action row at the bottom is the first
+    thing pushed off the screen.
+  -->
   <div
     id="cb-panel"
-    class="band hidden mt-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) overflow-hidden"
+    class="band mobile-sheet hidden flex-col md:mt-2 rounded-xl bg-panel md:bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) overflow-hidden"
   >
-    <div class="px-3.5 py-3 border-b border-hair">
-      <p id="cb-intro" class="text-[11px] text-ink-3 leading-snug">
+    <div class="px-3.5 py-3 border-b border-hair flex items-start gap-2 shrink-0">
+      <p id="cb-intro" class="text-[11px] text-ink-3 leading-snug min-w-0 flex-1">
         Every data center bill before the Minnesota Legislature, pulled live
         from Open States.
       </p>
+      <!-- See ~/lib/mobileSheet.ts — the toolbar closes the open sheet when a
+           click lands on anything carrying this attribute. -->
+      <button
+        type="button"
+        data-sheet-close
+        aria-label="Close bills panel"
+        class="md:hidden w-8 h-8 -mt-1 -mr-1 flex items-center justify-center rounded-full text-ink-3 active:bg-hover transition-colors shrink-0"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M18 6L6 18M6 6l12 12"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"></path>
+        </svg>
+      </button>
     </div>
 
     <!--
@@ -120,7 +152,7 @@ import {
     -->
     <div
       id="cb-summary"
-      class="flex items-stretch gap-1.5 px-3.5 py-2.5 border-b border-hair"
+      class="flex items-stretch gap-1.5 px-3.5 py-2.5 border-b border-hair shrink-0"
       aria-label="Bill counts by stage"
     ></div>
 
@@ -133,20 +165,17 @@ import {
       id="cb-chamber-group"
       role="group"
       aria-label="Filter bills by chamber"
-      class="flex items-center gap-1.5 px-3.5 py-2 border-b border-hair"
+      class="flex items-center gap-1.5 px-3.5 py-2 border-b border-hair shrink-0"
     ></div>
 
     <!-- One scroll container for all three groups below, so the panel keeps a
          predictable height however many bills the search turns up.
 
-         The cap is viewport-relative on mobile. A flat 20rem list plus this
-         panel's own fixed chrome (intro, the three-count strip, the chamber
-         pills, the action row) and the pill above it comes to ~34rem, which
-         runs off the bottom of a 667px phone — and this bar is `fixed`, so
-         what runs off is unreachable rather than merely below the fold.
-         45dvh keeps the whole panel inside the viewport at every phone size
-         while still showing three or four bills before scrolling. -->
-    <div class="max-h-[min(45dvh,20rem)] md:max-h-80 overflow-y-auto">
+         `flex-1 min-h-0` on a phone: the sheet's own 62dvh cap sets the height
+         and this is the part that gives, so the take-action row below stays on
+         screen no matter how many bills the search turns up. On desktop the
+         panel floats free and the flat 20rem cap is what bounds it. -->
+    <div class="flex-1 min-h-0 md:max-h-80 overflow-y-auto">
       <!-- Blindspots: bills that moved without saying "data center" in their
            title. Rendered above the main list because they are the ones a
            search for "data center bills" would never surface. -->
@@ -181,7 +210,7 @@ import {
       </details>
     </div>
 
-    <div class="px-3.5 py-3 border-t border-hair flex flex-wrap gap-2">
+    <div class="px-3.5 py-3 border-t border-hair flex flex-wrap gap-2 shrink-0">
       <button
         id="cb-action-open"
         type="button"
@@ -338,6 +367,7 @@ import {
     sponsorLine,
   } from "~/lib/legislation";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
+  import { isMobile, onSheetChange } from "~/lib/mobileSheet";
   import type {
     BillStage,
     LegislationPayload,
@@ -347,11 +377,6 @@ import {
   } from "~/lib/legislation";
 
   const STORAGE_KEY = "cb-expanded";
-
-  /** Announced on every expand/collapse. NewsFeedParent.astro listens: on a
-   *  phone its card sits in the row this panel expands into. */
-  const BANNER_EVENT = "campaignbannertoggle";
-  const MOBILE_QUERY = "(max-width: 767px)";
 
   /** Decimal places kept from a coordinate before it leaves the browser —
    *  ~1km, matching COORD_PRECISION in ~/pages/api/legislators.ts. Districts
@@ -919,37 +944,43 @@ import {
       renderRepsIdle();
     }
 
-    function setExpanded(next: boolean) {
+    /**
+     * Shows or hides the panel. On desktop this is the pill's own state and is
+     * persisted; on a phone it is driven by the toolbar's Bills tab, and the
+     * persistence is skipped — the toolbar's sheet always opens closed, and
+     * restoring a sheet over the map on every page load is not the same
+     * proposition as restoring a bar that sits above it.
+     */
+    function setExpanded(next: boolean, opts: { persist?: boolean } = {}) {
+      // Both, not just `hidden` — see the note on the element. `flex` is not in
+      // its class list, so nothing shows this panel except this line.
       panel.classList.toggle("hidden", !next);
+      panel.classList.toggle("flex", next);
       chevron.classList.toggle("-rotate-90", !next);
       toggle.setAttribute("aria-expanded", String(next));
       // Private-mode storage failures can't break the toggle — see storage.ts.
-      writeStoredFlag(STORAGE_KEY, next);
-      document.dispatchEvent(
-        new CustomEvent(BANNER_EVENT, { detail: { expanded: next } }),
-      );
-
-      if (!next) return;
-      load();
-
-      // On a phone this panel and the facility sheet are both near-full-height
-      // surfaces, and they open from opposite edges into the same screen. The
-      // reverse direction already works by accident — tapping a marker is a
-      // click outside this banner, which the handler below collapses it on —
-      // so this is the half that was missing. Desktop has room for both.
-      if (window.matchMedia(MOBILE_QUERY).matches) {
-        document.dispatchEvent(
-          new CustomEvent("mapmarkerselect", { detail: null }),
-        );
-      }
+      if (opts.persist !== false) writeStoredFlag(STORAGE_KEY, next);
+      if (next) load();
     }
 
     toggle.addEventListener("click", () => {
       setExpanded(panel.classList.contains("hidden"));
     });
 
-    // Click anywhere off the banner collapses it. It floats over the map, so
-    // leaving it open swallows clicks on the markers underneath.
+    // On a phone the toolbar owns which panel is showing (see
+    // ~/lib/mobileSheet.ts). This used to be a set of pairwise rules — "hide
+    // the news card while this is expanded", "clear the marker selection when
+    // this opens on a phone" — one per surface this one could collide with.
+    // There is nothing to collide with now: the toolbar will not name two
+    // sheets at once.
+    onSheetChange((open) => {
+      if (!isMobile()) return;
+      setExpanded(open === "bills", { persist: false });
+    });
+
+    // Desktop only: a click off the banner collapses it. It floats over the map
+    // there, so leaving it open swallows clicks on the markers underneath. On a
+    // phone the toolbar's scrim does this job for every sheet at once.
     //
     // The take-action modal is a sibling of the banner, not a descendant, so a
     // click inside it — or on its backdrop, which reports the <dialog> itself
@@ -957,7 +988,7 @@ import {
     // behind it. `dialog.contains` covers both, and unlike a `dialog.open`
     // check it doesn't depend on whether the dialog's own handler ran first.
     document.addEventListener("click", (event) => {
-      if (panel.classList.contains("hidden")) return;
+      if (isMobile() || panel.classList.contains("hidden")) return;
       const target = event.target as Node;
       if (root.contains(target) || dialog.contains(target)) return;
       setExpanded(false);
@@ -992,6 +1023,10 @@ import {
     // Restore the stored preference after first paint rather than inlining it
     // into the markup — the page is prerendered, so the served HTML is shared
     // by every visitor and can't carry one visitor's choice.
-    if (readStoredFlag(STORAGE_KEY)) setExpanded(true);
+    //
+    // Desktop only. The stored flag describes a bar docked at the top of a wide
+    // screen; on a phone the same panel is a sheet over the map, and opening
+    // one unasked on every page load is a different thing entirely.
+    if (!isMobile() && readStoredFlag(STORAGE_KEY)) setExpanded(true);
   }
 </script>

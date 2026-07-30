@@ -334,6 +334,59 @@
 }
 
 /*
+  --- The phone layout's single sheet ---
+
+  Below 768px every inspector on this site occupies one slot, directly above
+  MobileToolbar.astro, and exactly one is showing at a time. `.mobile-sheet` is
+  that slot. See ~/lib/mobileSheet.ts for who decides which.
+
+  Written as unlayered CSS on purpose. Tailwind's utilities live in
+  `@layer utilities`, and an unlayered rule outranks every one of them
+  regardless of source order — which is what lets one class restate the
+  position of panels that each carry their own `absolute` / `fixed` / inset /
+  width utilities for the desktop layout, without any of them needing a
+  `max-md:` twin per property. (Same mechanism the `.band` note above relies
+  on, and the reason that note warns against setting a background here.)
+
+  What is deliberately NOT set here is `display`. Every panel keeps its own
+  showing/hiding mechanism — a `hidden` class, a translate, a media query — and
+  an unlayered `display` would silently outrank all of them, which is exactly
+  the kind of two-owners bug this refactor exists to remove.
+
+  --mobile-sheet-max-h lets one panel ask for a different height without a
+  second class; the facility panel sets it inline, being a record to read
+  rather than a set of controls to operate.
+*/
+/* `not all and (min-width: 48rem)` is the exact complement of Tailwind's `md:`,
+   which matters at fractional viewport widths — see MOBILE_QUERY in
+   ~/lib/mobileSheet.ts, which has to agree with this rule exactly. */
+@media not all and (min-width: 48rem) {
+  .mobile-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: var(--mobile-toolbar-h);
+    width: auto;
+    max-width: none;
+    margin: 0;
+    max-height: var(--mobile-sheet-max-h, 62dvh);
+    border-radius: 1rem 1rem 0 0;
+    border-bottom-width: 0;
+    /* Above the scrim (z-50), below the toolbar (z-60) that opened it. */
+    z-index: 55;
+    transform: none;
+  }
+}
+
+/* The iOS home indicator sits in the bottom ~34px of the viewport, and a tap
+   there belongs to the system. Anything docked to the bottom edge has to pad
+   past it or lose its lower third. */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/*
   Shared alignment for the bottom-right map control stack: MapLibre's own
   NavigationControl (zoom buttons) plus our MapThemeSelector.astro button,
   stacked directly above it. Both read from these variables so they can
@@ -359,6 +412,16 @@
   */
   --map-ctrl-attrib-height: 24px;
   --map-controls-bottom: var(--map-ctrl-edge);
+
+  /*
+    Height of the phone layout's bottom toolbar. Declared here at 0px so every
+    reader of it — `.mobile-sheet`, the facility panel's `bottom-`, the control
+    stack — resolves to the desktop layout without a fallback of its own.
+    MobileToolbar.astro overrides it on :root with its own measured height while
+    a phone-width viewport is showing, and removes the override above 768px,
+    which falls back to this.
+  */
+  --mobile-toolbar-h: 0px;
 }
 
 /* --- MapLibre Global Overrides --- */
@@ -567,7 +630,7 @@ html, body {
   the card scroll inside itself; the close button rides on the popup rather than
   the content, so it stays reachable either way.
 */
-@media (max-width: 767px) {
+@media not all and (min-width: 48rem) {
   .map-record-popup .maplibregl-popup-content {
     max-height: 55dvh;
     overflow-y: auto;

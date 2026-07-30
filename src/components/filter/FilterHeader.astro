@@ -10,8 +10,8 @@
 // is itself `hidden md:flex`, so the chevron could never be on screen at any
 // width, and the button's own handler was a no-op above 768px. Between them the
 // sidebar had no working collapse on a phone and a dead control on the desktop.
-// The real trigger now lives in MapFilterParent.astro, where it can be
-// `md:hidden` without being nested inside a desktop-only block.
+// Opening and closing this panel is the desktop pull-tab's job at this width
+// and MobileToolbar.astro's Filters tab below it; neither belongs in a masthead.
 import { clientProjects } from "~/data/dataCenters";
 import { countBy } from "~/lib/collections";
 import { parseMW } from "~/lib/projectMetrics";
