@@ -110,6 +110,7 @@ src/
 ├─ data/           Registries: facilities, status + legal + stage + size meta,
 │                  map layers and styles, utilities, ratepayer baselines
 ├─ lib/            edgeCache, openStates client, bill classifier, news feed,
+│                  overlayLayers (owns the PMTiles overlays on the map),
 │                  pure helpers shared by routes and client islands
 ├─ pages/
 │  ├─ index.astro  Prerendered map page

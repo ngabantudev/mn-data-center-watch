@@ -300,6 +300,7 @@ import {
     relativeAge,
     sponsorLine,
   } from "~/lib/legislation";
+  import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
   import type {
     BillStage,
     LegislationPayload,
@@ -880,11 +881,8 @@ import {
       panel.classList.toggle("hidden", !next);
       chevron.classList.toggle("-rotate-90", !next);
       toggle.setAttribute("aria-expanded", String(next));
-      try {
-        localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
-      } catch {
-        // Private-mode storage failures shouldn't break the toggle.
-      }
+      // Private-mode storage failures can't break the toggle — see storage.ts.
+      writeStoredFlag(STORAGE_KEY, next);
       if (next) load();
     }
 
@@ -936,12 +934,6 @@ import {
     // Restore the stored preference after first paint rather than inlining it
     // into the markup — the page is prerendered, so the served HTML is shared
     // by every visitor and can't carry one visitor's choice.
-    let restored = false;
-    try {
-      restored = localStorage.getItem(STORAGE_KEY) === "1";
-    } catch {
-      restored = false;
-    }
-    if (restored) setExpanded(true);
+    if (readStoredFlag(STORAGE_KEY)) setExpanded(true);
   }
 </script>

@@ -121,7 +121,7 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
  * 0.5–1.5 MB each — a second or more of parsing per tile no matter how well
  * this code schedules it. Re-running tippecanoe without that flag is the fix.
  */
-export const TILE_BASE_URL = 'https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev';
+const TILE_BASE_URL = 'https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev';
 
 /** Absolute URL of a layer's PMTiles archive. */
 export const tileUrlFor = (layer: MapLayerMeta): string =>

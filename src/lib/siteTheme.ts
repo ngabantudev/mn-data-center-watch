@@ -10,6 +10,8 @@
 // map, but a user who then picks a specific basemap keeps it — switching the
 // site theme afterwards won't stomp that choice.
 
+import { readStored, writeStored } from './storage';
+
 export type SiteTheme = 'light' | 'dark';
 
 export const SITE_THEME_STORAGE_KEY = 'siteTheme';
@@ -27,11 +29,7 @@ export function isSiteTheme(value: unknown): value is SiteTheme {
 
 /** Reads the persisted theme, falling back to the default. Never throws. */
 export function getStoredTheme(): SiteTheme {
-  try {
-    const stored = localStorage.getItem(SITE_THEME_STORAGE_KEY);
-    if (isSiteTheme(stored)) return stored;
-  } catch {}
-  return DEFAULT_SITE_THEME;
+  return readStored(SITE_THEME_STORAGE_KEY, isSiteTheme, DEFAULT_SITE_THEME);
 }
 
 /** The theme currently applied to the document, regardless of what's stored. */
@@ -49,7 +47,5 @@ export function setTheme(theme: SiteTheme): void {
   const meta = document.querySelector('meta[name="theme-color"]');
   meta?.setAttribute('content', THEME_COLOR[theme]);
 
-  try {
-    localStorage.setItem(SITE_THEME_STORAGE_KEY, theme);
-  } catch {}
+  writeStored(SITE_THEME_STORAGE_KEY, theme);
 }

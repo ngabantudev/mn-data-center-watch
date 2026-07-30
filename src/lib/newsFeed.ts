@@ -44,6 +44,34 @@ export interface NewsPayload {
  */
 const FETCH_TIMEOUT_MS = 8000;
 
+/**
+ * Newest first. Written out twice before — here and again in the news rail's
+ * client script, which re-sorts after fetching a different date range — so the
+ * two paths could have disagreed about ordering.
+ */
+export function byPublishedDesc(
+  a: { published: string },
+  b: { published: string },
+): number {
+  return new Date(b.published).getTime() - new Date(a.published).getTime();
+}
+
+/**
+ * How a headline's date is written, in one place. The rail renders items from
+ * two paths — the build-time snapshot through the Astro template, and the
+ * client's own fetch when someone picks another range — and each had its own
+ * copy of these options, ~130 lines apart in the same file.
+ *
+ * `undefined` locale on purpose: the reader's own, not ours.
+ */
+export function formatNewsDate(published: string): string {
+  return new Date(published).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 // --- Tune these lists to control precision without touching the fetch/parse logic ---
 
 // Must match at least one of these — establishes it's actually about a data center.
@@ -108,19 +136,20 @@ function buildDateQuery(windowDays: number): string {
 async function attemptNews(
   googleNewsUrl: string,
 ): Promise<NewsResult> {
-  // Force an early escape rather than hanging a request on a slow upstream.
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
   try {
+    // Force an early escape rather than hanging a request on a slow upstream.
+    // `AbortSignal.timeout` rather than an AbortController and a setTimeout to
+    // cancel by hand: the manual version needed a `clearTimeout` on the success
+    // path *and* in the catch, which is two chances to leak a pending timer on
+    // a route that runs per request. Same mechanism openStates.ts uses, though
+    // the budgets stay separate constants — they're the same 8s for unrelated
+    // reasons, and tuning one shouldn't move the other.
     const response = await fetch(googleNewsUrl, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       // Carry the status. "Feed unavailable" and "Google answered 429 to this
@@ -164,20 +193,24 @@ async function attemptNews(
         const hasMinnesota = MINNESOTA_TERMS.some((t) => item.haystack.includes(t));
         return hasDataCenter && hasMinnesota;
       })
-      .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime())
+      .sort(byPublishedDesc)
       .map(({ haystack, ...item }) => item);
 
     return { ok: true, newsItems };
 
   } catch (error) {
-    clearTimeout(timeoutId);
     // The old message here claimed "unavailable in dev environment", which was
     // being served in production — the same abort path runs in both, and this
     // was the string a live visitor saw when the 2s budget expired.
-    const aborted = (error as Error | undefined)?.name === "AbortError";
+    //
+    // Both names are checked because they're the same event from two APIs:
+    // `AbortSignal.timeout` rejects with `TimeoutError`, while an
+    // `AbortController.abort()` (what this used to use) gives `AbortError`.
+    const name = (error as Error | undefined)?.name;
+    const timedOut = name === "TimeoutError" || name === "AbortError";
     return {
       ok: false,
-      reason: aborted
+      reason: timedOut
         ? `No response from Google News within ${FETCH_TIMEOUT_MS / 1000}s.`
         : "Couldn't reach Google News.",
     };

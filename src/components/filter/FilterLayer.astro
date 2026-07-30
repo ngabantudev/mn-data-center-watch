@@ -144,11 +144,13 @@ const SWATCHES: Record<
     unreadable: "Couldn't load this dataset — try reloading.",
   };
 
-  // Registered at module scope rather than inside setupLayerToggles(): that
-  // function re-runs on every `astro:page-load`, and this listener is on
-  // `document`, which survives the navigation — re-registering would stack a
+  // Registered at module scope rather than inside setupLayerToggles(), which
+  // `onReady` would re-run on `astro:page-load`: this listener is on
+  // `document`, which survives a navigation, so re-registering would stack a
   // fresh copy per page view. It resolves the toggle by query at fire time, so
-  // it stays correct across re-renders without being re-bound.
+  // it stays correct across re-renders without being re-bound. (Nothing
+  // dispatches `astro:page-load` on this site yet — see domReady.ts — so this
+  // is the invariant being kept, not a bug being fixed.)
   document.addEventListener(LAYER_UNAVAILABLE_EVENT, (event) => {
     const { id, reason } = (event as CustomEvent<LayerUnavailableDetail>).detail;
     const toggle = document.querySelector<HTMLInputElement>(

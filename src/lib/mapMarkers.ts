@@ -3,7 +3,7 @@ import type { Project } from '~/data/dataCenters';
 import { STATUS_HEX, STATUS_POPUP_LABEL } from '~/data/mapStatusMeta';
 import { LEGAL_META_BY_STATUS, getLegalStatus, isUnderLegalHold } from '~/data/legalStatusMeta';
 import { impactForProject } from './ratepayerImpact';
-import { buildRatepayerWidgetHtml } from './ratepayerWidget';
+import { buildRatepayerWidgetHtml, nf } from './ratepayerWidget';
 
 /**
  * The environmental-review / legal-hold badge. One builder for both the
@@ -184,7 +184,7 @@ export function buildPreviewHtml(project: Project): string {
   const householdsHtml = `
     <div class="mb-1.5 flex items-baseline justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-1">
       <span class="text-[9px] font-bold uppercase tracking-wider text-amber-700">Est. Power Usage</span>
-      <span class="text-[10px] font-bold text-amber-900">≈ ${new Intl.NumberFormat('en-US').format(impact.households)} MN homes</span>
+      <span class="text-[10px] font-bold text-amber-900">≈ ${nf.format(impact.households)} MN homes</span>
     </div>
   `;
 

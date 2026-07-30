@@ -37,7 +37,13 @@ const RATEPAYER_ROOT_SELECTOR = '[data-ratepayer]';
  */
 const METER_CEILING = 0.2;
 
-const nf = new Intl.NumberFormat('en-US');
+/**
+ * One thousands-separated formatter for the whole app. Exported because
+ * `mapMarkers.ts` was building a second `Intl.NumberFormat` inline, per popup,
+ * to print the same `impact.households` figure this one prints — two ways to
+ * format one number, and a fresh formatter allocated on every hover.
+ */
+export const nf = new Intl.NumberFormat('en-US');
 
 /** Percent with just enough precision to stay honest at both ends of the range. */
 function formatPercent(fraction: number): string {

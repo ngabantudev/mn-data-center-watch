@@ -753,9 +753,22 @@ const news = await fetchLocalNews();
       return { onMarker: false, label: overlays.regionLabel(top) };
     };
 
-    /** The label bubble, shared by the hover popup and the click popup — which
-     *  differ only in whether they persist and carry a close button. */
-    const envLabelHtml = (label: string): string => `<strong>${label}</strong>`;
+    /**
+     * The label bubble, shared by the hover popup and the click popup — which
+     * differ only in whether they persist and carry a close button.
+     *
+     * A node with `textContent`, not an HTML string: the text is a feature
+     * attribute out of a PMTiles archive, so it is third-party data being put
+     * on the page. CampaignBanner.astro states this policy for the Open States
+     * payload ("none of it is ours to trust as markup"); the same applies to a
+     * city name from a state GIS export, and building the node is shorter than
+     * escaping a template anyway.
+     */
+    const envLabelNode = (label: string): HTMLElement => {
+      const node = document.createElement("strong");
+      node.textContent = label;
+      return node;
+    };
 
     // Coalesced to one hit test per frame: the last position seen in a frame is
     // the only one that can still be under the cursor when it renders.
@@ -789,7 +802,10 @@ const news = await fetchLocalNews();
         closeButton: false,
         closeOnClick: false,
       });
-      envPopup.setLngLat(event.lngLat).setHTML(envLabelHtml(label)).addTo(map);
+      envPopup
+        .setLngLat(event.lngLat)
+        .setDOMContent(envLabelNode(label))
+        .addTo(map);
     };
 
     map.on("mousemove", (e) => {
@@ -818,7 +834,7 @@ const news = await fetchLocalNews();
       if (label) {
         new maplibregl.Popup({ closeButton: true })
           .setLngLat(e.lngLat)
-          .setHTML(envLabelHtml(label))
+          .setDOMContent(envLabelNode(label))
           .addTo(map);
       }
     });
