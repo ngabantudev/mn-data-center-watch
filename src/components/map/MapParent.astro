@@ -42,20 +42,24 @@ const news = await fetchLocalNews();
 
 <script>
   import maplibregl from "maplibre-gl";
-  import * as pmtiles from "pmtiles";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { clientProjects } from "~/data/dataCenters";
   import { getInitialMapStyleId, getMapStyleUrlById } from "~/data/mapStyles";
   import { STATUS_HEX } from "~/data/mapStatusMeta";
   import { LEGAL_STATUS_META } from "~/data/legalStatusMeta";
-  import {
-    LAYER_UNAVAILABLE_EVENT,
-    MAP_LAYER_META,
-    layerIdFor,
-    sourceIdFor,
-  } from "~/data/mapLayers";
+  import { MAP_LAYER_META } from "~/data/mapLayers";
   import { onReady } from "~/lib/domReady";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
+  import { createOverlayLayers } from "~/lib/overlayLayers";
+  import {
+    createMoratoriumLayer,
+    jurisdictionForFeature,
+    moratoriumPopupHtml,
+    MORATORIUM_API_KEY,
+    MORATORIUM_LAYER_IDS,
+    MORATORIUM_TINT,
+  } from "~/lib/moratoriumLayer";
+  import type { PosturedJurisdiction } from "~/data/moratoriums";
   import {
     DEFAULT_CRITERIA,
     matchesProject,
@@ -63,12 +67,6 @@ const news = await fetchLocalNews();
     toMapLibreFilter,
     type FilterCriteria,
   } from "~/lib/projectFilters";
-
-  // Register PMTiles protocol globally
-  try {
-    const protocol = new pmtiles.Protocol();
-    maplibregl.addProtocol("pmtiles", protocol.tile);
-  } catch (e) {}
 
   const MINNESOTA_CENTER: [number, number] = [-93.265, 44.9778];
   const MOBILE_ZOOM = 6.8;
@@ -123,11 +121,36 @@ const news = await fetchLocalNews();
   /** Static warning ring, as a multiple of the marker radius. */
   const RING_SCALE = 1.45;
 
-  // --- Legal-hold ripple tuning ---
+  // --- Project layer ids ---
+  //
+  // Named because these strings were repeated as literals in a dozen places,
+  // and because three separate things need the *order*: the shared filter
+  // expression, the ripple animation, and the overlay controller, which inserts
+  // its fills beneath the lowest of them so an overlay never paints over a
+  // marker. Bottom-first.
+  const MARKER_SOURCE_ID = "data-centers";
   const RIPPLE_LAYER_IDS = [
     "data-centers-legal-ripple-a",
     "data-centers-legal-ripple-b",
   ];
+  const LEGAL_RING_LAYER_ID = "data-centers-legal-ring";
+  const MARKER_LAYER_ID = "data-centers-circles";
+  const MARKER_LABEL_LAYER_ID = "data-centers-labels";
+
+  /**
+   * Every layer drawn from the project source, bottom-first. All of them share
+   * one filter expression built from the criteria the sidebar counts with; the
+   * legal-hold ring and its ripples additionally restrict to flagged sites so
+   * they never paint under a compliant marker.
+   */
+  const PROJECT_LAYER_IDS = [
+    ...RIPPLE_LAYER_IDS,
+    LEGAL_RING_LAYER_ID,
+    MARKER_LAYER_ID,
+    MARKER_LABEL_LAYER_ID,
+  ];
+
+  // --- Legal-hold ripple tuning ---
   const RIPPLE_PERIOD_MS = 2600;
   /** Ripple travels from the marker edge out to this multiple of its radius. */
   const RIPPLE_MAX_SCALE = 2.2;
@@ -190,7 +213,7 @@ const news = await fetchLocalNews();
     // Credit is a license condition, not a courtesy — OpenStreetMap data is
     // ODbL. `compact` keeps it to a single ⓘ button until clicked, so the
     // obligation is met without spending map on a phone. Overlay credits ride
-    // on their own sources (see syncEnvironmentalLayers), so each appears only
+    // on their own sources (see ~/lib/overlayLayers.ts), so each appears only
     // while that layer is switched on.
     //
     // Added here rather than through the Map constructor's `attributionControl`
@@ -349,46 +372,29 @@ const news = await fetchLocalNews();
 
     let criteria: FilterCriteria = { ...DEFAULT_CRITERIA };
 
-    // Track state of each environmental toggle independently. Seeded from the
-    // shared registry so a new overlay never needs a matching edit here.
-    let cachedLayerVisibility: Record<string, boolean> = Object.fromEntries(
-      MAP_LAYER_META.map((l) => [l.id, false]),
-    );
-
-    /** Registry hexes → the fill paint MapLibre wants. One conversion, not a second config. */
-    const paintFor = (
-      layer: (typeof MAP_LAYER_META)[number],
-    ): maplibregl.FillLayerSpecification["paint"] => ({
-      "fill-color": layer.hex,
-      "fill-opacity": layer.fillOpacity,
-      "fill-outline-color": layer.outlineHex,
+    // Everything about the PMTiles overlays — reading each archive, adding its
+    // fill and borders, switching it on and off, naming the
+    // region under the cursor — lives in ~/lib/overlayLayers.ts. It used to be
+    // ~120 lines here, interleaved with the marker layers; see that file for the
+    // bug that hid in the interleaving.
+    // Three tiers, bottom-first: the PMTiles fills, then the moratorium dots,
+    // then the project markers. Each controller is told what it must stay
+    // beneath, which is what keeps the stack the same however the visitor
+    // happens to click the toggles.
+    const moratoriums = createMoratoriumLayer(map, {
+      layersAbove: PROJECT_LAYER_IDS,
     });
-
-    const BUCKET_BASE_URL = "https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev";
-    const discoveredSourceLayers: Record<string, string> = {};
-    /**
-     * Layers whose PMTiles archive couldn't be read at all — not yet uploaded,
-     * or unreachable. Previously a metadata failure fell through to
-     * `fallbackLayerName` and added a layer against a source that renders
-     * nothing, so the toggle looked on and the map looked empty with no
-     * explanation. Now the failure is recorded once and announced, and the
-     * sidebar disables the toggle with a reason.
-     */
-    const unavailableLayers = new Set<string>();
-
-    // Every project layer shares one filter expression built from the same
-    // criteria the sidebar counts with. The legal-hold ring additionally
-    // restricts to flagged sites so it never paints under a compliant marker.
-    const FILTERED_LAYERS = [
-      ...RIPPLE_LAYER_IDS,
-      "data-centers-legal-ring",
-      "data-centers-circles",
-      "data-centers-labels",
-    ];
+    // The moratorium tint is handed to the overlay controller rather than
+    // drawn by the moratorium layer itself: it shades polygons out of the
+    // city-boundaries archive, and that controller already owns that source.
+    const overlays = createOverlayLayers(map, {
+      layersAbove: [...MORATORIUM_LAYER_IDS, ...PROJECT_LAYER_IDS],
+      companions: [MORATORIUM_TINT],
+    });
 
     const applyMapFilters = () => {
       const base = toMapLibreFilter(criteria);
-      for (const layerId of FILTERED_LAYERS) {
+      for (const layerId of PROJECT_LAYER_IDS) {
         if (!map.getLayer(layerId)) continue;
         const expr = layerId.startsWith("data-centers-legal")
           ? ["all", base, ["==", ["get", "underLegalHold"], true]]
@@ -486,176 +492,9 @@ const news = await fetchLocalNews();
       document.removeEventListener("visibilitychange", syncRipple);
     });
 
-    interface PMTilesMetadata {
-      vector_layers?: Array<{
-        id: string;
-        fields?: Record<string, string>;
-        [key: string]: any;
-      }>;
-      [key: string]: any;
-    }
-
-    // Common attribute names for a human-readable label, in priority order.
-    // Matched case-insensitively against whatever fields each archive
-    // actually contains, since PAD-US/DWSMA/city-boundary exports don't
-    // agree on naming (Unit_Nm vs GNIS_NAME vs CTU_NAME, etc).
-    const LABEL_FIELD_CANDIDATES = [
-      "name",
-      "unit_nm",
-      "loc_nm",
-      "gnis_name",
-      "ctu_name",
-      "city_name",
-      "wb_name",
-      "label",
-    ];
-
-    function pickLabelField(fields?: Record<string, string>): string | null {
-      if (!fields) return null;
-      const keys = Object.keys(fields);
-      const exactMatch = keys.find((k) =>
-        LABEL_FIELD_CANDIDATES.includes(k.toLowerCase()),
-      );
-      if (exactMatch) return exactMatch;
-      // Fallback: first string-typed field — better than nothing if none
-      // of the known candidates are present.
-      return keys.find((k) => fields[k]?.toLowerCase() === "string") ?? null;
-    }
-
-    const discoveredLabelFields: Record<string, string | null> = {};
-
-    function getEnvLabel(
-      configLayerId: string,
-      feature: maplibregl.MapGeoJSONFeature,
-    ): string {
-      const field = discoveredLabelFields[configLayerId];
-      const props = feature.properties || {};
-      if (field && props[field]) return String(props[field]);
-      // Last resort: first non-empty string property on the feature.
-      const fallback = Object.entries(props).find(
-        ([, v]) => typeof v === "string" && v.trim().length > 0,
-      );
-      return fallback ? String(fallback[1]) : "Unnamed area";
-    }
-
-    const syncEnvironmentalLayers = async () => {
-      for (const layer of MAP_LAYER_META) {
-        const isVisible = cachedLayerVisibility[layer.id];
-        if (
-          isVisible &&
-          !discoveredSourceLayers[layer.id] &&
-          !unavailableLayers.has(layer.id)
-        ) {
-          const fileUrl = `${BUCKET_BASE_URL}/${layer.fileName}`;
-          try {
-            const p = new pmtiles.PMTiles(fileUrl);
-            const meta = (await p.getMetadata()) as PMTilesMetadata;
-
-            if (meta && meta.vector_layers && meta.vector_layers.length > 0) {
-              const vectorLayerMeta = meta.vector_layers[0];
-              discoveredSourceLayers[layer.id] = vectorLayerMeta.id;
-              discoveredLabelFields[layer.id] = pickLabelField(
-                vectorLayerMeta.fields,
-              );
-            } else {
-              // Archive is readable but doesn't declare its vector layers —
-              // the fallback name is the documented shape for that case.
-              discoveredSourceLayers[layer.id] = layer.fallbackLayerName;
-              discoveredLabelFields[layer.id] = null;
-            }
-          } catch (err) {
-            // The archive itself is missing or unreadable. There is no name to
-            // fall back to, so stop trying and say so.
-            console.error(`[PMTiles ERROR] Metadata failed for ${layer.id}`, err);
-            unavailableLayers.add(layer.id);
-            cachedLayerVisibility[layer.id] = false;
-            document.dispatchEvent(
-              new CustomEvent(LAYER_UNAVAILABLE_EVENT, {
-                detail: { id: layer.id },
-              }),
-            );
-            continue;
-          }
-          if (import.meta.env.DEV) {
-            console.log(
-              `[PMTiles] "${layer.id}" → source-layer: "${discoveredSourceLayers[layer.id]}", label field: "${discoveredLabelFields[layer.id] ?? "(none found)"}"`,
-              `url: ${fileUrl}`,
-            );
-          }
-        }
-      }
-
-      // The style can still be mid-load right here (e.g. a layer checkbox
-      // toggled immediately after page load, before MapLibre's own "load"
-      // event has fired, or right after a basemap swap via the theme
-      // selector). Previously this just `return`ed at this point, which
-      // silently dropped whichever layer triggered this call — it never
-      // got added even after the style *did* finish loading, since nothing
-      // re-ran this add/remove loop afterward. Waiting for "idle" instead
-      // ensures this call always finishes what it started.
-      if (!map.isStyleLoaded()) {
-        await new Promise<void>((resolve) => map.once("idle", () => resolve()));
-      }
-
-      for (const layer of MAP_LAYER_META) {
-        const sourceId = sourceIdFor(layer.id);
-        const layerId = layerIdFor(layer.id);
-        const isVisible = cachedLayerVisibility[layer.id];
-
-        if (isVisible) {
-          const sourceLayerName = discoveredSourceLayers[layer.id];
-          if (!sourceLayerName) continue;
-
-          const fileUrl = `${BUCKET_BASE_URL}/${layer.fileName}`;
-          const protocolUrl = `pmtiles://${fileUrl}`;
-
-          if (!map.getSource(sourceId)) {
-            if (import.meta.env.DEV && !layer.attribution) {
-              console.warn(
-                `[attribution] Layer "${layer.id}" has no attribution set. Add one in ~/data/mapLayers.ts before shipping it — these datasets carry credit requirements.`,
-              );
-            }
-            map.addSource(sourceId, {
-              type: "vector",
-              url: protocolUrl,
-              // Carried by the source, not the control, so MapLibre lists the
-              // credit only while this layer is actually on the map.
-              attribution: layer.attribution,
-            });
-          }
-
-          if (!map.getLayer(layerId) && map.getSource(sourceId)) {
-            try {
-              // Insert beneath the lowest project layer (the legal-hold
-              // ring, when present) so environmental fills never paint
-              // over a marker or its warning halo.
-              const beforeId =
-                FILTERED_LAYERS.find((id) => map.getLayer(id)) ?? undefined;
-
-              map.addLayer(
-                {
-                  id: layerId,
-                  type: "fill",
-                  source: sourceId,
-                  "source-layer": sourceLayerName,
-                  paint: paintFor(layer),
-                },
-                beforeId,
-              );
-            } catch (err) {
-              console.error(`[PMTiles ERROR] Failed to add layer ${layerId}:`, err);
-            }
-          }
-        } else {
-          if (map.getLayer(layerId)) map.removeLayer(layerId);
-          if (map.getSource(sourceId)) map.removeSource(sourceId);
-        }
-      }
-    };
-
     const addDataLayer = () => {
-      if (!map.getSource("data-centers")) {
-        map.addSource("data-centers", {
+      if (!map.getSource(MARKER_SOURCE_ID)) {
+        map.addSource(MARKER_SOURCE_ID, {
           type: "geojson",
           data: geoJsonData,
           generateId: true,
@@ -669,7 +508,7 @@ const news = await fetchLocalNews();
         map.addLayer({
           id: rippleId,
           type: "circle",
-          source: "data-centers",
+          source: MARKER_SOURCE_ID,
           paint: {
             "circle-color": "rgba(0,0,0,0)",
             "circle-radius": radiusExpr(1) as any,
@@ -681,11 +520,11 @@ const news = await fetchLocalNews();
       }
 
       // Warning ring sits *below* the marker so only the halo shows.
-      if (!map.getLayer("data-centers-legal-ring")) {
+      if (!map.getLayer(LEGAL_RING_LAYER_ID)) {
         map.addLayer({
-          id: "data-centers-legal-ring",
+          id: LEGAL_RING_LAYER_ID,
           type: "circle",
-          source: "data-centers",
+          source: MARKER_SOURCE_ID,
           paint: {
             "circle-color": "rgba(0,0,0,0)",
             "circle-radius": radiusExpr(RING_SCALE) as any,
@@ -696,11 +535,11 @@ const news = await fetchLocalNews();
         } as maplibregl.CircleLayerSpecification);
       }
 
-      if (!map.getLayer("data-centers-circles")) {
+      if (!map.getLayer(MARKER_LAYER_ID)) {
         map.addLayer({
-          id: "data-centers-circles",
+          id: MARKER_LAYER_ID,
           type: "circle",
-          source: "data-centers",
+          source: MARKER_SOURCE_ID,
           paint: {
             "circle-color": ["get", "color"],
             "circle-radius": radiusExpr(1) as any,
@@ -715,9 +554,9 @@ const news = await fetchLocalNews();
           },
         });
         map.addLayer({
-          id: "data-centers-labels",
+          id: MARKER_LABEL_LAYER_ID,
           type: "symbol",
-          source: "data-centers",
+          source: MARKER_SOURCE_ID,
           layout: {
             "text-field": ["to-string", ["get", "parsedMW"]],
             "text-font": ["Open Sans Bold"],
@@ -733,17 +572,27 @@ const news = await fetchLocalNews();
       }
 
       applyMapFilters();
-      syncEnvironmentalLayers();
+      // Both of these insert beneath the layers just added, so they go on
+      // after them — and again after every basemap swap, since `setStyle`
+      // throws all of this away. Moratoriums first: the overlay fills are told
+      // to sit under its dots.
+      moratoriums.attachToStyle();
+      overlays.attachToStyle();
     };
 
     map.on("load", () => {
       setTimeout(() => map.resize(), 100);
       addDataLayer();
+      overlays.warmArchives();
     });
 
     const handleStyleChange = (event: Event) => {
       const detail = (event as CustomEvent<{ url: string }>).detail;
       if (detail?.url) {
+        // Nothing may touch these layers between here and `style.load`:
+        // they belong to the style being replaced.
+        moratoriums.detachFromStyle();
+        overlays.detachFromStyle();
         map.setStyle(detail.url);
         map.once("style.load", () => {
           addDataLayer();
@@ -773,13 +622,18 @@ const news = await fetchLocalNews();
 
       for (const layer of MAP_LAYER_META) {
         const value = detail[layer.apiKey];
-        if (typeof value === "boolean") {
-          cachedLayerVisibility[layer.id] = value;
-        }
+        if (typeof value === "boolean") overlays.setVisible(layer.id, value);
+      }
+
+      // One checkbox, two things on the map: the shaded city boundaries and
+      // the labelled dots that name them.
+      const showMoratoriums = detail[MORATORIUM_API_KEY];
+      if (typeof showMoratoriums === "boolean") {
+        moratoriums.setVisible(showMoratoriums);
+        overlays.setCompanionVisible(MORATORIUM_TINT.id, showMoratoriums);
       }
 
       applyMapFilters();
-      syncEnvironmentalLayers();
     };
     document.addEventListener("mapfilterchange", handleFilterChange);
     mapCleanups.push(() =>
@@ -834,19 +688,26 @@ const news = await fetchLocalNews();
       document.removeEventListener("mapmarkerselect", handleMarkerSelect),
     );
 
-    map.on("mouseenter", "data-centers-circles", (e) => {
+    /** Moves the hover feature-state onto one marker, or clears it. The source
+     *  name and the "clear the previous one first" step were written out at
+     *  three call sites. */
+    const setHoveredMarker = (id: number | null): void => {
+      if (hoverStateId !== null) {
+        map.setFeatureState(
+          { source: MARKER_SOURCE_ID, id: hoverStateId },
+          { hover: false },
+        );
+      }
+      hoverStateId = id;
+      if (id !== null) {
+        map.setFeatureState({ source: MARKER_SOURCE_ID, id }, { hover: true });
+      }
+    };
+
+    map.on("mouseenter", MARKER_LAYER_ID, (e) => {
       map.getCanvas().style.cursor = "pointer";
       if (e.features && e.features.length > 0) {
-        if (hoverStateId !== null)
-          map.setFeatureState(
-            { source: "data-centers", id: hoverStateId },
-            { hover: false },
-          );
-        hoverStateId = e.features[0].id as number;
-        map.setFeatureState(
-          { source: "data-centers", id: hoverStateId },
-          { hover: true },
-        );
+        setHoveredMarker(e.features[0].id as number);
 
         const feature = e.features[0];
         // The selected marker already carries the campaign popup at this exact
@@ -870,18 +731,13 @@ const news = await fetchLocalNews();
       }
     });
 
-    map.on("mouseleave", "data-centers-circles", () => {
+    map.on("mouseleave", MARKER_LAYER_ID, () => {
       map.getCanvas().style.cursor = "";
-      if (hoverStateId !== null)
-        map.setFeatureState(
-          { source: "data-centers", id: hoverStateId },
-          { hover: false },
-        );
-      hoverStateId = null;
+      setHoveredMarker(null);
       if (activePopup) activePopup.remove();
     });
 
-    map.on("click", "data-centers-circles", (e) => {
+    map.on("click", MARKER_LAYER_ID, (e) => {
       if (!e.features || e.features.length === 0) return;
       if (activePopup) activePopup.remove();
 
@@ -892,48 +748,111 @@ const news = await fetchLocalNews();
       );
     });
 
-    // --- Environmental layer hover/tap labels ---
-    // Layers are added/removed dynamically as their toggles flip, so this
-    // recomputes which ones actually exist on the map right now rather
-    // than assuming all three are present.
+    // --- Overlay hover/tap labels ---
+    //
+    // One hit test answers both questions these handlers have — "is the cursor
+    // on a marker?" and "which overlay region is under it?" — because a single
+    // query over the marker layer plus the switched-on overlays returns them
+    // topmost-first. It was three `queryRenderedFeatures` calls per pointer
+    // event, two of them just to yield to the marker, on a `mousemove` that
+    // fires more often than the map draws — while the same main thread was
+    // parsing tiles for a layer someone had just switched on.
+    //
+    // The layer ids come from the controller rather than from a fresh sweep of
+    // `map.getLayer`, and they matter: MapLibre fires an error and returns
+    // *nothing* if any requested layer isn't in the style.
     let envPopup: maplibregl.Popup | null = null;
-
-    const getVisibleEnvLayerIds = (): string[] =>
-      MAP_LAYER_META.map((l) => layerIdFor(l.id)).filter((id) =>
-        map.getLayer(id),
-      );
-
-    /** True when a data-center marker is under `point`. Both handlers below
-     *  yield to the marker's own hover/click rather than competing with it. */
-    const isOverMarker = (point: maplibregl.Point): boolean =>
-      map.queryRenderedFeatures(point, { layers: ["data-centers-circles"] })
-        .length > 0;
+    /** Town whose hover card is currently up, so it isn't re-anchored per frame. */
+    let hoveredJurisdictionId: string | null = null;
 
     /**
-     * Name of the overlay region under `point`, or null. The topmost feature
-     * wins where layers overlap. Callers are expected to have yielded to a
-     * marker already; this only asks about overlays.
+     * What the pointer is over, resolved once.
+     *
+     * `idle` and `none` are different answers and the hover handler treats
+     * them differently: `idle` means nothing this handler owns is switched on,
+     * so it must not touch the cursor at all — the marker layer's own
+     * mouseenter/mouseleave own it. `none` means we looked and the pointer is
+     * over bare map, which is when a stale label popup has to be cleared.
      */
-    const envLabelAt = (point: maplibregl.Point): string | null => {
-      const layerIds = getVisibleEnvLayerIds();
-      if (layerIds.length === 0) return null;
+    type Hit =
+      | { kind: "idle" }
+      | { kind: "none" }
+      | { kind: "marker" }
+      | { kind: "moratorium"; jurisdiction: PosturedJurisdiction }
+      | { kind: "overlay"; label: string };
 
-      const [feature] = map.queryRenderedFeatures(point, { layers: layerIds });
-      if (!feature) return null;
-      return getEnvLabel(feature.layer.id.replace(/-layer$/, ""), feature);
+    const IDLE: Hit = { kind: "idle" };
+    const NO_HIT: Hit = { kind: "none" };
+
+    const hitTest = (point: maplibregl.Point): Hit => {
+      // A town can be reported by either of two layers — the shaded boundary,
+      // which belongs to the overlay controller's source, or its name label.
+      // Both mean the same thing here.
+      const moratoriumIds = [
+        ...overlays.visibleCompanionIds(),
+        ...moratoriums.visibleLayerIds(),
+      ];
+      const overlayIds = overlays.visibleLayerIds();
+      // Nothing switched on that this test can answer for. The marker layer
+      // alone doesn't count: its own handlers cover it, and querying for it
+      // here would only duplicate their work on every frame.
+      if (moratoriumIds.length === 0 && overlayIds.length === 0) return IDLE;
+
+      const layers = [
+        ...(map.getLayer(MARKER_LAYER_ID) ? [MARKER_LAYER_ID] : []),
+        ...moratoriumIds,
+        ...overlayIds,
+      ];
+
+      // Topmost-first, which is also the order these are stacked: markers over
+      // the moratorium shading over the plain city fills beneath it.
+      const [top] = map.queryRenderedFeatures(point, { layers });
+      if (!top) return NO_HIT;
+      if (top.layer.id === MARKER_LAYER_ID) return { kind: "marker" };
+      if (moratoriumIds.includes(top.layer.id)) {
+        const jurisdiction = jurisdictionForFeature(top);
+        return jurisdiction ? { kind: "moratorium", jurisdiction } : NO_HIT;
+      }
+      const label = overlays.regionLabel(top);
+      return label ? { kind: "overlay", label } : NO_HIT;
     };
 
-    /** The label bubble, shared by the hover popup and the click popup — which
-     *  differ only in whether they persist and carry a close button. */
-    const envLabelHtml = (label: string): string => `<strong>${label}</strong>`;
+    /**
+     * The label bubble, shared by the hover popup and the click popup — which
+     * differ only in whether they persist and carry a close button.
+     *
+     * A node with `textContent`, not an HTML string: the text is a feature
+     * attribute out of a PMTiles archive, so it is third-party data being put
+     * on the page. CampaignBanner.astro states this policy for the Open States
+     * payload ("none of it is ours to trust as markup"); the same applies to a
+     * city name from a state GIS export, and building the node is shorter than
+     * escaping a template anyway.
+     */
+    const envLabelNode = (label: string): HTMLElement => {
+      const node = document.createElement("strong");
+      node.textContent = label;
+      return node;
+    };
 
-    map.on("mousemove", (e) => {
-      // Nothing to hit-test against, so leave the cursor and the marker layer's
-      // own hover handling entirely alone.
-      if (getVisibleEnvLayerIds().length === 0 || isOverMarker(e.point)) return;
+    // Coalesced to one hit test per frame: the last position seen in a frame is
+    // the only one that can still be under the cursor when it renders.
+    let pendingMove: maplibregl.MapMouseEvent | null = null;
+    let moveFrame: number | null = null;
 
-      const label = envLabelAt(e.point);
-      if (!label) {
+    const handleHover = (): void => {
+      moveFrame = null;
+      const event = pendingMove;
+      pendingMove = null;
+      if (!event) return;
+
+      // One hit test per frame, and it also answers "is there anything on that
+      // this handler owns" — see the `Hit` union for why `idle` and `none`
+      // aren't the same answer.
+      const hit = hitTest(event.point);
+      if (hit.kind !== "moratorium") hoveredJurisdictionId = null;
+      if (hit.kind === "idle" || hit.kind === "marker") return;
+
+      if (hit.kind === "none") {
         envPopup?.remove();
         envPopup = null;
         map.getCanvas().style.cursor = "";
@@ -947,7 +866,37 @@ const news = await fetchLocalNews();
         closeButton: false,
         closeOnClick: false,
       });
-      envPopup.setLngLat(e.lngLat).setHTML(envLabelHtml(label)).addTo(map);
+
+      if (hit.kind === "moratorium") {
+        // Placed once, where the pointer entered the city, and left there for
+        // as long as it stays inside it. A card this size re-anchored on every
+        // mousemove would shudder across the screen the whole way over a
+        // polygon — and unlike the one-word region label, this one is read.
+        if (hoveredJurisdictionId !== hit.jurisdiction.id) {
+          hoveredJurisdictionId = hit.jurisdiction.id;
+          envPopup
+            .setLngLat(event.lngLat)
+            .setHTML(moratoriumPopupHtml(hit.jurisdiction, "hover"))
+            .addTo(map);
+        }
+        return;
+      }
+
+      envPopup
+        .setLngLat(event.lngLat)
+        .setDOMContent(envLabelNode(hit.label))
+        .addTo(map);
+    };
+
+    map.on("mousemove", (e) => {
+      pendingMove = e;
+      if (moveFrame === null) moveFrame = requestAnimationFrame(handleHover);
+    });
+
+    mapCleanups.push(() => {
+      if (moveFrame !== null) cancelAnimationFrame(moveFrame);
+      moveFrame = null;
+      pendingMove = null;
     });
 
     // One handler for a click anywhere that isn't a marker: clear the selection,
@@ -955,17 +904,31 @@ const news = await fetchLocalNews();
     // listeners that between them ran the same hit-test three times — and, being
     // independent, each had to re-derive "did this land on a marker" for itself.
     map.on("click", (e) => {
-      if (isOverMarker(e.point)) return; // the marker's own handler owns this tap
+      const hit = hitTest(e.point);
+      if (hit.kind === "marker") return; // the marker's own handler owns this tap
 
       document.dispatchEvent(
         new CustomEvent("mapmarkerselect", { detail: null }),
       );
 
-      const label = envLabelAt(e.point);
-      if (label) {
+      if (hit.kind === "moratorium") {
+        // The hover card and the full record at the same spot would stack, and
+        // the hover one is the disposable half.
+        envPopup?.remove();
+        envPopup = null;
+        hoveredJurisdictionId = null;
+
+        new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
+          .setLngLat(e.lngLat)
+          .setHTML(moratoriumPopupHtml(hit.jurisdiction, "detail"))
+          .addTo(map);
+        return;
+      }
+
+      if (hit.kind === "overlay") {
         new maplibregl.Popup({ closeButton: true })
           .setLngLat(e.lngLat)
-          .setHTML(envLabelHtml(label))
+          .setDOMContent(envLabelNode(hit.label))
           .addTo(map);
       }
     });

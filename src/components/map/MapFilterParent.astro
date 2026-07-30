@@ -12,6 +12,7 @@ import { countBy } from "~/lib/collections";
 import { parseMW, projectMW } from "~/lib/projectMetrics";
 import FilterHeader from "~/components/filter/FilterHeader.astro";
 import FilterLayer from "~/components/filter/FilterLayer.astro";
+import FilterMoratorium from "~/components/filter/FilterMoratorium.astro";
 import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
@@ -57,7 +58,15 @@ const totalCount = clientProjects.length;
       holdCount={holdCount}
     />
 
-    <FilterLayer />
+    <FilterLayer group="climate" />
+
+    <!-- What a site would sit on top of, and then who decides whether it does.
+         The moratorium layer rides in the Politics section's slot: it is the
+         same question the city boundaries raise ("whose council?") with the
+         answer that council has already given. -->
+    <FilterLayer group="politics">
+      <FilterMoratorium />
+    </FilterLayer>
 
     <FilterProject largestProjects={largestProjects} />
   </div>
@@ -95,6 +104,7 @@ const totalCount = clientProjects.length;
   import { clientProjects } from "~/data/dataCenters";
   import { onReady } from "~/lib/domReady";
   import { countVisible, type FilterCriteria } from "~/lib/projectFilters";
+  import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
 
   const STORAGE_KEY = "mapFiltersCollapsed";
 
@@ -137,10 +147,7 @@ const totalCount = clientProjects.length;
 
     const totalCount = clientProjects.length;
 
-    let collapsed = false;
-    try {
-      collapsed = localStorage.getItem(STORAGE_KEY) === "true";
-    } catch {}
+    let collapsed = readStoredFlag(STORAGE_KEY);
 
     const MOBILE_QUERY = "(max-width: 767px)";
     const FILTERS_BOTTOM_OFFSET = 16;
@@ -256,9 +263,7 @@ const totalCount = clientProjects.length;
     const onHeaderTriggerClick = () => {
       if (window.innerWidth < 768) {
         collapsed = !collapsed;
-        try {
-          localStorage.setItem(STORAGE_KEY, String(collapsed));
-        } catch {}
+        writeStoredFlag(STORAGE_KEY, collapsed);
         applyCollapsedState();
         updateControlsOffset();
       }
@@ -270,9 +275,7 @@ const totalCount = clientProjects.length;
 
     const onToggleClick = () => {
       collapsed = !collapsed;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(collapsed));
-      } catch {}
+      writeStoredFlag(STORAGE_KEY, collapsed);
       applyCollapsedState();
     };
     toggleBtn?.addEventListener("click", onToggleClick);

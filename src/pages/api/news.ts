@@ -21,6 +21,7 @@
 
 import type { APIRoute } from "astro";
 import { withCache } from "~/lib/edgeCache";
+import { jsonResponse } from "~/lib/jsonResponse";
 import { fetchNews, type NewsItem, type NewsPayload } from "~/lib/newsFeed";
 
 export const prerender = false;
@@ -103,11 +104,10 @@ export const GET: APIRoute = async ({ url }) => {
   const maxAge = windowDays >= 365 ? 3600 : 120;
   const sMaxAge = result?.stale ? 60 : freshSeconds;
 
-  return new Response(JSON.stringify(payload), {
-    status: 200,
+  return jsonResponse(payload, {
+    maxAge,
+    sMaxAge,
     headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": `public, max-age=${maxAge}, s-maxage=${sMaxAge}`,
       // Lets us tell "live" from "last known good" when debugging, without
       // changing the payload shape the client already parses.
       "X-News-Source": result

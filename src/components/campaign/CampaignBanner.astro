@@ -34,14 +34,43 @@ import {
 ---
 
 <!--
-  Placement: top-centre of the map area. On desktop it's inset past both rails
-  (18rem filters left, 24rem news right) so it never sits on top of either. On
-  mobile the news card owns the very top, so NewsFeedParent.astro drops to
-  top-16 to leave this collapsed pill the first row — see the note there.
+  Placement: horizontally centred on the screen, at the top, at every width.
+  Mobile already was (`left-4 right-4 mx-auto`); desktop wasn't — it used
+  `left-76 right-100` with `mx-0`, which anchors the box 19rem from the left edge
+  rather than centring it, so on a 1440px screen it sat at 19–47rem where centre
+  is 31–59rem. Visibly left of centre, and inconsistent with mobile.
+
+  Centring is now `left-1/2` + `-translate-x-1/2` on both, so the two breakpoints
+  agree by construction rather than by two sets of offsets that have to be kept
+  in agreement by hand.
+
+  The width clamp is what keeps that safe. This bar sits at z-55, above both
+  rails (18rem filters left, 24rem news right, flush to their edges), so a fixed
+  28rem box centred on screen would cover the news rail on anything narrower than
+  ~1216px. `calc(100vw - 50rem)` is the widest a centred box can be while still
+  clearing the wider rail plus a 1rem gap on each side — the news rail is the
+  binding one, and clearing it symmetrically clears the narrower filters rail too.
+  It yields the full 28rem from ~1280px up and narrows instead of colliding below
+  that.
+
+  Below ~1010px the 13rem floor takes over and the bar does reach over the rails'
+  outer edges. That band has no good answer: both rails are showing from 768px and
+  together take 42rem, so at 768px there are 6rem left and *any* centred bar wide
+  enough to read its own label overlaps something. The old offsets didn't overlap
+  but resolved to a 4rem-wide pill there, which is not better. 13rem is where the
+  collapsed label still reads.
+
+  `md:max-w-md` looks redundant beside the clamp's own 28rem cap and is not:
+  `max-w-sm` above it applies at every width, so without this the desktop bar
+  would be capped at the mobile 24rem and the clamp could never reach 28rem.
+
+  Vertical placement is unchanged: on mobile the news card owns the very top, so
+  NewsFeedParent.astro drops to top-16 to leave this collapsed pill the first
+  row — see the note there.
 -->
 <div
   id="campaign-banner"
-  class="fixed md:absolute top-3 left-4 right-4 mx-auto max-w-sm md:mx-0 md:left-76 md:right-100 md:max-w-md z-55 pointer-events-auto font-sans"
+  class="fixed md:absolute top-3 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm md:w-[clamp(13rem,calc(100vw-50rem),28rem)] md:max-w-md z-55 pointer-events-auto font-sans"
 >
   <!--
     `band` on all three surfaces below (pill, panel, modal): this banner stays on
@@ -300,6 +329,7 @@ import {
     relativeAge,
     sponsorLine,
   } from "~/lib/legislation";
+  import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
   import type {
     BillStage,
     LegislationPayload,
@@ -880,11 +910,8 @@ import {
       panel.classList.toggle("hidden", !next);
       chevron.classList.toggle("-rotate-90", !next);
       toggle.setAttribute("aria-expanded", String(next));
-      try {
-        localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
-      } catch {
-        // Private-mode storage failures shouldn't break the toggle.
-      }
+      // Private-mode storage failures can't break the toggle — see storage.ts.
+      writeStoredFlag(STORAGE_KEY, next);
       if (next) load();
     }
 
@@ -936,12 +963,6 @@ import {
     // Restore the stored preference after first paint rather than inlining it
     // into the markup — the page is prerendered, so the served HTML is shared
     // by every visitor and can't carry one visitor's choice.
-    let restored = false;
-    try {
-      restored = localStorage.getItem(STORAGE_KEY) === "1";
-    } catch {
-      restored = false;
-    }
-    if (restored) setExpanded(true);
+    if (readStoredFlag(STORAGE_KEY)) setExpanded(true);
   }
 </script>

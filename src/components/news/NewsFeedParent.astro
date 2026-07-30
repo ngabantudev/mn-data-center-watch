@@ -1,6 +1,6 @@
 ---
 // src/components/news/NewsFeedParent.astro
-import type { NewsPayload } from "~/lib/newsFeed";
+import { formatNewsDate, type NewsPayload } from "~/lib/newsFeed";
 import { Newspaper } from "lucide-astro";
 
 interface Props extends NewsPayload {
@@ -155,11 +155,7 @@ const RANGE_OPTIONS = [
               </a>
             </h3>
             <span class="text-[10px] text-ink-4 block mt-1.5 font-medium">
-              {new Date(item.published).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
+              {formatNewsDate(item.published)}
             </span>
           </article>
         ))
@@ -216,7 +212,13 @@ const RANGE_OPTIONS = [
 
 <script>
   import { onReady } from "~/lib/domReady";
-  import type { NewsItem, NewsPayload } from "~/lib/newsFeed";
+  import {
+    byPublishedDesc,
+    formatNewsDate,
+    type NewsItem,
+    type NewsPayload,
+  } from "~/lib/newsFeed";
+  import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
 
   const STORAGE_KEY = "newsFeedCollapsed";
   const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
@@ -264,9 +266,7 @@ const RANGE_OPTIONS = [
     const cutoff = Date.now() - days * DAY_MS;
     return Array.from(articleCache.values())
       .filter((item) => new Date(item.published).getTime() >= cutoff)
-      .sort(
-        (a, b) => new Date(b.published).getTime() - new Date(a.published).getTime(),
-      );
+      .sort(byPublishedDesc);
   }
 
   function readInitialPayload(): NewsPayload {
@@ -285,14 +285,6 @@ const RANGE_OPTIONS = [
     return div.innerHTML;
   }
 
-  function formatDate(published: string): string {
-    return new Date(published).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
   function desktopItemHTML(item: NewsItem): string {
     return `
       <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
@@ -300,7 +292,7 @@ const RANGE_OPTIONS = [
         <h3 class="text-xs font-medium text-ink-2 hover:text-accent-hover leading-snug">
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
         </h3>
-        <span class="text-[10px] text-ink-4 block mt-1.5 font-medium">${formatDate(item.published)}</span>
+        <span class="text-[10px] text-ink-4 block mt-1.5 font-medium">${formatNewsDate(item.published)}</span>
       </article>`;
   }
 
@@ -529,11 +521,7 @@ const RANGE_OPTIONS = [
     const desktopMql = window.matchMedia(DESKTOP_MEDIA_QUERY);
 
     isMarkerSelected = false;
-    try {
-      isNewsCollapsed = localStorage.getItem(STORAGE_KEY) === "true";
-    } catch {
-      isNewsCollapsed = false;
-    }
+    isNewsCollapsed = readStoredFlag(STORAGE_KEY);
 
     function updatePanelDOM(): void {
       const isDesktop = desktopMql.matches;
@@ -567,9 +555,7 @@ const RANGE_OPTIONS = [
 
     function setCollapsed(next: boolean): void {
       isNewsCollapsed = next;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(isNewsCollapsed));
-      } catch {}
+      writeStoredFlag(STORAGE_KEY, isNewsCollapsed);
       updatePanelDOM();
     }
 

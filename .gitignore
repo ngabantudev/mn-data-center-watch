@@ -30,3 +30,15 @@ public/data/mn-protected-lands.json
 # Cloudflare local secrets (wrangler / astro dev platform proxy)
 .dev.vars
 .dev.vars.*
+
+# Editor config. Untracked deliberately: without this, anything VS Code writes
+# into .vscode/ — settings.json carrying local absolute paths, per-machine tasks —
+# gets committed by the next `git add -A`, which is the actual risk here.
+#
+# The two files this dropped, extensions.json and launch.json, were Astro's own
+# scaffolding: a recommendation to install the Astro extension, and a generic
+# `astro dev` launch config. Neither held anything machine-specific, so if you
+# want the extension hint back for contributors, keep the directory ignored and
+# re-admit just that file:
+#     !.vscode/extensions.json
+.vscode/

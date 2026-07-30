@@ -1,8 +1,20 @@
 ---
 // src/components/filter/FilterLayer.astro
 import AccordionSection from "~/components/ui/AccordionSection.astro";
-import { MAP_LAYER_META } from "~/data/mapLayers";
+import {
+  MAP_LAYER_GROUP_TITLE,
+  layersInGroup,
+  type MapLayerGroup,
+} from "~/data/mapLayers";
 import { Trees, Droplet, Landmark, Zap } from "lucide-astro";
+
+interface Props {
+  /** Which section this renders — one accordion per group. */
+  group: MapLayerGroup;
+}
+
+const { group } = Astro.props;
+const layers = layersInGroup(group);
 
 // Ids, labels, event keys, file names, and fill hexes all come from
 // ~/data/mapLayers.ts — the same registry MapParent.astro builds the layers
@@ -44,11 +56,15 @@ const SWATCHES: Record<
       "text-blue-700 group-hover:text-blue-800 dark:text-blue-500 dark:group-hover:text-blue-400",
     accentClass: "accent-blue-700 dark:accent-blue-400",
   },
+  // The one entry that isn't a hue. This layer's identity on the map is a
+  // black border per city, not a fill, and a purple swatch beside it would be
+  // pointing at the 5%-opacity tint nobody sees. Black itself is unusable in
+  // the dark theme, so each theme takes the darkest ink its panel can carry —
+  // which is what "an outline" looks like on that surface.
   "city-boundaries": {
     icon: Landmark,
-    colorClass:
-      "text-purple-700 group-hover:text-purple-800 dark:text-purple-500 dark:group-hover:text-purple-400",
-    accentClass: "accent-purple-700 dark:accent-purple-400",
+    colorClass: "text-ink group-hover:text-ink dark:text-ink-2 dark:group-hover:text-ink",
+    accentClass: "accent-neutral-800 dark:accent-neutral-300",
   },
   "coop-territories": {
     icon: Zap,
@@ -59,12 +75,12 @@ const SWATCHES: Record<
 };
 ---
 
-<AccordionSection title="Climate & Regional Impacts">
+<AccordionSection title={MAP_LAYER_GROUP_TITLE[group]}>
   <div
     class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair"
   >
     {
-      MAP_LAYER_META.map((layer) => {
+      layers.map((layer) => {
         const swatch = SWATCHES[layer.id];
         const IconComponent = swatch.icon;
         return (
@@ -99,11 +115,21 @@ const SWATCHES: Record<
       })
     }
   </div>
+
+  <!-- Anything else that belongs in this section but isn't a tile overlay —
+       today, the Politics section's moratorium layer, which is compiled from a
+       hand-sourced registry rather than a PMTiles archive and so can't come
+       from MAP_LAYER_META. -->
+  <slot />
 </AccordionSection>
 
 <script>
   import { onReady } from "~/lib/domReady";
-  import { LAYER_UNAVAILABLE_EVENT, type LayerUnavailableDetail } from "~/data/mapLayers";
+  import {
+    LAYER_UNAVAILABLE_EVENT,
+    type LayerUnavailableDetail,
+    type LayerUnavailableReason,
+  } from "~/data/mapLayers";
 
   function setupLayerToggles() {
     const toggles = document.querySelectorAll<HTMLInputElement>(
@@ -127,15 +153,28 @@ const SWATCHES: Record<
 
   // An overlay whose tile archive isn't published (or is unreachable) would
   // otherwise sit checked over an empty map with no explanation. The map tells
-  // us once, and the row says so and stops offering the toggle.
+  // us once, and the row says so and stops offering the toggle. Since the map
+  // now reads every archive during idle time after load rather than on first
+  // click, a row that can't work says so before anyone waits on it.
   //
-  // Registered at module scope rather than inside setupLayerToggles(): that
-  // function re-runs on every `astro:page-load`, and this listener is on
-  // `document`, which survives the navigation — re-registering would stack a
+  // Two sentences, because they aren't the same fact: a dataset we haven't
+  // uploaded is a gap in this map, while one we failed to fetch is a fault that
+  // a reload might clear. Reporting the second as the first would tell a
+  // visitor a public dataset doesn't exist yet.
+  const UNAVAILABLE_TEXT: Record<LayerUnavailableReason, string> = {
+    missing: "Dataset not published yet.",
+    unreadable: "Couldn't load this dataset — try reloading.",
+  };
+
+  // Registered at module scope rather than inside setupLayerToggles(), which
+  // `onReady` would re-run on `astro:page-load`: this listener is on
+  // `document`, which survives a navigation, so re-registering would stack a
   // fresh copy per page view. It resolves the toggle by query at fire time, so
-  // it stays correct across re-renders without being re-bound.
+  // it stays correct across re-renders without being re-bound. (Nothing
+  // dispatches `astro:page-load` on this site yet — see domReady.ts — so this
+  // is the invariant being kept, not a bug being fixed.)
   document.addEventListener(LAYER_UNAVAILABLE_EVENT, (event) => {
-    const { id } = (event as CustomEvent<LayerUnavailableDetail>).detail;
+    const { id, reason } = (event as CustomEvent<LayerUnavailableDetail>).detail;
     const toggle = document.querySelector<HTMLInputElement>(
       `.environmental-layer-toggle[data-layer-id="${id}"]`,
     );
@@ -148,7 +187,7 @@ const SWATCHES: Record<
       .closest("label")
       ?.querySelector<HTMLElement>("[data-layer-status]");
     if (status) {
-      status.textContent = "Dataset not published yet.";
+      status.textContent = UNAVAILABLE_TEXT[reason];
       status.classList.remove("hidden");
     }
   });

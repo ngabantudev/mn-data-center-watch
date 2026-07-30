@@ -9,8 +9,8 @@
 // Pure functions over the constants in `~/data/mnRatepayerBaseline`. No DOM,
 // no formatting decisions: `ratepayerWidget.ts` renders this, and both the
 // server-rendered first paint and the client-side slider call the same
-// `computeRatepayerImpact`, so the two can't drift the way the MW parsing
-// once did (see projectMetrics.ts for that story).
+// `computeImpactForMW`, so the two can't drift the way the MW parsing once did
+// (see projectMetrics.ts for that story).
 //
 // The grid-stress class is *not* a new set of thresholds. `sizeTierMeta`
 // already buckets capacity by the point at which the fight changes venue —

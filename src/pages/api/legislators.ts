@@ -10,6 +10,7 @@ import {
   LEGISLATOR_S_MAX_AGE,
   MN_STATE_JURISDICTION_ID,
 } from "~/data/legislation";
+import { jsonResponse } from "~/lib/jsonResponse";
 import {
   isMailAddress,
   type Chamber,
@@ -75,15 +76,10 @@ function toView(person: OpenStatesPerson): LegislatorView | null {
   };
 }
 
-function json(payload: LegislatorsPayload, sMaxAge: number) {
-  return new Response(JSON.stringify(payload), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": `public, max-age=${LEGISLATOR_MAX_AGE}, s-maxage=${sMaxAge}`,
-    },
-  });
-}
+/** Every reply here shares one browser lifetime; only the shared-cache half
+ *  varies, by how much we actually know. */
+const json = (payload: LegislatorsPayload, sMaxAge: number) =>
+  jsonResponse(payload, { maxAge: LEGISLATOR_MAX_AGE, sMaxAge });
 
 export const GET: APIRoute = async ({ url }) => {
   const lat = coerceCoord(url.searchParams.get("lat"));
