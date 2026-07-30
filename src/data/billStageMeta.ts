@@ -54,10 +54,13 @@ export const STAGE_INK = "text-[#0a0a0a]";
  * bitten this project before (see the note on `eaw_challenged` in
  * legalStatusMeta.ts):
  *
- *  1. CONTRAST. Both themes put panels on a *dark* surface — #003865 navy in
- *     light, #18181b in dark — so each pill has to clear the 3.0:1 graphics
- *     floor against both, and its own near-black text has to clear 4.5:1.
- *     Measured, in that order: navy / dark / text.
+ *  1. CONTRAST. These three are only ever drawn on the campaign banner, which
+ *     is a dark surface in both themes — #003865 navy in light (the `.band`
+ *     scope in global.css; the banner opts in precisely so these stay valid),
+ *     #18181b in dark. So each pill has to clear the 3.0:1 graphics floor
+ *     against both, and its own near-black text has to clear 4.5:1. Measured,
+ *     in that order: navy / dark / text. Do not carry these onto the light
+ *     theme's off-white panel body — every one of them lands under 2.5:1 there.
  *
  *  2. NO COLLISION with the map. #ef4444 already means "Rejected / Withdrawn"
  *     and #10b981 means "Operational" in STATUS_META, and the map legend can be

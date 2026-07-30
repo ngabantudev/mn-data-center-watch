@@ -43,12 +43,21 @@ import {
   id="campaign-banner"
   class="fixed md:absolute top-3 left-4 right-4 mx-auto max-w-sm md:mx-0 md:left-76 md:right-100 md:max-w-md z-55 pointer-events-auto font-sans"
 >
+  <!--
+    `band` on all three surfaces below (pill, panel, modal): this banner stays on
+    the navy in the light theme rather than following the data rails onto the
+    portal off-white. Not a style preference — the legislative palette in
+    billStageMeta.ts is measured against a dark panel and only clears the 3.0:1
+    graphics floor there (its stage tints land at 1.5–2.5:1 on off-white), and
+    those hexes encode meaning, so they can't be re-picked per surface. A navy
+    notice bar over the map is also the portal's own treatment for this.
+  -->
   <button
     id="cb-toggle"
     type="button"
     aria-expanded="false"
     aria-controls="cb-panel"
-    class="group w-full flex items-center gap-2 px-3.5 py-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+    class="band group w-full flex items-center gap-2 px-3.5 py-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
   >
     <Landmark size={14} class="shrink-0 text-accent" />
     <span
@@ -64,7 +73,7 @@ import {
 
   <div
     id="cb-panel"
-    class="hidden mt-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) overflow-hidden"
+    class="band hidden mt-2 rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) overflow-hidden"
   >
     <div class="px-3.5 py-3 border-b border-hair">
       <p id="cb-intro" class="text-[11px] text-ink-3 leading-snug">
@@ -177,7 +186,7 @@ import {
 -->
 <dialog
   id="cb-action"
-  class="font-sans fixed inset-0 m-auto open:flex h-fit max-h-[92dvh] w-[min(32rem,92vw)] flex-col overflow-hidden rounded-2xl border border-hair bg-panel p-0 text-ink backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+  class="band font-sans fixed inset-0 m-auto open:flex h-fit max-h-[92dvh] w-[min(32rem,92vw)] flex-col overflow-hidden rounded-2xl border border-hair bg-panel p-0 text-ink backdrop:bg-black/50 backdrop:backdrop-blur-sm"
 >
   <div class="shrink-0 flex items-start justify-between gap-3 px-4 py-3.5 border-b border-hair">
     <div>

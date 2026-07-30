@@ -20,11 +20,14 @@ import { Trees, Droplet, Landmark, Zap } from "lucide-astro";
 // going through the theme tokens — each one matches the fill its layer paints
 // on the map, and that pairing has to hold in both themes.
 //
-// Both themes put these on a dark panel (navy #003865 in light, near-black in
-// dark), so both need the brighter end of each ramp. The light theme sits a
-// step brighter still: on that navy, blue-500 lands at 3.3:1 and purple-500 at
-// 3.0:1, i.e. under AA — the 400s clear it. The dark theme keeps the 500/400
-// pair it has always used.
+// The two themes sit these on opposite surfaces, so each needs the opposite end
+// of its ramp. The dark theme keeps the 500/400 pair it has always used, on
+// near-black. The light theme's panel body is the portal off-white (#e9e9e9 for
+// this strip), where the 400s land at 1.4–2.3:1 — invisible. It takes the 700 of
+// each ramp instead: 4.2–5.9:1 there, clear of the 3.0:1 floor for UI graphics,
+// and close enough to the `outlineHex` each layer already draws its own borders
+// with to still read as that layer's colour. Hover deepens a further step, the
+// same direction the ink tokens move on hover in this theme.
 const SWATCHES: Record<
   string,
   { icon: typeof Trees; colorClass: string; accentClass: string }
@@ -32,26 +35,26 @@ const SWATCHES: Record<
   "protected-lands": {
     icon: Trees,
     colorClass:
-      "text-emerald-400 group-hover:text-emerald-300 dark:text-emerald-500 dark:group-hover:text-emerald-400",
-    accentClass: "accent-emerald-400",
+      "text-emerald-700 group-hover:text-emerald-800 dark:text-emerald-500 dark:group-hover:text-emerald-400",
+    accentClass: "accent-emerald-700 dark:accent-emerald-400",
   },
   "drinking-water": {
     icon: Droplet,
     colorClass:
-      "text-blue-400 group-hover:text-blue-300 dark:text-blue-500 dark:group-hover:text-blue-400",
-    accentClass: "accent-blue-400",
+      "text-blue-700 group-hover:text-blue-800 dark:text-blue-500 dark:group-hover:text-blue-400",
+    accentClass: "accent-blue-700 dark:accent-blue-400",
   },
   "city-boundaries": {
     icon: Landmark,
     colorClass:
-      "text-purple-400 group-hover:text-purple-300 dark:text-purple-500 dark:group-hover:text-purple-400",
-    accentClass: "accent-purple-400",
+      "text-purple-700 group-hover:text-purple-800 dark:text-purple-500 dark:group-hover:text-purple-400",
+    accentClass: "accent-purple-700 dark:accent-purple-400",
   },
   "coop-territories": {
     icon: Zap,
     colorClass:
-      "text-amber-400 group-hover:text-amber-300 dark:text-amber-500 dark:group-hover:text-amber-400",
-    accentClass: "accent-amber-400",
+      "text-amber-700 group-hover:text-amber-800 dark:text-amber-500 dark:group-hover:text-amber-400",
+    accentClass: "accent-amber-700 dark:accent-amber-400",
   },
 };
 ---
