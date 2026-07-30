@@ -55,12 +55,12 @@ export const STAGE_INK = "text-[#0a0a0a]";
  * legalStatusMeta.ts):
  *
  *  1. CONTRAST. These three are only ever drawn on the campaign banner, which
- *     is a dark surface in both themes — #003865 navy in light (the `.band`
- *     scope in global.css; the banner opts in precisely so these stay valid),
- *     #18181b in dark. So each pill has to clear the 3.0:1 graphics floor
- *     against both, and its own near-black text has to clear 4.5:1. Measured,
- *     in that order: navy / dark / text. Do not carry these onto the light
- *     theme's off-white panel body — every one of them lands under 2.5:1 there.
+ *     is a dark surface in both themes — the flag's #002d5d in light (the
+ *     `.band` scope in global.css; the banner opts in precisely so these stay
+ *     valid), #18181b in dark. So each pill has to clear the 3.0:1 graphics
+ *     floor against both, and its own near-black text has to clear 4.5:1.
+ *     Measured, in that order: band / dark / text. Do not carry these onto the
+ *     light theme's off-white panel body — every one lands under 2.5:1 there.
  *
  *  2. NO COLLISION with the map. #ef4444 already means "Rejected / Withdrawn"
  *     and #10b981 means "Operational" in STATUS_META, and the map legend can be
@@ -77,7 +77,7 @@ export const BILL_STAGE_META: BillStageMeta[] = [
   {
     stage: "passed",
     label: "Passed",
-    // 6.87 navy / 10.17 dark / 11.36 text. Not #10b981 (map "Operational")
+    // 7.86 band / 10.17 dark / 11.36 text. Not #10b981 (map "Operational")
     // and not #34d399 (the dark theme's own accent, which would read as
     // decoration rather than status).
     hex: "#4ade80",
@@ -88,7 +88,7 @@ export const BILL_STAGE_META: BillStageMeta[] = [
   {
     stage: "advancing",
     label: "Advancing",
-    // 7.17 navy / 10.61 dark / 11.86 text. Not #f59e0b (map "Paused") or
+    // 8.20 band / 10.61 dark / 11.86 text. Not #f59e0b (map "Paused") or
     // #f97316 (map "Under Construction").
     hex: "#fbbf24",
     color: "bg-[#fbbf24]",
@@ -98,7 +98,7 @@ export const BILL_STAGE_META: BillStageMeta[] = [
   {
     stage: "introduced",
     label: "Proposed",
-    // 4.33 navy / 6.40 dark / 7.16 text. Not #ef4444 (map "Rejected") — which
+    // 4.95 band / 6.40 dark / 7.16 text. Not #ef4444 (map "Rejected") — which
     // matters especially here, because "proposed" is the start of the process
     // and must not be mistaken for a bill that was killed.
     hex: "#f87171",

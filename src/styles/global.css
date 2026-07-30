@@ -26,16 +26,12 @@
 */
 :root {
   /*
-    Light — the State of Minnesota portal palette, taken from mn.gov's own
-    core.css rather than approximated. The values and their roles there:
+    Light — two measured sources, no eyeballed values.
 
-      #003865  the portal's navy — `header`, `#header-search`, and
-               `.main-landing-content.branded` all sit on it
-      #00649e  second-level nav, and the hover state for the level above it
-      #9bcbeb  the hairline mn.gov rules its navy header with, and the light
-               blue it uses for de-emphasised type on navy
-      #f2f2f2  the off-white it fills its deepest nav levels with, always
-               with #003865 type on it; #e6e6e6 is that surface's hover
+    The BODY is the State of Minnesota portal, taken from mn.gov's own core.css:
+
+      #f2f2f2  the off-white it fills its deepest nav levels with; #e6e6e6 is
+               that surface's hover
       #e9e9e9  its striped-table row
       #e5e5e5  its `.nav-divider` rule; #d9d9d9 a heavier nav edge
       #333333  body type, #555555 the de-emphasised step below it
@@ -43,11 +39,24 @@
       #303030  the footer band, with #b2b2b2 for muted type on it
       #78be21  brand green (#86d425 on hover), reserved for primary CTAs
 
-    The portal is an off-white body under a navy header band, and that's what
-    the tokens below describe: --panel and the ink ramp are the *body*, so
-    --panel is off-white and ink runs near-black→grey, same direction as the
-    dark theme's ramp. The navy is not a panel token — it's the `.band` scope
-    further down, which the two panel headers opt into.
+    The BANDS are the state flag adopted in 2024, at the State Emblems Redesign
+    Commission's own published values (its report of 2024-01-01 specifies each
+    in Web colour, CMYK and Pantone):
+
+      #002d5d  Night Sky Blue, Pantone 648 — the flag's field
+      #52c9e8  Water Blue, Pantone 305
+      #ffffff  the eight-pointed North Star
+
+    Three colours is the whole flag, so where the chrome needs a step the flag
+    doesn't give — a row hover, a recessed well — it's derived from those three
+    and labelled as such at the point of use. The flag has no light surface at
+    all, which is why the body stays the portal's: Water Blue measures 1.7:1 on
+    #f2f2f2, so it can only ever be an on-navy colour here.
+
+    What the tokens below describe is the body: --panel and the ink ramp, so
+    --panel is off-white and ink runs near-black→grey, the same direction as the
+    dark theme's ramp. The flag blues are not panel tokens — they're the `.band`
+    scope further down, which the panel headers opt into.
 
     --ink-canvas stays separate because a panel and the map backdrop are still
     two different surfaces (in the dark theme --canvas is darker than --panel);
@@ -73,19 +82,19 @@
   --hover: #e6e6e6;
 
   --accent: #0062b2;
-  /* Hover goes *darker* on a light surface — the portal navy, which is also
-     the type colour mn.gov puts on its own off-white nav levels. */
-  --accent-hover: #003865;
+  /* Hover goes *darker* on a light surface, and lands on Night Sky Blue: the
+     flag's field doubles as this theme's strongest ink-on-white blue (12.2:1). */
+  --accent-hover: #002d5d;
   --accent-soft: rgba(0, 98, 178, 0.1);
   --on-accent: #ffffff;
 
   --positive: #78be21;
   --positive-hover: #86d425;
-  --on-positive: #003865;
+  --on-positive: #002d5d;
 
   /* Panels are edge-docked over the map, so the shadow only has to lift them
      off the basemap — at the dark theme's strength it reads as grime here. */
-  --shadow-panel: rgba(0, 32, 56, 0.18);
+  --shadow-panel: rgba(0, 45, 93, 0.18);
 
   /* The stat tiles live inside the navy band, which supplies its own well (see
      `.band`). These values are for a `.stat-well` on the off-white body:
@@ -93,7 +102,7 @@
   --well: #ffffff;
   --well-hair: #d9d9d9;
   --well-shadow:
-    inset 0 1px 3px rgba(0, 32, 56, 0.09), 0 1px 0 rgba(255, 255, 255, 0.8);
+    inset 0 1px 3px rgba(0, 45, 93, 0.09), 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .dark {
@@ -163,10 +172,10 @@
   Layer 3 — surface scopes.
 
   The two themes disagree about how many surfaces the chrome has. The dark
-  theme is one dark field throughout. The light theme is the mn.gov portal: an
-  off-white body, a navy band for panel headers, and the portal's dark footer
-  grey for the strip under one of them — with type that has to invert between
-  them, white on the bands and near-black on the body.
+  theme is one dark field throughout. The light theme has three: the portal's
+  off-white body, the state flag's Night Sky Blue for panel headers, and the
+  portal's dark footer grey for the strip under one of them — with type that has
+  to invert between them, white on the bands and near-black on the body.
 
   A band re-declares the surface tokens for its own subtree rather than every
   component inside it carrying a light/dark twin per colour. That works because
@@ -175,7 +184,7 @@
   unchanged inside a band — they just resolve against the band instead of the
   body. Same mechanism as `.dark`, one subtree deep.
 
-    .band      the navy masthead / panel header (mn.gov's `header`)
+    .band      the masthead / panel header — the flag's field, #002d5d
     .band-sub  the dark grey strip beneath it (mn.gov's `footer`, #303030)
 
   A band declares no background of its own — pair it with `bg-panel`, which now
@@ -187,39 +196,61 @@
   Note which selectors carry which half of this. The inverted ink, hairlines and
   accent are scoped to `:root:not(.dark)`, because they only make sense on the
   light theme's off-white body — the dark theme has no surface to invert against,
-  and letting them through would hand its masthead a light-blue eyebrow and a
+  and letting them through would hand its masthead a Water Blue eyebrow and a
   blue hover in place of its emerald. What both themes do share is the surface
   step: in dark a band drops to that theme's near-black, which is what its panel
   headers have always been, so the chrome still reads there as one continuous
   field. Everything else there stays exactly as `.dark` declares it.
 */
 :root:not(.dark) .band {
-  --panel: #003865;
-  --panel-2: #003865;
-  --panel-3: #003865;
+  /* Night Sky Blue, the flag's field. */
+  --panel: #002d5d;
+  --panel-2: #002d5d;
+  --panel-3: #002d5d;
 
+  /*
+    The muted ink ramp is the North Star's white stepped down in opacity, not a
+    second family of light blues. Two reasons: the flag only has one light blue
+    and it's spoken for as --accent below, so a separate cool ramp would read as
+    a near-miss of it; and a neutral ramp is what lets Water Blue register as
+    emphasis rather than as one more shade of the same wash.
+
+    On Night Sky: 13.7 / 10.9 / 7.7 / 6.2:1. They're translucent, so they
+    composite over whatever surface they land on — the hover wash and the well
+    below are both accounted for, --ink-4 being the tight one at 5.0:1 on hover.
+  */
   --ink: #ffffff;
-  --ink-2: #e6f0f7;
-  --ink-3: #b9d9ec;
-  --ink-4: #9bcbeb;
+  --ink-2: rgba(255, 255, 255, 0.88);
+  --ink-3: rgba(255, 255, 255, 0.72);
+  --ink-4: rgba(255, 255, 255, 0.64);
 
-  /* #9bcbeb is the rule mn.gov draws under its navy header; softened here
-     because we use far more internal dividers than the portal does. */
-  --hair: rgba(155, 203, 235, 0.3);
-  --hair-strong: rgba(155, 203, 235, 0.55);
-  --hover: #00649e;
+  /* Water Blue hairlines, and a row hover derived from it: the flag has no
+     mid-tone, so the step off the field is #0d4673, Pantone 305 at 16% over
+     #002d5d. Water Blue itself still reads at 5.1:1 on a hovered row.
 
-  --accent: #9bcbeb;
-  --accent-hover: #b3dcff;
-  --accent-soft: rgba(155, 203, 235, 0.16);
-  --on-accent: #003865;
+     Flattened to a hex rather than left as that rgba, deliberately. `bg-hover`
+     is a *replacement* background, and one of the elements that hovers with it
+     is the campaign pill, which floats over the live map — a translucent hover
+     there doesn't tint the pill, it punches a hole through it to the basemap. */
+  --hair: rgba(82, 201, 232, 0.32);
+  --hair-strong: rgba(82, 201, 232, 0.55);
+  --hover: #0d4673;
 
-  /* Recessed well for the stat tiles — see .stat-well below. #002a4b is
-     mn.gov's own darker blue (it edges .btn-primary in their core.css). */
-  --well: #002a4b;
-  --well-hair: rgba(155, 203, 235, 0.22);
+  /* Water Blue, Pantone 305 — 7.1:1 on the field, and 7.1:1 the other way round
+     for Night Sky type on a Water Blue button. Accent hover is the star's white
+     rather than a lightened blue, so the flag's own three values cover it. */
+  --accent: #52c9e8;
+  --accent-hover: #ffffff;
+  --accent-soft: rgba(82, 201, 232, 0.12);
+  --on-accent: #002d5d;
+
+  /* Recessed well for the stat tiles — see .stat-well below. Derived: Night Sky
+     darkened, since the flag offers nothing between its field and black. White
+     reads at 16.7:1 in here and Water Blue at 8.7:1. */
+  --well: #001e3f;
+  --well-hair: rgba(82, 201, 232, 0.22);
   --well-shadow:
-    inset 0 1px 3px rgba(0, 16, 30, 0.5), 0 1px 0 rgba(255, 255, 255, 0.05);
+    inset 0 1px 3px rgba(0, 12, 26, 0.5), 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 :root:not(.dark) .band-sub {
@@ -236,11 +267,11 @@
   --hair-strong: rgba(255, 255, 255, 0.4);
   --hover: #4a4a4a;
 
-  /* The light blue off the navy band, not the body's #0062b2 link blue, which
-     is nearly invisible on #303030. */
-  --accent: #9bcbeb;
-  --accent-hover: #b3dcff;
-  --accent-soft: rgba(155, 203, 235, 0.16);
+  /* Water Blue again, carried down from the band above: the body's #0062b2 link
+     blue measures 2.1:1 on this grey, and Pantone 305 measures 6.8:1. */
+  --accent: #52c9e8;
+  --accent-hover: #ffffff;
+  --accent-soft: rgba(82, 201, 232, 0.16);
   --on-accent: #303030;
 }
 
