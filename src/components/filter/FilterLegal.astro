@@ -11,16 +11,15 @@ import type { LegalStatus } from "~/data/dataCenters";
 import { LEGAL_STATUS_META } from "~/data/legalStatusMeta";
 
 interface Props {
-  countsByLegalStatus: Record<LegalStatus, number>;
+  countsByLegalStatus: Partial<Record<LegalStatus, number>>;
   holdCount: number;
-  openByDefault?: boolean;
 }
 
 const { countsByLegalStatus, holdCount } = Astro.props;
 const holdMeta = LEGAL_STATUS_META.filter((m) => m.isHold);
 ---
 
-<AccordionSection id="legal" title="Environmental Review & Legal Hold">
+<AccordionSection title="Environmental Review & Legal Hold">
   <div
     class="px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair"
   >

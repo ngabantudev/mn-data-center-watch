@@ -21,7 +21,7 @@
 
 import type { APIRoute } from "astro";
 import { withCache } from "~/lib/edgeCache";
-import { fetchNews, type NewsItem } from "~/lib/newsFeed";
+import { fetchNews, type NewsItem, type NewsPayload } from "~/lib/newsFeed";
 
 export const prerender = false;
 
@@ -58,11 +58,6 @@ const KEEP_SECONDS = 604800; // 7 days
  * cache did on the first live test of this change.
  */
 const FAILURE_BACKOFF_SECONDS = 10;
-
-interface NewsPayload {
-  newsItems: NewsItem[];
-  errorMessage: string | null;
-}
 
 export const GET: APIRoute = async ({ url }) => {
   const requested = Number(url.searchParams.get("days"));

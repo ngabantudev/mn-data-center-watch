@@ -1,79 +1,45 @@
 ---
 // src/components/map/MapFilterParent.astro
-import {
-  clientProjects,
-  type LegalStatus,
-  type ProjectStatus,
-} from "~/data/dataCenters";
-import { STATUS_META } from "~/data/mapStatusMeta";
+//
+// The filters sidebar: the panel chrome, the per-axis counts each section
+// renders, and the one script that turns every control in here into a single
+// `mapfilterchange` event. The sections themselves are presentational and read
+// their own registries — this file computes counts and owns the wiring.
+import { clientProjects } from "~/data/dataCenters";
 import { getLegalStatus, isUnderLegalHold } from "~/data/legalStatusMeta";
-import { getSizeTier, type SizeTier } from "~/data/sizeTierMeta";
+import { getSizeTier } from "~/data/sizeTierMeta";
 import { countBy } from "~/lib/collections";
-import { parseMW } from "~/lib/projectMetrics";
-import {
-  Zap,
-  HardHat,
-  ClipboardList,
-  CirclePause,
-  CircleX,
-} from "lucide-astro";
-import type { NewsItem } from "~/lib/newsFeed";
+import { parseMW, projectMW } from "~/lib/projectMetrics";
 import FilterHeader from "~/components/filter/FilterHeader.astro";
-import FilterLayer from "../filter/FilterLayer.astro";
-import FilterStatus from "../filter/FilterStatus.astro";
-import FilterProject from "../filter/FilterProject.astro";
-import FilterLegal from "../filter/FilterLegal.astro";
-import FilterSize from "../filter/FilterSize.astro";
+import FilterLayer from "~/components/filter/FilterLayer.astro";
+import FilterStatus from "~/components/filter/FilterStatus.astro";
+import FilterProject from "~/components/filter/FilterProject.astro";
+import FilterLegal from "~/components/filter/FilterLegal.astro";
+import FilterSize from "~/components/filter/FilterSize.astro";
 
-interface Props {
-  newsItems: NewsItem[];
-  errorMessage: string | null;
-}
+// Takes no props: it read the whole dataset from `clientProjects` even when it
+// declared `newsItems` and `errorMessage`, which it never once referenced. The
+// news rail is NewsFeedParent's job.
 
-// Logic setup — single O(n) pass per axis rather than one full scan per bucket.
-const rawStatusCounts = countBy(clientProjects, (p) => p.status);
-const countsByStatus = Object.fromEntries(
-  STATUS_META.map((meta) => [meta.status, rawStatusCounts[meta.status] ?? 0]),
-) as Record<ProjectStatus, number>;
+// One O(n) pass per axis rather than a full scan per bucket. `countBy` omits
+// empty buckets, so every consumer reads these as partial records and supplies
+// its own `?? 0` — which is also what keeps a zero-count status visible in the
+// sidebar instead of quietly disappearing from the legend.
+const countsByStatus = countBy(clientProjects, (p) => p.status);
+const countsByLegalStatus = countBy(clientProjects, getLegalStatus);
+const countsByTier = countBy(clientProjects, (p) => getSizeTier(projectMW(p)));
 
-const countsByLegalStatus = countBy(clientProjects, getLegalStatus) as Record<
-  LegalStatus,
-  number
->;
 const holdCount = clientProjects.filter(isUnderLegalHold).length;
-
-const countsByTier = countBy(clientProjects, (p) =>
-  getSizeTier(parseMW(p.powerCapacityMW) || 5),
-) as Record<SizeTier, number>;
 
 const largestProjects = [...clientProjects].sort(
   (a, b) => parseMW(b.powerCapacityMW) - parseMW(a.powerCapacityMW),
 );
 
 const totalCount = clientProjects.length;
-
-const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
-  active: Zap,
-  construction: HardHat,
-  planned: ClipboardList,
-  paused: CirclePause,
-  rejected: CircleX,
-};
 ---
-
-<style>
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-</style>
 
 <div
   id="map-filters"
-  data-total={totalCount}
   class="absolute z-10 pointer-events-auto font-sans bottom-4 left-4 right-4 md:right-auto md:top-0 md:bottom-0 md:left-0 w-auto md:w-72 bg-panel backdrop-blur-md border border-hair md:border-r md:border-l-0 md:border-t-0 md:border-b-0 shadow-2xl shadow-(color:--shadow-panel) flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0 rounded-2xl md:rounded-none"
 >
   <FilterHeader totalCount={totalCount} />
@@ -82,24 +48,18 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     id="mf-content"
     class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
   >
-    <FilterStatus
-      STATUS_META={STATUS_META}
-      countsByStatus={countsByStatus}
-      STATUS_ICONS={STATUS_ICONS}
-      openByDefault={false}
-    />
+    <FilterStatus countsByStatus={countsByStatus} />
 
-    <FilterSize countsByTier={countsByTier} openByDefault={false} />
+    <FilterSize countsByTier={countsByTier} />
 
     <FilterLegal
       countsByLegalStatus={countsByLegalStatus}
       holdCount={holdCount}
-      openByDefault={false}
     />
 
-    <FilterLayer openByDefault={false} />
+    <FilterLayer />
 
-    <FilterProject largestProjects={largestProjects} openByDefault={false} />
+    <FilterProject largestProjects={largestProjects} />
   </div>
 
   <!-- Desktop pull-tab toggle -->
@@ -133,6 +93,7 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
 
 <script>
   import { clientProjects } from "~/data/dataCenters";
+  import { onReady } from "~/lib/domReady";
   import { countVisible, type FilterCriteria } from "~/lib/projectFilters";
 
   const STORAGE_KEY = "mapFiltersCollapsed";
@@ -154,9 +115,9 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     ) as HTMLElement | null;
     const selectAllBtn = document.getElementById("mf-select-all");
     const clearAllBtn = document.getElementById("mf-clear-all");
-    
+
     const statusCheckboxes = Array.from(
-      document.querySelectorAll<HTMLInputElement>(".mf-status-checkbox, .mf-checkbox"),
+      document.querySelectorAll<HTMLInputElement>(".mf-checkbox"),
     );
 
     const sizeCheckboxes = Array.from(
@@ -402,10 +363,5 @@ const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
     applyCollapsedState();
   }
 
-  document.addEventListener("astro:page-load", initMapFilters);
-  if (document.readyState !== "loading") {
-    initMapFilters();
-  } else {
-    document.addEventListener("DOMContentLoaded", initMapFilters);
-  }
+  onReady(initMapFilters);
 </script>

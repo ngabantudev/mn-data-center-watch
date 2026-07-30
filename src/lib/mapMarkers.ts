@@ -47,37 +47,134 @@ function section(title: string, body: string): string {
   `;
 }
 
+/**
+ * The developer's own figures — the facility record — listed once for both
+ * surfaces that show it.
+ *
+ * The hover preview and the detail panel render the same optional fields in the
+ * same order, and used to do it as eight separate `project.x ? … : ''` blocks
+ * across two functions: a new metric meant two coordinated edits, and the two
+ * lists had every opportunity to disagree about what a facility record contains.
+ *
+ * `kind` is the single styling axis, and it settles the presentation on both
+ * surfaces — an identifier gets a full-width label/value line, a figure gets a
+ * half-width stat cell, and prose gets a stacked block free to wrap. Labels stay
+ * per-variant because the popup is narrower and abbreviates.
+ */
+type MetricKind = 'id' | 'figure' | 'prose';
+
+interface MetricField {
+  get: (project: Project) => string | undefined;
+  kind: MetricKind;
+  previewLabel: string;
+  detailLabel: string;
+}
+
+const METRIC_FIELDS: MetricField[] = [
+  {
+    get: (p) => p.developer,
+    kind: 'id',
+    previewLabel: 'Developer:',
+    detailLabel: 'Developer:',
+  },
+  {
+    get: (p) => p.estimatedCost,
+    kind: 'figure',
+    previewLabel: 'Est. Cost',
+    detailLabel: 'Est. Cost:',
+  },
+  {
+    get: (p) => p.powerCapacityMW,
+    kind: 'figure',
+    previewLabel: 'Power Draw',
+    detailLabel: 'Power Grid Draw:',
+  },
+  {
+    get: (p) => p.waterFootprint,
+    kind: 'prose',
+    previewLabel: 'Water Use',
+    detailLabel: 'Water System Footprint:',
+  },
+];
+
+/**
+ * Renders whichever metrics this project actually has. Each surface supplies
+ * only markup — the "is this field set" bookkeeping lives here once.
+ */
+function buildMetricsHtml(
+  project: Project,
+  label: (field: MetricField) => string,
+  row: (kind: MetricKind, label: string, value: string) => string,
+): string {
+  return METRIC_FIELDS.map((field) => {
+    const value = field.get(project);
+    return value ? row(field.kind, label(field), value) : '';
+  }).join('');
+}
+
+/** Preview rows: a two-column grid on white, so fixed neutral inks (see the
+ *  popup note in global.css) rather than theme tokens. */
+function buildPreviewMetricsHtml(project: Project): string {
+  return buildMetricsHtml(
+    project,
+    (f) => f.previewLabel,
+    (kind, label, value) => {
+      if (kind === 'id') {
+        return `
+          <div class="col-span-2 flex justify-between items-center gap-2">
+            <span class="text-neutral-400 font-medium shrink-0">${label}</span>
+            <span class="font-bold text-neutral-800 text-right truncate">${value}</span>
+          </div>
+        `;
+      }
+      if (kind === 'prose') {
+        return `
+          <div class="col-span-2">
+            <span class="block text-neutral-400 font-medium">${label}</span>
+            <span class="font-semibold text-neutral-700 leading-tight">${value}</span>
+          </div>
+        `;
+      }
+      return `
+        <div>
+          <span class="block text-neutral-400 font-medium">${label}</span>
+          <span class="font-bold text-neutral-800">${value}</span>
+        </div>
+      `;
+    },
+  );
+}
+
+/** Shared by every detail metric row, so the four can't drift apart on spacing. */
+const DETAIL_ROW =
+  'text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0';
+
+/** Detail rows: full-width label/value lines in the themed panel. */
+function buildDetailMetricsHtml(project: Project): string {
+  return buildMetricsHtml(
+    project,
+    (f) => f.detailLabel,
+    (kind, label, value) =>
+      kind === 'prose'
+        ? `
+          <div class="flex flex-col ${DETAIL_ROW}">
+            <span class="text-ink-4 font-medium">${label}</span>
+            <span class="font-semibold text-ink-2 mt-0.5 leading-tight">${value}</span>
+          </div>
+        `
+        : `
+          <div class="flex justify-between items-center ${DETAIL_ROW}">
+            <span class="text-ink-4 font-medium">${label}</span>
+            <span class="font-bold text-ink">${value}</span>
+          </div>
+        `,
+  );
+}
+
 /** Builds the compact hover-preview popup: status, name, description, and a highlight grid of key stats. */
 export function buildPreviewHtml(project: Project): string {
   const color = STATUS_HEX[project.status];
   const statusText = STATUS_POPUP_LABEL[project.status];
-
-  const statsHtml = `
-    ${project.developer ? `
-      <div class="col-span-2 flex justify-between items-center gap-2">
-        <span class="text-neutral-400 font-medium shrink-0">Developer:</span>
-        <span class="font-bold text-neutral-800 text-right truncate">${project.developer}</span>
-      </div>
-    ` : ''}
-    ${project.estimatedCost ? `
-      <div>
-        <span class="block text-neutral-400 font-medium">Est. Cost</span>
-        <span class="font-bold text-neutral-800">${project.estimatedCost}</span>
-      </div>
-    ` : ''}
-    ${project.powerCapacityMW ? `
-      <div>
-        <span class="block text-neutral-400 font-medium">Power Draw</span>
-        <span class="font-bold text-neutral-800">${project.powerCapacityMW}</span>
-      </div>
-    ` : ''}
-    ${project.waterFootprint ? `
-      <div class="col-span-2">
-        <span class="block text-neutral-400 font-medium">Water Use</span>
-        <span class="font-semibold text-neutral-700 leading-tight">${project.waterFootprint}</span>
-      </div>
-    ` : ''}
-  `;
 
   // The single most legible line from the ratepayer calculator, previewed at
   // its default utilization. The interactive version lives in the detail
@@ -102,7 +199,7 @@ export function buildPreviewHtml(project: Project): string {
       ${buildLegalBadgeHtml(project, 'preview')}
       ${householdsHtml}
       <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] bg-neutral-50 border border-neutral-100 rounded-md p-1.5 mb-1.5">
-        ${statsHtml}
+        ${buildPreviewMetricsHtml(project)}
       </div>
       <p class="text-[9px] font-semibold text-blue-600 uppercase tracking-wide">Click for full details &rarr;</p>
     </div>
@@ -113,33 +210,6 @@ export function buildPreviewHtml(project: Project): string {
 export function buildDetailHtml(project: Project): string {
   const color = STATUS_HEX[project.status];
   const statusText = STATUS_POPUP_LABEL[project.status];
-
-  const metricsHtml = `
-    ${project.developer ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
-        <span class="text-ink-4 font-medium">Developer:</span>
-        <span class="font-bold text-ink">${project.developer}</span>
-      </div>
-    ` : ''}
-    ${project.estimatedCost ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
-        <span class="text-ink-4 font-medium">Est. Cost:</span>
-        <span class="font-bold text-ink">${project.estimatedCost}</span>
-      </div>
-    ` : ''}
-    ${project.powerCapacityMW ? `
-      <div class="flex justify-between items-center text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
-        <span class="text-ink-4 font-medium">Power Grid Draw:</span>
-        <span class="font-bold text-ink">${project.powerCapacityMW}</span>
-      </div>
-    ` : ''}
-    ${project.waterFootprint ? `
-      <div class="flex flex-col text-[11px] border-b border-hair pb-1 mb-1 last:border-b-0 last:pb-0 last:mb-0">
-        <span class="text-ink-4 font-medium">Water System Footprint:</span>
-        <span class="font-semibold text-ink-2 mt-0.5 leading-tight">${project.waterFootprint}</span>
-      </div>
-    ` : ''}
-  `;
 
   const asymmetryHtml = project.economicAsymmetry ? section(
     'Jobs vs. Capital',
@@ -196,7 +266,7 @@ export function buildDetailHtml(project: Project): string {
       `)}
 
       <!-- 4. The developer's own numbers. -->
-      ${section('Facility Record', metricsHtml)}
+      ${section('Facility Record', buildDetailMetricsHtml(project))}
 
       ${asymmetryHtml}
 

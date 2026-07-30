@@ -187,6 +187,26 @@
 }
 
 /*
+  Scrolling panes that shouldn't show a scrollbar chrome — the filters sidebar,
+  the news list, the mobile news carousel, the "largest centers" list.
+
+  Global, not per-component, and that's a fix rather than a preference: this
+  lived in a scoped <style> block in two components, so it applied only to the
+  elements those two files rendered themselves. FilterProject.astro's list
+  carried the class with no rule behind it, and so did every news item the client
+  island injects via innerHTML — both showed a scrollbar the design says they
+  shouldn't. One definition covers all four.
+*/
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/*
   Shared alignment for the bottom-right map control stack: MapLibre's own
   NavigationControl (zoom buttons) plus our MapThemeSelector.astro button,
   stacked directly above it. Both read from these variables so they can
@@ -194,7 +214,7 @@
 
   --map-controls-bottom is the single source of truth for how far the
   whole stack sits off the bottom edge. It defaults to the same 10px inset
-  MapLibre uses natively. On mobile, MapFilters.astro raises it dynamically
+  MapLibre uses natively. On mobile, MapFilterParent.astro raises it dynamically
   (via inline style on :root) to whatever clears its own current rendered
   height, since that panel's height changes as it expands/collapses. On
   desktop it's left at the default, since the filters sidebar lives on the
@@ -379,25 +399,5 @@ html, body {
   .campaign-popup .maplibregl-popup-content {
     max-height: none !important;
     overflow-y: visible !important;
-  }
-}
-
-/* --- Universal Interactive Pin Scaling --- */
-.maplibregl-marker {
-  cursor: pointer;
-  
-  /* 1. Scale down all pins globally by default */
-  & > * {
-    transform: scale(0.75);
-    transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
-    /* Crucial: keeps the pin tip anchored exactly over its coordinates when it scales */
-    transform-origin: bottom center; 
-  }
-
-  /* 2. Isolated scaling (120%) only on the active, hovered, or tapped pin element */
-  &:hover > *,
-  &:focus-within > *,
-  &:active > * {
-    transform: scale(1.2);
   }
 }

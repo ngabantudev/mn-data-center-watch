@@ -1,6 +1,6 @@
 ---
 // src/components/map/MapThemeSelector.astro
-import { MAP_STYLE_OPTIONS, DEFAULT_MAP_STYLE_ID } from "~/data/mapStyles";
+import { MAP_STYLE_OPTIONS } from "~/data/mapStyles";
 import { Sun, Moon } from "lucide-astro";
 
 // Site chrome theme first, basemap second. They're two different things but
@@ -17,16 +17,15 @@ const SITE_THEMES = [
   Collapsed: a single icon button, stacked directly above MapLibre's
   NavigationControl. Both share the --map-ctrl-edge / --map-controls-bottom
   CSS variables defined in global.css, so they always line up and move
-  together — MapFilters.astro raises --map-controls-bottom on mobile to
+  together — MapFilterParent.astro raises --map-controls-bottom on mobile to
   clear its own panel, which shifts this whole stack up in sync.
   Expanded: a small popover panel listing each style, opening upward so it
   doesn't run off the bottom of the viewport; picking one dispatches a
-  `mapstylechange` CustomEvent on `document` with `{ url, id }` for Map.astro
+  `mapstylechange` CustomEvent on `document` with `{ url, id }` for MapParent.astro
   to consume.
 -->
 <div
   id="map-theme-selector"
-  data-default-style={DEFAULT_MAP_STYLE_ID}
   class="absolute right-(--map-ctrl-edge) bottom-[calc(var(--map-controls-bottom)+var(--map-ctrl-attrib-height)+var(--map-ctrl-gap)+var(--map-ctrl-group-height)+var(--map-ctrl-gap))] z-20 pointer-events-auto font-sans transition-[bottom] duration-250 ease-out"
 >
   <button
@@ -139,6 +138,7 @@ const SITE_THEMES = [
     getMapStyleUrlById,
     storeMapStyleId,
   } from "~/data/mapStyles";
+  import { onReady } from "~/lib/domReady";
   import {
     getActiveTheme,
     isSiteTheme,
@@ -162,11 +162,11 @@ const SITE_THEMES = [
     );
 
     let open = false;
-    let currentStyleId =
-      getInitialMapStyleId() ||
-      root.dataset.defaultStyle ||
-      options[0]?.dataset.styleId ||
-      "";
+    // Always a valid id from MAP_STYLE_OPTIONS — an explicit past choice, or the
+    // basemap paired with the stored site theme. There used to be a chain of
+    // fallbacks behind this (a data-attribute default, then the first option,
+    // then an empty string); none of them was reachable.
+    let currentStyleId = getInitialMapStyleId();
 
     function applyStyle(styleId: string): void {
       currentStyleId = styleId;
@@ -249,10 +249,5 @@ const SITE_THEMES = [
     syncChecks();
   }
 
-  document.addEventListener("astro:page-load", initThemeSelector);
-  if (document.readyState !== "loading") {
-    initThemeSelector();
-  } else {
-    document.addEventListener("DOMContentLoaded", initThemeSelector);
-  }
+  onReady(initThemeSelector);
 </script>

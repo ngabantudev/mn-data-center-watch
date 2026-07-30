@@ -111,14 +111,6 @@ export const STAGE_META_BY_STAGE = indexBy(
   (m) => m,
 );
 
-export const STAGE_HEX = indexBy(BILL_STAGE_META, (m) => m.stage, (m) => m.hex);
-
-export const STAGE_LABEL = indexBy(
-  BILL_STAGE_META,
-  (m) => m.stage,
-  (m) => m.label,
-);
-
 /** Stages in display order — drives the grouped sections in the banner. */
 export const STAGES_IN_ORDER: BillStage[] = [...BILL_STAGE_META]
   .sort((a, b) => a.order - b.order)

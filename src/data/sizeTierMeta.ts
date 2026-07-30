@@ -18,10 +18,9 @@ export type SizeTier = 'small' | 'medium' | 'large';
 
 export interface SizeTierMeta {
   tier: SizeTier;
-  /** Inclusive lower bound in MW */
+  /** Inclusive lower bound in MW. The only threshold `getSizeTier` reads — the
+   *  upper bound of each bucket is the next one's `minMW`, stated once. */
   minMW: number;
-  /** Exclusive upper bound in MW, or null for the open-ended top bucket */
-  maxMW: number | null;
   label: string;
   /** Capacity range, rendered next to the label */
   rangeLabel: string;
@@ -42,7 +41,6 @@ export const SIZE_TIER_META: SizeTierMeta[] = [
   {
     tier: 'small',
     minMW: 0,
-    maxMW: 100,
     label: 'Small',
     rangeLabel: '< 100 MW',
     description: 'Fits municipal grid — local zoning fight',
@@ -54,7 +52,6 @@ export const SIZE_TIER_META: SizeTierMeta[] = [
   {
     tier: 'medium',
     minMW: 100,
-    maxMW: 300,
     label: 'Medium',
     rangeLabel: '100–299 MW',
     description: 'Needs substation upgrades — county + utility',
@@ -66,7 +63,6 @@ export const SIZE_TIER_META: SizeTierMeta[] = [
   {
     tier: 'large',
     minMW: 300,
-    maxMW: null,
     label: 'Large',
     rangeLabel: '300+ MW',
     description: 'Hyperscale — state PUC & transmission proceedings',

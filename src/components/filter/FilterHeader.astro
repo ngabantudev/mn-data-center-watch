@@ -1,6 +1,13 @@
 ---
-import { ChevronDown, SlidersHorizontal } from "lucide-astro";
+// src/components/filter/FilterHeader.astro
+//
+// The masthead plus the four headline totals, over the whole dataset rather
+// than the current filter — this is the scale of the buildout, not a readout of
+// what's on screen (that's the "Showing N of M" line in MapFilterParent).
+import { ChevronDown } from "lucide-astro";
 import { clientProjects } from "~/data/dataCenters";
+import { countBy } from "~/lib/collections";
+import { parseMW } from "~/lib/projectMetrics";
 
 interface Props {
   totalCount: number;
@@ -8,58 +15,52 @@ interface Props {
 
 const { totalCount } = Astro.props;
 
-// --- CONFIGURATION VALUES (Tweak theme colors and styling here) ---
-// These are theme tokens (defined in global.css), not fixed colors, so the
-// same class list resolves correctly in both the light civic theme and the
-// dark one. Swap a token for another token here, not for a raw hex.
-const THEME = {
-  accentTextClass: "text-accent",
-  primaryTextClass: "text-ink",
-  labelTargetClass: "text-ink-3",
-  // Surface + hairline + inner shadow together; defined in global.css
-  // because the three have to move as a unit. See .stat-well there.
-  boxBgClass: "stat-well",
-  gridSpacingClass: "grid-cols-2 gap-3 px-4 pb-4",
-  boxPaddingClass: "p-3",
-  largeTextSizeClass: "text-xl md:text-2xl"
-};
+// Rejected and withdrawn projects are excluded from the money/power/jobs
+// totals: they describe what Minnesota is actually being asked to absorb, and a
+// cancelled site absorbs nothing. The Active/Total tile below still counts them,
+// because there the denominator is the whole record.
+const validProjects = clientProjects.filter((p) => p.status !== "rejected");
 
-// --- CALCULATIONS ---
-const validProjects = clientProjects.filter(p => p.status !== 'rejected');
+// `parseMW`, not a second regex. This file used to carry its own — one that
+// averaged a range ("~10-15 MW" -> 12.5) where every other consumer on the map
+// takes the first figure (-> 10). One capacity string in the dataset is a range,
+// so the header was quietly reporting a total no other surface agreed with.
+const totalMW = validProjects.reduce((sum, p) => sum + parseMW(p.powerCapacityMW), 0);
 
-const totalMW = validProjects.reduce((acc, p) => {
-  if (!p.powerCapacityMW) return acc;
-  const match = p.powerCapacityMW.match(/(\d+[\d\s-]*)\s*MW/i);
-  if (!match) return acc;
-  const numbers = match[1].replace(/[^\d-]/g, '').split('-');
-  const val = numbers.length === 2 ? (parseFloat(numbers[0]) + parseFloat(numbers[1])) / 2 : parseFloat(numbers[0]);
-  return acc + (isNaN(val) ? 0 : val);
+const totalCapExBillion = validProjects.reduce((sum, p) => {
+  const cost = p.estimatedCost?.toLowerCase();
+  if (!cost) return sum;
+  const val = parseFloat(cost.replace(/[^\d.]/g, ""));
+  if (isNaN(val)) return sum;
+  if (cost.includes("billion")) return sum + val;
+  if (cost.includes("million")) return sum + val / 1000;
+  return sum;
 }, 0);
 
-const totalCapExBillion = validProjects.reduce((acc, p) => {
-  if (!p.estimatedCost) return acc;
-  const numStr = p.estimatedCost.replace(/[^\d.]/g, '');
-  const val = parseFloat(numStr);
-  if (isNaN(val)) return acc;
-  
-  if (p.estimatedCost.toLowerCase().includes('billion')) {
-    return acc + val;
-  } else if (p.estimatedCost.toLowerCase().includes('million')) {
-    return acc + (val / 1000);
-  }
-  return acc;
-}, 0);
+const activeCount = countBy(clientProjects, (p) => p.status).active ?? 0;
 
-const statusCounts = clientProjects.reduce((acc, p) => {
-  acc[p.status] = (acc[p.status] || 0) + 1;
-  return acc;
-}, {} as Record<string, number>);
+const totalPermanentJobs = validProjects.reduce(
+  (sum, p) => sum + (p.economicAsymmetry?.permanentOperationalJobsEstimate ?? 0),
+  0,
+);
 
-const activeCount = statusCounts['active'] || 0;
-
-const totalPermanentJobs = validProjects.reduce((acc, p) => {
-  return acc + (p.economicAsymmetry?.permanentOperationalJobsEstimate || 0);
-}, 0);
+// The four tiles, so the classes shared by all of them are written once rather
+// than four times. `.stat-well` is surface + hairline + inner shadow together,
+// defined in global.css because the three have to move as a unit; the light
+// theme reads it as recessed and the dark theme as raised.
+const STATS: Array<{
+  label: string;
+  value: string;
+  /** De-emphasised trailing text, for a value that is a ratio. */
+  muted?: string;
+  /** The lead figure of the four gets the accent ink. */
+  accent?: boolean;
+}> = [
+  { label: "Total Power", value: `${(totalMW / 1000).toFixed(2)} GW`, accent: true },
+  { label: "Total Cost", value: `$${totalCapExBillion.toFixed(1)}B` },
+  { label: "Active Centers", value: String(activeCount), muted: `/ ${totalCount}` },
+  { label: "Permanent Tech Jobs", value: `~${totalPermanentJobs}` },
+];
 ---
 
 <div class="w-full hidden md:flex flex-col border-b border-hair bg-panel-2">
@@ -90,25 +91,24 @@ const totalPermanentJobs = validProjects.reduce((acc, p) => {
     />
   </button>
 
-    <div class={`grid ${THEME.gridSpacingClass} bg-transparent`}>
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Total Power</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.accentTextClass}`}>{(totalMW / 1000).toFixed(2)} GW</span>
-    </div>
-
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Total Cost</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.primaryTextClass}`}>${totalCapExBillion.toFixed(1)}B</span>
-    </div>
-
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Active Centers</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.primaryTextClass}`}>{activeCount} <span class="text-ink-4">/ {totalCount}</span></span>
-    </div>
-
-    <div class={`${THEME.boxPaddingClass} rounded-lg ${THEME.boxBgClass} flex flex-col justify-center gap-1 min-w-0`}>
-      <span class={`text-[10px] font-medium ${THEME.labelTargetClass} uppercase tracking-wider leading-tight`}>Permanent Tech Jobs</span>
-      <span class={`${THEME.largeTextSizeClass} font-bold tracking-tight tabular-nums ${THEME.primaryTextClass}`}>~{totalPermanentJobs}</span>
-    </div>
+  <div class="grid grid-cols-2 gap-3 px-4 pb-4">
+    {
+      STATS.map((stat) => (
+        <div class="p-3 rounded-lg stat-well flex flex-col justify-center gap-1 min-w-0">
+          <span class="text-[10px] font-medium text-ink-3 uppercase tracking-wider leading-tight">
+            {stat.label}
+          </span>
+          <span
+            class:list={[
+              "text-xl md:text-2xl font-bold tracking-tight tabular-nums",
+              stat.accent ? "text-accent" : "text-ink",
+            ]}
+          >
+            {stat.value}
+            {stat.muted && <span class="text-ink-4"> {stat.muted}</span>}
+          </span>
+        </div>
+      ))
+    }
   </div>
 </div>

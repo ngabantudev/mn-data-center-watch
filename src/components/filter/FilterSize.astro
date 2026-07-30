@@ -13,14 +13,13 @@ import type { SizeTier } from "~/data/sizeTierMeta";
 import { SIZE_TIER_META } from "~/data/sizeTierMeta";
 
 interface Props {
-  countsByTier: Record<SizeTier, number>;
-  openByDefault?: boolean;
+  countsByTier: Partial<Record<SizeTier, number>>;
 }
 
 const { countsByTier } = Astro.props;
 ---
 
-<AccordionSection id="size" title="Capacity Scale">
+<AccordionSection title="Capacity Scale">
   <div
     class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-t border-b border-hair bg-panel-3"
   >
@@ -49,7 +48,7 @@ const { countsByTier } = Astro.props;
   <div class="flex flex-col gap-0.5 p-1.5 pb-3">
     {
       SIZE_TIER_META.map((meta) => (
-        <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-hover">
+        <label class="group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-hover">
           <input
             type="checkbox"
             class="mf-size-checkbox w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 shrink-0 cursor-pointer"

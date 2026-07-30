@@ -12,7 +12,7 @@ import type { Project, ProjectStatus } from '~/data/dataCenters';
 import { STATUS_META } from '~/data/mapStatusMeta';
 import { HOLD_STATUSES, getLegalStatus } from '~/data/legalStatusMeta';
 import { ALL_SIZE_TIERS, getSizeTier, type SizeTier } from '~/data/sizeTierMeta';
-import { parseMW } from './projectMetrics';
+import { projectMW } from './projectMetrics';
 
 export interface FilterCriteria {
   /** Project statuses left checked in the sidebar */
@@ -44,9 +44,7 @@ export interface ProjectFeatureProps {
 /** Derives the filterable properties for a project — used to build map features. */
 export function toFeatureProps(project: Project): ProjectFeatureProps {
   const legalStatus = getLegalStatus(project);
-  // `|| 5` keeps un-parseable capacity strings visible at the smallest
-  // marker size rather than collapsing them to a zero-radius dot.
-  const parsedMW = parseMW(project.powerCapacityMW) || 5;
+  const parsedMW = projectMW(project);
   return {
     status: project.status,
     parsedMW,

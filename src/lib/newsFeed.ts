@@ -21,6 +21,18 @@ export type NewsResult =
   | { ok: false; reason: string };
 
 /**
+ * The flattened shape the UI consumes, and the JSON body of /api/news.
+ *
+ * Declared here rather than in the route so the route, the server-rendered
+ * first paint, and the client island that parses the response all agree by
+ * construction — all three previously re-declared the same two fields inline.
+ */
+export interface NewsPayload {
+  newsItems: NewsItem[];
+  errorMessage: string | null;
+}
+
+/**
  * Wall-clock budget for the Google News RSS call.
  *
  * Was 2000ms, which failed roughly one request in three from a Worker —
@@ -207,7 +219,7 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
  */
 export async function fetchLocalNews(
   windowDays: number = 7,
-): Promise<{ newsItems: NewsItem[]; errorMessage: string | null }> {
+): Promise<NewsPayload> {
   const result = await fetchNews(windowDays);
   return result.ok
     ? { newsItems: result.newsItems, errorMessage: null }

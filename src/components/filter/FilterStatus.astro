@@ -1,20 +1,41 @@
 ---
+// src/components/filter/FilterStatus.astro
+//
+// Project-status checkboxes and legend. Presentational only — MapFilterParent
+// owns the single dispatcher that assembles FilterCriteria.
+//
+// Reads STATUS_META and owns its icon map directly, the way FilterSize and
+// FilterLegal read theirs. Both used to arrive as props from MapFilterParent,
+// which meant the parent imported a registry it never otherwise touched purely
+// to hand it straight back down, and the icons for a status axis lived in a file
+// that has nothing to do with statuses.
 import AccordionSection from "~/components/ui/AccordionSection.astro";
 import type { ProjectStatus } from "~/data/dataCenters";
-import type { StatusMeta } from "~/data/mapStatusMeta";
-import type { Zap } from "lucide-astro";
+import { STATUS_META } from "~/data/mapStatusMeta";
+import {
+  Zap,
+  HardHat,
+  ClipboardList,
+  CirclePause,
+  CircleX,
+} from "lucide-astro";
 
 interface Props {
-  STATUS_META: StatusMeta[];
-  countsByStatus: Record<ProjectStatus, number>;
-  STATUS_ICONS: Record<ProjectStatus, typeof Zap>;
-  openByDefault?: boolean;
+  countsByStatus: Partial<Record<ProjectStatus, number>>;
 }
 
-const { STATUS_META, countsByStatus, STATUS_ICONS } = Astro.props;
+const { countsByStatus } = Astro.props;
+
+const STATUS_ICONS: Record<ProjectStatus, typeof Zap> = {
+  active: Zap,
+  construction: HardHat,
+  planned: ClipboardList,
+  paused: CirclePause,
+  rejected: CircleX,
+};
 ---
 
-<AccordionSection id="filters" title="Project Status">
+<AccordionSection title="Project Status">
   <div
     class="flex items-center justify-between gap-2 px-3.5 md:px-4 py-2 border-t border-b border-hair bg-panel-3"
   >
@@ -45,16 +66,15 @@ const { STATUS_META, countsByStatus, STATUS_ICONS } = Astro.props;
   >
     {
       STATUS_META.map((meta) => {
-        const Icon = STATUS_ICONS[meta.status as ProjectStatus];
-        const count = countsByStatus[meta.status as ProjectStatus];
+        const Icon = STATUS_ICONS[meta.status];
+        const count = countsByStatus[meta.status] ?? 0;
         return (
-          <label class="mf-row group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-hover">
+          <label class="group flex items-center gap-2.5 md:gap-3 cursor-pointer rounded-lg px-2 py-2 transition-colors hover:bg-hover">
             <input
               type="checkbox"
               class="mf-checkbox w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 shrink-0 cursor-pointer"
               style={`accent-color: ${meta.hex}`}
               value={meta.status}
-              data-count={count}
               checked
             />
             <div class="relative w-6 h-6 md:w-7 md:h-7 shrink-0 flex items-center justify-center">

@@ -26,8 +26,6 @@ export const THEME_BASEMAP: Record<SiteTheme, string> = {
   dark: 'dark',
 };
 
-export const DEFAULT_MAP_STYLE_ID = 'dark';
-
 /**
  * Set only when the user picks a basemap by hand. Its absence is meaningful:
  * it's what lets the theme pairing above apply, and once it's set the pairing
@@ -59,7 +57,7 @@ export function getMapStyleUrlById(id: string): string {
 
 /** Default basemap id for a theme, for callers that haven't got a stored choice. */
 export function getMapStyleIdForTheme(theme: SiteTheme): string {
-  return THEME_BASEMAP[theme] ?? DEFAULT_MAP_STYLE_ID;
+  return THEME_BASEMAP[theme];
 }
 
 /**
