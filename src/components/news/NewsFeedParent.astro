@@ -28,9 +28,13 @@ const RANGE_OPTIONS = [
   data-initial-days={initialDays}
   class="fixed md:absolute top-16 left-4 right-4 max-w-sm mx-auto md:mx-0 md:inset-x-auto md:top-0 md:bottom-0 md:right-0 md:left-auto z-50 md:z-30 pointer-events-auto font-sans bg-panel/90 md:bg-panel backdrop-blur-xl md:backdrop-blur-md border border-hair md:border-l md:border-t-0 md:border-r-0 md:border-b-0 rounded-2xl md:rounded-none shadow-2xl shadow-(color:--shadow-panel) md:w-96 flex flex-col overflow-hidden md:overflow-visible transition-transform duration-300 ease-out translate-x-0"
 >
-  <!-- Desktop Header -->
+  <!--
+    Desktop Header. Same navy band as the filter sidebar's masthead (see
+    global.css), so the two rails are headed identically and the article list
+    below reads as the portal's off-white body.
+  -->
   <div
-    class="hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-hair shrink-0"
+    class="band bg-panel hidden md:flex items-center gap-2.5 px-4 py-3.5 border-b border-hair shrink-0"
   >
     <div
       class="flex items-center justify-center w-7 h-7 rounded-lg bg-hover shrink-0"
@@ -46,12 +50,16 @@ const RANGE_OPTIONS = [
     </div>
   </div>
 
-  <!-- Date Range Selector -->
+  <!--
+    Date Range Selector. `.band-sub` is the portal's dark footer grey: a third
+    surface between the navy header and the off-white list, which is what keeps
+    the range pills reading as chrome rather than as the first article.
+  -->
   <div
     id="nf-range-group"
     role="group"
     aria-label="News date range"
-    class="flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
+    class="band-sub bg-panel flex items-center gap-1.5 px-4 py-2.5 border-b border-hair shrink-0"
   >
     {
       RANGE_OPTIONS.map((opt) => (
@@ -83,7 +91,7 @@ const RANGE_OPTIONS = [
     >
       {
         errorMessage ? (
-          <div class="p-4 text-red-300 text-xs w-full text-center">
+          <div class="p-4 text-red-700 dark:text-red-300 text-xs w-full text-center">
             {errorMessage}
           </div>
         ) : newsItems.length === 0 ? (
@@ -128,7 +136,7 @@ const RANGE_OPTIONS = [
   >
     {
       errorMessage ? (
-        <div class="p-3 bg-red-500/10 text-red-300 rounded-lg text-xs border border-red-400/40">
+        <div class="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs border border-red-500/30 dark:border-red-400/40">
           <strong>Error:</strong> {errorMessage}
         </div>
       ) : newsItems.length === 0 ? (
@@ -138,7 +146,7 @@ const RANGE_OPTIONS = [
       ) : (
         newsItems.map((item) => (
           <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
-            <span class="text-[9px] font-bold text-accent/80 tracking-wider uppercase block mb-1">
+            <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-1">
               {item.source}
             </span>
             <h3 class="text-xs font-medium text-ink-2 hover:text-accent-hover leading-snug">
@@ -288,7 +296,7 @@ const RANGE_OPTIONS = [
   function desktopItemHTML(item: NewsItem): string {
     return `
       <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
-        <span class="text-[9px] font-bold text-accent/80 tracking-wider uppercase block mb-1">${escapeHtml(item.source)}</span>
+        <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-1">${escapeHtml(item.source)}</span>
         <h3 class="text-xs font-medium text-ink-2 hover:text-accent-hover leading-snug">
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
         </h3>
@@ -323,8 +331,8 @@ const RANGE_OPTIONS = [
     // itself), which is the only thing that varies.
     const state = errorMessage
       ? {
-          desktop: `<div class="p-3 bg-red-500/10 text-red-300 rounded-lg text-xs border border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`,
-          mobile: `<div class="p-4 text-red-300 text-xs w-full text-center">${escapeHtml(errorMessage)}</div>`,
+          desktop: `<div class="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs border border-red-500/30 dark:border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`,
+          mobile: `<div class="p-4 text-red-700 dark:text-red-300 text-xs w-full text-center">${escapeHtml(errorMessage)}</div>`,
         }
       : newsItems.length === 0
         ? {

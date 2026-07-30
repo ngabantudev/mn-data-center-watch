@@ -17,10 +17,10 @@ const { title } = Astro.props;
 
 <div class="mf-accordion-section border-b border-hair">
   <!--
-    `group` + the group-hover ink lifts aren't decoration: hover raises this
-    row to --hover, a lighter blue in the light theme, where the muted ink
-    tokens would otherwise fall below 4.5:1. Lifting them a step on hover
-    keeps the contrast and reads as normal hover emphasis.
+    `group` + the group-hover ink lifts read as normal hover emphasis, and also
+    keep the contrast: hover shifts the row to --hover, a step away from the
+    panel in both themes, which the muted ink tokens have to follow to stay
+    clear of 4.5:1.
   -->
   <button
     type="button"

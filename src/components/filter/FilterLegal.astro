@@ -29,14 +29,16 @@ const holdMeta = LEGAL_STATUS_META.filter((m) => m.isHold);
       <input
         id="mf-legal-hold-only"
         type="checkbox"
-        class="w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 accent-amber-400 shrink-0 cursor-pointer"
+        class="w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 accent-yellow-700 dark:accent-amber-400 shrink-0 cursor-pointer"
       />
-      <!-- Amber is the legal-hold signal colour shared with the map's hold
-           ring, so it stays fixed rather than becoming a theme token. Both
-           themes put it on a dark panel; light runs a step brighter because
-           its panel is the navy. -->
+      <!-- The legal-hold signal colour shared with the map's hold ring, so it
+           stays fixed rather than becoming a theme token. The two themes put it
+           on opposite surfaces: amber-400 on the dark panel, and on the light
+           theme's off-white a mid-tone gold — yellow-700, the same register
+           legalStatusMeta.ts settled on (#a16207) for the same reason on the
+           light basemap. A bright amber measures 1.4:1 on this strip. -->
       <span
-        class="text-amber-400 group-hover:text-amber-300 dark:text-amber-500 dark:group-hover:text-amber-400 transition-colors"
+        class="text-yellow-700 group-hover:text-yellow-800 dark:text-amber-500 dark:group-hover:text-amber-400 transition-colors"
       >
         <Scale size={16} stroke-width={2} />
       </span>

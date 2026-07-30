@@ -105,9 +105,9 @@ const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
   </head>
 
   <!--
-    text-ink-canvas, not text-ink: the body sits on --canvas (the map
-    backdrop), and in the light theme --ink is white for use on the navy
-    sidebars. See the palette notes in global.css.
+    text-ink-canvas, not text-ink: the body sits on --canvas (the map backdrop),
+    which is a different surface from the panels --ink is measured against. See
+    the palette notes in global.css.
   -->
   <body class="bg-canvas text-ink-canvas antialiased h-full flex flex-col">
     <main id="main-content" class="grow">

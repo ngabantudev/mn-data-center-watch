@@ -5,9 +5,9 @@
 // `mapmarkerselect` dispatch). Listens for a `mapmarkerselect` CustomEvent on
 // `document` with `{ project } | null` — `null` closes the panel.
 //
-// Styling mirrors MapFilterParent.astro: dark neutral-900 panel, white/10
-// hairline borders, emerald-400 accent chip in the header. Desktop: a
-// right-edge sidebar (MapFilterParent.astro is the left-edge counterpart).
+// Styling mirrors MapFilterParent.astro: a `.band` header with an accent icon
+// chip over a --panel body, hairline borders throughout. Desktop: a right-edge
+// sidebar (MapFilterParent.astro is the left-edge counterpart).
 // Mobile: a bottom sheet that overlays MapFilterParent.astro while open —
 // tapping outside, hitting Escape, or clicking empty map all close it.
 import { Building2 } from 'lucide-astro';
@@ -28,8 +28,10 @@ import { Building2 } from 'lucide-astro';
          bg-panel backdrop-blur-md border border-hair md:border-r-0
          shadow-2xl shadow-(color:--shadow-panel) flex-col overflow-hidden transition-transform duration-300 ease-out"
 >
-  <!-- Header: brand-consistent icon chip + title, matching MapFilterParent.astro's #mf-header-row -->
-  <div class="flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-hair">
+  <!-- Header: brand-consistent icon chip + title, in the same navy band as the
+       news rail this panel slides in over (see global.css) — the two share the
+       right edge, so they have to be headed the same way. -->
+  <div class="band bg-panel flex items-center gap-2.5 px-3.5 py-3 md:px-4 md:py-3.5 shrink-0 min-w-0 border-b border-hair">
     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-hover shrink-0">
       <Building2 size={14} stroke-width={2} class="text-accent" />
     </div>
