@@ -1,4 +1,6 @@
 // src/lib/newsFeed.ts
+import { decodeEntities } from './htmlEntities';
+
 export interface NewsItem {
   title: string;
   url: string;
@@ -168,9 +170,17 @@ async function attemptNews(
       const sourceMatch = itemXml.match(/<source[^>]*>([\s\S]*?)<\/source>/);
       const descMatch = itemXml.match(/<description>([\s\S]*?)<\/description>/);
 
-      let fullTitle = titleMatch ? titleMatch[1] : "Local Update";
-      let source = sourceMatch ? sourceMatch[1] : "Local News";
-      const description = descMatch ? descMatch[1] : "";
+      // Decoded on the way in, once, for every field that is read rather than
+      // matched on. XML requires an ampersand in a text node to arrive escaped,
+      // so a real headline — "Q&A: Minnesota environmental group leader talks
+      // data center review process" — reaches us as `Q&amp;A: …`, and every
+      // surface that renders it (the prerendered rail, the client re-render,
+      // the phone ticker) sets it as *text*, which is exactly what shows the
+      // entity to the reader instead of the character. The link needs it too:
+      // `&amp;` between query parameters is not the URL Google published.
+      let fullTitle = decodeEntities(titleMatch ? titleMatch[1] : "Local Update");
+      let source = decodeEntities(sourceMatch ? sourceMatch[1] : "Local News");
+      const description = decodeEntities(descMatch ? descMatch[1] : "");
 
       if (fullTitle.includes(` - ${source}`)) {
         fullTitle = fullTitle.split(` - ${source}`)[0];
@@ -180,7 +190,7 @@ async function attemptNews(
 
       return {
         title: fullTitle,
-        url: linkMatch ? linkMatch[1] : "#",
+        url: linkMatch ? decodeEntities(linkMatch[1]) : "#",
         published: pubDateMatch ? pubDateMatch[1] : new Date().toString(),
         source,
         haystack,
