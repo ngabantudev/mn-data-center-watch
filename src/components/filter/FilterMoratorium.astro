@@ -1,0 +1,133 @@
+---
+// src/components/filter/FilterMoratorium.astro
+//
+// The Politics section's moratorium toggle, and the legend that makes its five
+// dots readable. Rendered inside FilterLayer's slot so it shares that
+// accordion; it is not in MAP_LAYER_META because it isn't a tile archive — see
+// ~/lib/moratoriumLayer.ts for why that distinction is kept rather than papered
+// over.
+//
+// The legend carries counts, and the counts are the argument. "No pause,
+// project advancing — 2" is the line a reader acts on, and it is derived here
+// from the same `getPosture` the map colours by, at build time, off the same
+// registry. There is no second definition of "exposed" anywhere.
+import { Gavel } from "lucide-astro";
+import { countBy } from "~/lib/collections";
+import {
+  JURISDICTIONS,
+  MORATORIUM_COVERAGE_NOTE,
+  MORATORIUM_ISSUE_URL,
+  POSTURE_META,
+  getPosture,
+} from "~/data/moratoriums";
+import { MORATORIUM_API_KEY } from "~/lib/moratoriumLayer";
+
+// One clock for this render. A posture that turns on a date — an ordinance
+// lapsing — is resolved once here rather than per row, so no two rows can
+// disagree about what day it is.
+const asOf = new Date();
+const counts = countBy(JURISDICTIONS, (j) => getPosture(j, asOf));
+const total = JURISDICTIONS.length;
+---
+
+<div
+  class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-b border-hair"
+>
+  <label
+    class="flex items-start gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover"
+  >
+    <input
+      type="checkbox"
+      id="mf-toggle-moratoriums"
+      data-api-key={MORATORIUM_API_KEY}
+      class="moratorium-layer-toggle mt-0.5 w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 accent-emerald-700 dark:accent-emerald-400 cursor-pointer"
+    />
+    <span class="mt-0.5 shrink-0 text-ink-2 group-hover:text-ink transition-colors">
+      <Gavel size={16} stroke-width={2} />
+    </span>
+    <span class="min-w-0 flex-1">
+      <span
+        class="block text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors"
+      >
+        Data Center Moratoriums
+      </span>
+      <span class="block text-[10px] leading-snug text-ink-4 mt-0.5">
+        Which councils have paused permits, and until when.
+      </span>
+    </span>
+  </label>
+
+  <!-- Hidden until the layer is on: five colours nobody has asked to see yet
+       is just noise in a closed accordion. -->
+  <div class="hidden mt-1 pl-2" id="mf-moratorium-legend">
+    <ul class="flex flex-col gap-1.5">
+      {
+        POSTURE_META.map((meta) => (
+          <li class="flex items-start gap-2">
+            <span
+              class="mt-1 shrink-0 w-2 h-2 rounded-full ring-1 ring-white/70"
+              style={`background-color: ${meta.hex}`}
+              aria-hidden="true"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="flex items-baseline justify-between gap-2">
+                <span class="text-[10px] font-semibold text-ink-2">
+                  {meta.label}
+                </span>
+                <span class="text-[10px] font-bold text-ink-3 tabular-nums">
+                  {counts[meta.posture] ?? 0}
+                </span>
+              </span>
+              <span class="block text-[9px] leading-snug text-ink-4">
+                {meta.description}
+              </span>
+            </span>
+          </li>
+        ))
+      }
+    </ul>
+
+    <p class="mt-2 text-[9px] leading-snug text-ink-4">
+      {total} towns sourced. {MORATORIUM_COVERAGE_NOTE}{" "}
+      <a
+        href={MORATORIUM_ISSUE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="font-semibold text-accent hover:text-accent-hover hover:underline"
+      >
+        Report one &rarr;
+      </a>
+    </p>
+  </div>
+</div>
+
+<script>
+  import { onReady } from "~/lib/domReady";
+
+  // Its own listener rather than a sixth `.environmental-layer-toggle`: that
+  // class also carries the unavailable-archive handling in FilterLayer.astro,
+  // which is meaningless for a layer compiled into the bundle. Both dispatch
+  // the same `mapfilterchange` patch, so MapParent sees no difference.
+  function setupMoratoriumToggle() {
+    const toggle = document.getElementById(
+      "mf-toggle-moratoriums",
+    ) as HTMLInputElement | null;
+    const legend = document.getElementById("mf-moratorium-legend");
+    if (!toggle) return;
+
+    toggle.addEventListener("change", () => {
+      const apiKey = toggle.dataset.apiKey;
+      if (!apiKey) return;
+
+      legend?.classList.toggle("hidden", !toggle.checked);
+
+      document.dispatchEvent(
+        new CustomEvent("mapfilterchange", {
+          detail: { [apiKey]: toggle.checked },
+        }),
+      );
+    });
+  }
+
+  onReady(setupMoratoriumToggle);
+</script>

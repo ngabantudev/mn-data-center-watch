@@ -1,8 +1,10 @@
 // src/lib/overlayLayers.ts
 //
-// Everything about getting the Climate & Regional Impacts overlays onto the
-// map: reading each PMTiles archive, adding its fill, switching it on and off,
-// and naming the region under the cursor. It lived inside MapParent.astro's
+// Everything about getting the sidebar's tile overlays — the Climate &
+// Regional Impacts datasets and the Politics section's city boundaries — onto
+// the map: reading each PMTiles archive, adding its fill and any per-polygon
+// border, switching it on and off, and naming the region under the cursor.
+// It lived inside MapParent.astro's
 // script, interleaved with the marker layers, and had three problems that were
 // hard to see from there and are the reason this file exists.
 //
@@ -47,6 +49,7 @@ import {
   LAYER_UNAVAILABLE_EVENT,
   MAP_LAYER_META,
   layerIdFor,
+  outlineLayerIdFor,
   sourceIdFor,
   tileUrlFor,
   type LayerUnavailableDetail,
@@ -55,6 +58,8 @@ import {
 } from '~/data/mapLayers';
 
 const LAYER_BY_ID = new Map(MAP_LAYER_META.map((l) => [l.id, l]));
+// Keyed by fill id alone, which is what `visibleLayerIds()` hands the hit test
+// — a border layer is drawn but never queried.
 const LAYER_BY_MAP_LAYER_ID = new Map(
   MAP_LAYER_META.map((l) => [layerIdFor(l.id), l]),
 );
@@ -305,6 +310,8 @@ export function createOverlayLayers(
       });
     }
 
+    const before = insertBefore(index);
+
     map.addLayer(
       {
         id: layerIdFor(layer.id),
@@ -315,10 +322,45 @@ export function createOverlayLayers(
         paint: {
           'fill-color': layer.hex,
           'fill-opacity': layer.fillOpacity,
-          'fill-outline-color': layer.outlineHex,
+          // A layer drawing real borders gets them from the line layer below;
+          // stacking a tile-resolution hairline under a 0.8px stroke of the
+          // same colour buys nothing and darkens it unevenly by zoom.
+          ...(layer.outline ? {} : { 'fill-outline-color': layer.outlineHex }),
         },
       },
-      insertBefore(index),
+      before,
+    );
+
+    if (!layer.outline) return;
+
+    // Added against the same reference layer, so it lands directly above the
+    // fill it belongs to and still below the markers.
+    map.addLayer(
+      {
+        id: outlineLayerIdFor(layer.id),
+        type: 'line',
+        source: sourceId,
+        'source-layer': archive.sourceLayer,
+        layout: { visibility: 'visible', 'line-join': 'round' },
+        paint: {
+          'line-color': layer.outlineHex,
+          'line-opacity': layer.outline.opacity,
+          // Statewide, ~850 city outlines at a fixed width collapse into a
+          // smear; zoomed to one council's jurisdiction, the same width is
+          // too faint to trace. Doubling across z6–z12 keeps a border legible
+          // at both ends without ever becoming the loudest thing on the map.
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            6,
+            layer.outline.width,
+            12,
+            layer.outline.width * 2,
+          ],
+        },
+      },
+      before,
     );
   };
 
@@ -336,15 +378,24 @@ export function createOverlayLayers(
       const layerId = layerIdFor(layer.id);
       const onMap = Boolean(map.getLayer(layerId));
 
+      // A layer with borders owns two map layers, and both follow the one
+      // checkbox — a visible outline over a hidden fill would draw a city grid
+      // nobody asked for.
+      const setVisibility = (visibility: 'visible' | 'none') => {
+        for (const id of [layerId, outlineLayerIdFor(layer.id)]) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
+        }
+      };
+
       if (!wanted.has(layer.id)) {
-        if (onMap) map.setLayoutProperty(layerId, 'visibility', 'none');
+        if (onMap) setVisibility('none');
         continue;
       }
 
       const archive = archiveInfo.get(layer.id);
       if (!archive) continue;
 
-      if (onMap) map.setLayoutProperty(layerId, 'visibility', 'visible');
+      if (onMap) setVisibility('visible');
       else addFill(layer, archive, index);
     }
   };

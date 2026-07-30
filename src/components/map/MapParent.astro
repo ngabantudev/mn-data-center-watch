@@ -52,6 +52,11 @@ const news = await fetchLocalNews();
   import { buildPreviewHtml } from "~/lib/mapMarkers";
   import { createOverlayLayers } from "~/lib/overlayLayers";
   import {
+    createMoratoriumLayer,
+    MORATORIUM_API_KEY,
+    MORATORIUM_LAYER_IDS,
+  } from "~/lib/moratoriumLayer";
+  import {
     DEFAULT_CRITERIA,
     matchesProject,
     toFeatureProps,
@@ -363,12 +368,21 @@ const news = await fetchLocalNews();
 
     let criteria: FilterCriteria = { ...DEFAULT_CRITERIA };
 
-    // Everything about the Climate & Regional Impacts overlays — reading each
-    // PMTiles archive, adding its fill, switching it on and off, naming the
+    // Everything about the PMTiles overlays — reading each archive, adding its
+    // fill and borders, switching it on and off, naming the
     // region under the cursor — lives in ~/lib/overlayLayers.ts. It used to be
     // ~120 lines here, interleaved with the marker layers; see that file for the
     // bug that hid in the interleaving.
-    const overlays = createOverlayLayers(map, { layersAbove: PROJECT_LAYER_IDS });
+    // Three tiers, bottom-first: the PMTiles fills, then the moratorium dots,
+    // then the project markers. Each controller is told what it must stay
+    // beneath, which is what keeps the stack the same however the visitor
+    // happens to click the toggles.
+    const moratoriums = createMoratoriumLayer(map, {
+      layersAbove: PROJECT_LAYER_IDS,
+    });
+    const overlays = createOverlayLayers(map, {
+      layersAbove: [...MORATORIUM_LAYER_IDS, ...PROJECT_LAYER_IDS],
+    });
 
     const applyMapFilters = () => {
       const base = toMapLibreFilter(criteria);
@@ -550,9 +564,11 @@ const news = await fetchLocalNews();
       }
 
       applyMapFilters();
-      // Overlays are inserted beneath the layers just added, so they go on
+      // Both of these insert beneath the layers just added, so they go on
       // after them — and again after every basemap swap, since `setStyle`
-      // throws all of this away.
+      // throws all of this away. Moratoriums first: the overlay fills are told
+      // to sit under its dots.
+      moratoriums.attachToStyle();
       overlays.attachToStyle();
     };
 
@@ -565,8 +581,9 @@ const news = await fetchLocalNews();
     const handleStyleChange = (event: Event) => {
       const detail = (event as CustomEvent<{ url: string }>).detail;
       if (detail?.url) {
-        // Nothing may touch overlay layers between here and `style.load`:
+        // Nothing may touch these layers between here and `style.load`:
         // they belong to the style being replaced.
+        moratoriums.detachFromStyle();
         overlays.detachFromStyle();
         map.setStyle(detail.url);
         map.once("style.load", () => {
@@ -598,6 +615,11 @@ const news = await fetchLocalNews();
       for (const layer of MAP_LAYER_META) {
         const value = detail[layer.apiKey];
         if (typeof value === "boolean") overlays.setVisible(layer.id, value);
+      }
+
+      const showMoratoriums = detail[MORATORIUM_API_KEY];
+      if (typeof showMoratoriums === "boolean") {
+        moratoriums.setVisible(showMoratoriums);
       }
 
       applyMapFilters();
@@ -730,27 +752,55 @@ const news = await fetchLocalNews();
     // *nothing* if any requested layer isn't in the style.
     let envPopup: maplibregl.Popup | null = null;
 
-    interface Hit {
-      /** A marker is under the pointer, and its own handlers own this event. */
-      onMarker: boolean;
-      /** Name of the topmost overlay region under the pointer, if any. */
-      label: string | null;
-    }
+    /**
+     * What the pointer is over, resolved once.
+     *
+     * `idle` and `none` are different answers and the hover handler treats
+     * them differently: `idle` means nothing this handler owns is switched on,
+     * so it must not touch the cursor at all — the marker layer's own
+     * mouseenter/mouseleave own it. `none` means we looked and the pointer is
+     * over bare map, which is when a stale label popup has to be cleared.
+     */
+    type Hit =
+      | { kind: "idle" }
+      | { kind: "none" }
+      | { kind: "marker" }
+      | { kind: "moratorium"; feature: maplibregl.MapGeoJSONFeature }
+      | { kind: "overlay"; label: string };
 
-    const NO_HIT: Hit = { onMarker: false, label: null };
+    const IDLE: Hit = { kind: "idle" };
+    const NO_HIT: Hit = { kind: "none" };
+
+    /** Point geometry of a moratorium feature — always a Point, by construction. */
+    const featureCoords = (
+      feature: maplibregl.MapGeoJSONFeature,
+    ): [number, number] =>
+      (feature.geometry as { coordinates: [number, number] }).coordinates;
 
     const hitTest = (point: maplibregl.Point): Hit => {
+      const moratoriumIds = moratoriums.visibleLayerIds();
       const overlayIds = overlays.visibleLayerIds();
-      const layers = map.getLayer(MARKER_LAYER_ID)
-        ? [MARKER_LAYER_ID, ...overlayIds]
-        : overlayIds;
-      if (layers.length === 0) return NO_HIT;
+      // Nothing switched on that this test can answer for. The marker layer
+      // alone doesn't count: its own handlers cover it, and querying for it
+      // here would only duplicate their work on every frame.
+      if (moratoriumIds.length === 0 && overlayIds.length === 0) return IDLE;
 
-      // Topmost-first, and the markers sit above every overlay fill.
+      const layers = [
+        ...(map.getLayer(MARKER_LAYER_ID) ? [MARKER_LAYER_ID] : []),
+        ...moratoriumIds,
+        ...overlayIds,
+      ];
+
+      // Topmost-first, which is also the order these are stacked: markers over
+      // moratorium dots over overlay fills.
       const [top] = map.queryRenderedFeatures(point, { layers });
       if (!top) return NO_HIT;
-      if (top.layer.id === MARKER_LAYER_ID) return { onMarker: true, label: null };
-      return { onMarker: false, label: overlays.regionLabel(top) };
+      if (top.layer.id === MARKER_LAYER_ID) return { kind: "marker" };
+      if (moratoriumIds.includes(top.layer.id)) {
+        return { kind: "moratorium", feature: top };
+      }
+      const label = overlays.regionLabel(top);
+      return label ? { kind: "overlay", label } : NO_HIT;
     };
 
     /**
@@ -781,14 +831,13 @@ const news = await fetchLocalNews();
       pendingMove = null;
       if (!event) return;
 
-      // No overlay switched on, so there is nothing here to name — leave the
-      // cursor and the marker layer's own hover handling entirely alone.
-      if (overlays.visibleLayerIds().length === 0) return;
+      // One hit test per frame, and it also answers "is there anything on that
+      // this handler owns" — see the `Hit` union for why `idle` and `none`
+      // aren't the same answer.
+      const hit = hitTest(event.point);
+      if (hit.kind === "idle" || hit.kind === "marker") return;
 
-      const { onMarker, label } = hitTest(event.point);
-      if (onMarker) return;
-
-      if (!label) {
+      if (hit.kind === "none") {
         envPopup?.remove();
         envPopup = null;
         map.getCanvas().style.cursor = "";
@@ -802,9 +851,20 @@ const news = await fetchLocalNews();
         closeButton: false,
         closeOnClick: false,
       });
+
+      if (hit.kind === "moratorium") {
+        // Anchored on the town, not the cursor: this card is read, so it must
+        // not drift with the pointer the way a one-word region label can.
+        const html = moratoriums.popupHtml(hit.feature, "hover");
+        if (html) {
+          envPopup.setLngLat(featureCoords(hit.feature)).setHTML(html).addTo(map);
+        }
+        return;
+      }
+
       envPopup
         .setLngLat(event.lngLat)
-        .setDOMContent(envLabelNode(label))
+        .setDOMContent(envLabelNode(hit.label))
         .addTo(map);
     };
 
@@ -824,17 +884,32 @@ const news = await fetchLocalNews();
     // listeners that between them ran the same hit-test three times — and, being
     // independent, each had to re-derive "did this land on a marker" for itself.
     map.on("click", (e) => {
-      const { onMarker, label } = hitTest(e.point);
-      if (onMarker) return; // the marker's own handler owns this tap
+      const hit = hitTest(e.point);
+      if (hit.kind === "marker") return; // the marker's own handler owns this tap
 
       document.dispatchEvent(
         new CustomEvent("mapmarkerselect", { detail: null }),
       );
 
-      if (label) {
+      if (hit.kind === "moratorium") {
+        // The hover card and the full record at the same spot would stack, and
+        // the hover one is the disposable half.
+        envPopup?.remove();
+        envPopup = null;
+
+        const html = moratoriums.popupHtml(hit.feature, "detail");
+        if (!html) return;
+        new maplibregl.Popup({ closeButton: true, maxWidth: "320px" })
+          .setLngLat(featureCoords(hit.feature))
+          .setHTML(html)
+          .addTo(map);
+        return;
+      }
+
+      if (hit.kind === "overlay") {
         new maplibregl.Popup({ closeButton: true })
           .setLngLat(e.lngLat)
-          .setDOMContent(envLabelNode(label))
+          .setDOMContent(envLabelNode(hit.label))
           .addTo(map);
       }
     });
