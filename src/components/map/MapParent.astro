@@ -168,6 +168,30 @@ const news = await fetchLocalNews();
   // its fills beneath the lowest of them so an overlay never paints over a
   // marker. Bottom-first.
   const MARKER_SOURCE_ID = "data-centers";
+  /**
+   * The ripple's own copy of the same features, and the reason it exists is a
+   * bug rather than a preference.
+   *
+   * The animation below re-sets `circle-radius` every frame, and that value is
+   * data-driven (it interpolates on `parsedMW`). MapLibre treats a data-driven
+   * paint value as a *relayout*: `StyleLayer.setPaintProperty` returns
+   * `requiresRelayout`, and `Style._updateLayer` then marks the layer's whole
+   * source `'reload'` and calls `pause()` on it. Sharing the marker source
+   * meant pausing and re-parsing every project tile several times a second for
+   * as long as the animation ran — which is to say always.
+   *
+   * On a warm, fast machine the first parse still lands and nothing looks
+   * wrong. On a cold load, or a throttled one, it does not: a tile has no
+   * `latestFeatureIndex` until its first parse completes, so
+   * `queryRenderedFeatures` answers *nothing* for the marker layer, and the map
+   * paints markers that cannot be hovered or clicked. Both handlers are
+   * driven by that query. It cleared itself as soon as one parse got through,
+   * which is why interacting with the map appeared to fix it.
+   *
+   * Nothing queries this source — it draws two stroke-only rings — so the churn
+   * is now confined to layers where it costs only the work, not correctness.
+   */
+  const RIPPLE_SOURCE_ID = "data-centers-ripple";
   const RIPPLE_LAYER_IDS = [
     "data-centers-legal-ripple-a",
     "data-centers-legal-ripple-b",
@@ -564,6 +588,15 @@ const news = await fetchLocalNews();
         });
       }
 
+      // Same features, second source — see RIPPLE_SOURCE_ID. No `generateId`:
+      // feature-state belongs to the marker layer, and nothing here is hovered.
+      if (!map.getSource(RIPPLE_SOURCE_ID)) {
+        map.addSource(RIPPLE_SOURCE_ID, {
+          type: "geojson",
+          data: geoJsonData,
+        });
+      }
+
       // Ripples sit at the very bottom so they wash out from under the
       // marker rather than over it.
       for (const rippleId of RIPPLE_LAYER_IDS) {
@@ -571,7 +604,7 @@ const news = await fetchLocalNews();
         map.addLayer({
           id: rippleId,
           type: "circle",
-          source: MARKER_SOURCE_ID,
+          source: RIPPLE_SOURCE_ID,
           paint: {
             "circle-color": "rgba(0,0,0,0)",
             "circle-radius": radiusExpr(1) as any,
@@ -859,6 +892,28 @@ const news = await fetchLocalNews();
     const IDLE: Hit = { kind: "idle" };
     const NO_HIT: Hit = { kind: "none" };
 
+    /**
+     * Is this point on a project marker?
+     *
+     * Asked by the map-wide click handler below, which has to yield to the
+     * marker layer's own handler at *every* overlay state — and this is the one
+     * question `hitTest` cannot answer for it. That test returns `idle` before
+     * it looks at anything, whenever no overlay is switched on, which is the
+     * state the map opens in and the state most visitors never leave.
+     *
+     * So a marker tap read as a tap on bare map, and MapLibre runs both
+     * listeners for one click, in the order they were registered: the marker's
+     * handler dispatched the selection, and this handler dispatched a deselect
+     * immediately after it. The detail panel opened and shut again, and the
+     * camera flew to the site and straight back out.
+     *
+     * One layer, and only on click, so this doesn't reintroduce the per-frame
+     * marker query the hover path was written to avoid.
+     */
+    const isMarkerAt = (point: maplibregl.Point): boolean =>
+      !!map.getLayer(MARKER_LAYER_ID) &&
+      map.queryRenderedFeatures(point, { layers: [MARKER_LAYER_ID] }).length > 0;
+
     const hitTest = (point: maplibregl.Point): Hit => {
       // A town can be reported by either of two layers — the shaded boundary,
       // which belongs to the overlay controller's source, or its name label.
@@ -1018,8 +1073,12 @@ const news = await fetchLocalNews();
     // listeners that between them ran the same hit-test three times — and, being
     // independent, each had to re-derive "did this land on a marker" for itself.
     map.on("click", (e) => {
+      // The marker's own handler owns this tap. Tested directly rather than
+      // through `hitTest`, which cannot see markers while every overlay is off
+      // — see `isMarkerAt`.
+      if (isMarkerAt(e.point)) return;
+
       const hit = hitTest(e.point);
-      if (hit.kind === "marker") return; // the marker's own handler owns this tap
 
       document.dispatchEvent(
         new CustomEvent("mapmarkerselect", { detail: null }),

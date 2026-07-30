@@ -112,7 +112,28 @@ import { Building2 } from 'lucide-astro';
       detailCleanups.pop()?.();
     }
 
+    // The pending half of `close()` — the panel is hidden a transition later,
+    // not on the same tick, and until it fires this holds the handle to cancel
+    // it with.
+    //
+    // Load-bearing, because a close and an open can overlap: selecting a
+    // second facility within 300ms of any deselect (tapping one marker
+    // straight after another, or after a click on empty map) used to leave the
+    // first close's timer to land on the panel the second selection had just
+    // opened. It put `hidden` back on a panel whose state said open, so the
+    // record appeared and then vanished a third of a second later, and nothing
+    // short of selecting again could bring it back.
+    let hideTimer: number | null = null;
+
+    const cancelHide = (): void => {
+      if (hideTimer === null) return;
+      window.clearTimeout(hideTimer);
+      hideTimer = null;
+    };
+    detailCleanups.push(cancelHide);
+
     function open(project: Project): void {
+      cancelHide();
       content!.innerHTML = buildDetailHtml(project);
       // The ratepayer widget's utilization slider is the only interactive
       // control in this markup. Rewiring it per open is deliberate: the
@@ -135,7 +156,9 @@ import { Building2 } from 'lucide-astro';
 
     function close(): void {
       panel!.classList.add('translate-y-full', 'md:translate-x-full');
-      window.setTimeout(() => {
+      cancelHide();
+      hideTimer = window.setTimeout(() => {
+        hideTimer = null;
         panel!.classList.add('hidden');
         panel!.classList.remove('flex');
       }, 300);

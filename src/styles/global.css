@@ -414,6 +414,31 @@
   --map-controls-bottom: var(--map-ctrl-edge);
 
   /*
+    The stack's horizontal inset, kept as its own variable rather than reading
+    --map-ctrl-edge directly.
+
+    The two insets started as one number and are no longer the same question:
+    the bottom one is a margin, while this one has to clear whatever rail is
+    docked to the right edge. Overriding --map-ctrl-edge to say so would move
+    the stack *up* by the same amount, because --map-controls-bottom above is
+    derived from it — which is the bug this split exists to prevent.
+  */
+  --map-ctrl-right: var(--map-ctrl-edge);
+
+  /*
+    Width of whichever rail is docked to the right edge — the news list, or the
+    facility detail panel that slides in over it. Both are `md:w-96`, so one
+    number covers the corner either way.
+
+    It is here because the control stack has to clear it. NewsFeedParent.astro
+    is the single writer of --map-ctrl-right on desktop (it is the island that
+    knows whether either surface is showing); this is the measurement it writes
+    in terms of. Declared rather than inlined so the value sits with the rest of
+    the stack geometry instead of as a bare `24rem` in a script.
+  */
+  --map-rail-w: 24rem;
+
+  /*
     Height of the phone layout's bottom toolbar. Declared here at 0px so every
     reader of it — `.mobile-sheet`, the facility panel's `bottom-`, the control
     stack — resolves to the desktop layout without a fallback of its own.
@@ -475,8 +500,12 @@ html, body {
 */
 .maplibregl-ctrl-bottom-right {
   bottom: var(--map-controls-bottom) !important;
-  right: var(--map-ctrl-edge) !important;
-  transition: bottom 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+  right: var(--map-ctrl-right) !important;
+  /* `right` as well as `bottom`: the edge moves when the right-hand rail opens
+     or closes, and the stack should travel with it rather than jump. */
+  transition:
+    bottom 0.25s cubic-bezier(0.25, 1, 0.5, 1),
+    right 0.3s ease-out;
 }
 
 .maplibregl-ctrl-bottom-right .maplibregl-ctrl {

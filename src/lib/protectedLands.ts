@@ -44,6 +44,7 @@ import {
   PROTECTED_LANDS_LAYER_ID,
   layerIdFor,
 } from '~/data/mapLayers';
+import { decodeEntities } from '~/lib/htmlEntities';
 import { escapeHtml, popupBlock } from '~/lib/popupHtml';
 import { nf } from '~/lib/ratepayerWidget';
 
@@ -107,27 +108,6 @@ export interface ProtectedLand {
  * upstream escape and passing the value through as markup.
  */
 const ATTRIBUTE_ROW = /<td>([^<>]*)<\/td>\s*<td>([^<>]*)<\/td>/g;
-
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-};
-
-function decodeEntities(value: string): string {
-  return value.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (whole, ref: string) => {
-    if (!ref.startsWith('#')) return NAMED_ENTITIES[ref.toLowerCase()] ?? whole;
-    const code = ref[1]?.toLowerCase() === 'x'
-      ? Number.parseInt(ref.slice(2), 16)
-      : Number.parseInt(ref.slice(1), 10);
-    return Number.isInteger(code) && code > 0 && code <= 0x10ffff
-      ? String.fromCodePoint(code)
-      : whole;
-  });
-}
 
 /**
  * The balloon's HTML. tippecanoe stringifies the KML conversion's nested
