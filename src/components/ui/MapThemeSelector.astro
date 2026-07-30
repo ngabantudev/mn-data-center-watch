@@ -63,6 +63,14 @@ const SITE_THEMES = [
     </svg>
   </button>
 
+  <!--
+    Ships `hidden`; `setOpen` swaps that for `flex`, the way CampaignBanner's
+    panel and the facility sheet both do. `flex-col gap-0.5` was here from the
+    start with no `flex` to act on it and nothing but `hidden` being toggled,
+    so the popover opened as a block: the gap was dropped and the two section
+    headings, being inline spans, lost the vertical padding meant to separate
+    Site Theme from Map Theme.
+  -->
   <div
     id="mts-panel"
     role="menu"
@@ -218,7 +226,10 @@ const SITE_THEMES = [
 
     function setOpen(next: boolean): void {
       open = next;
+      // Both, not just `hidden` — see the note on the element. `flex` is not in
+      // its class list, so nothing lays this popover out except this line.
       panel?.classList.toggle("hidden", !open);
+      panel?.classList.toggle("flex", open);
       toggle?.setAttribute("aria-expanded", String(open));
     }
 
