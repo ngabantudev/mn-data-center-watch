@@ -168,6 +168,30 @@ const news = await fetchLocalNews();
   // its fills beneath the lowest of them so an overlay never paints over a
   // marker. Bottom-first.
   const MARKER_SOURCE_ID = "data-centers";
+  /**
+   * The ripple's own copy of the same features, and the reason it exists is a
+   * bug rather than a preference.
+   *
+   * The animation below re-sets `circle-radius` every frame, and that value is
+   * data-driven (it interpolates on `parsedMW`). MapLibre treats a data-driven
+   * paint value as a *relayout*: `StyleLayer.setPaintProperty` returns
+   * `requiresRelayout`, and `Style._updateLayer` then marks the layer's whole
+   * source `'reload'` and calls `pause()` on it. Sharing the marker source
+   * meant pausing and re-parsing every project tile several times a second for
+   * as long as the animation ran — which is to say always.
+   *
+   * On a warm, fast machine the first parse still lands and nothing looks
+   * wrong. On a cold load, or a throttled one, it does not: a tile has no
+   * `latestFeatureIndex` until its first parse completes, so
+   * `queryRenderedFeatures` answers *nothing* for the marker layer, and the map
+   * paints markers that cannot be hovered or clicked. Both handlers are
+   * driven by that query. It cleared itself as soon as one parse got through,
+   * which is why interacting with the map appeared to fix it.
+   *
+   * Nothing queries this source — it draws two stroke-only rings — so the churn
+   * is now confined to layers where it costs only the work, not correctness.
+   */
+  const RIPPLE_SOURCE_ID = "data-centers-ripple";
   const RIPPLE_LAYER_IDS = [
     "data-centers-legal-ripple-a",
     "data-centers-legal-ripple-b",
@@ -564,6 +588,15 @@ const news = await fetchLocalNews();
         });
       }
 
+      // Same features, second source — see RIPPLE_SOURCE_ID. No `generateId`:
+      // feature-state belongs to the marker layer, and nothing here is hovered.
+      if (!map.getSource(RIPPLE_SOURCE_ID)) {
+        map.addSource(RIPPLE_SOURCE_ID, {
+          type: "geojson",
+          data: geoJsonData,
+        });
+      }
+
       // Ripples sit at the very bottom so they wash out from under the
       // marker rather than over it.
       for (const rippleId of RIPPLE_LAYER_IDS) {
@@ -571,7 +604,7 @@ const news = await fetchLocalNews();
         map.addLayer({
           id: rippleId,
           type: "circle",
-          source: MARKER_SOURCE_ID,
+          source: RIPPLE_SOURCE_ID,
           paint: {
             "circle-color": "rgba(0,0,0,0)",
             "circle-radius": radiusExpr(1) as any,
