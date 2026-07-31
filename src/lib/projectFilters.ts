@@ -23,7 +23,7 @@ export interface FilterCriteria {
   legalHoldOnly: boolean;
 }
 
-export const ALL_STATUSES: ProjectStatus[] = STATUS_META.map((m) => m.status);
+const ALL_STATUSES: ProjectStatus[] = STATUS_META.map((m) => m.status);
 
 export const DEFAULT_CRITERIA: FilterCriteria = {
   statuses: ALL_STATUSES,

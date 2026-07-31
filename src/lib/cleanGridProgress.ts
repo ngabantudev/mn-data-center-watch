@@ -41,7 +41,7 @@ export function yearsUntilDeadline(fromYear: number): number {
  * widget outlives the deadline it tracks, and on 2041-01-01 it should say the
  * mandate is due, not count down to a date behind it.
  */
-export function nextMilestone(fromYear: number): CarbonFreeMilestone | null {
+function nextMilestone(fromYear: number): CarbonFreeMilestone | null {
   return CARBON_FREE_MILESTONES.find((m) => m.year >= fromYear) ?? null;
 }
 

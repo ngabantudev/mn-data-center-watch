@@ -66,7 +66,7 @@ export const LEGAL_STATUS_META: LegalStatusMeta[] = [
   },
 ];
 
-export const DEFAULT_LEGAL_STATUS: LegalStatus = 'compliant';
+const DEFAULT_LEGAL_STATUS: LegalStatus = 'compliant';
 
 /** Normalizes the optional field so every consumer reads one shape. */
 export function getLegalStatus(project: Project): LegalStatus {
