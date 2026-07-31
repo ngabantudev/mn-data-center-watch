@@ -19,7 +19,7 @@ export interface NewsItem {
  * serve last week's articles on a day that really had none. Neither is true.
  */
 export type NewsResult =
-  | { ok: true; newsItems: NewsItem[]; truncated: boolean }
+  | { ok: true; newsItems: NewsItem[]; truncated: boolean; partial: boolean }
   | { ok: false; reason: string };
 
 /**
@@ -40,6 +40,17 @@ export interface NewsPayload {
    * cannot support.
    */
   truncated: boolean;
+  /**
+   * True when at least one of the searches behind this window failed while
+   * others succeeded.
+   *
+   * Distinct from `truncated`, and worth its own flag rather than being folded
+   * in: a long window is fetched as several date ranges, so one dropped
+   * connection silently removes a specific stretch of the period rather than
+   * thinning the list evenly. Without this, a year missing three of its five
+   * segments looks exactly like a year in which little happened.
+   */
+  partial: boolean;
 }
 
 /**
@@ -625,7 +636,7 @@ async function attemptNews(
       .sort(byPublishedDesc)
       .map(({ haystack, ...item }) => item);
 
-    return { ok: true, newsItems, truncated };
+    return { ok: true, newsItems, truncated, partial: false };
 
   } catch (error) {
     // The old message here claimed "unavailable in dev environment", which was
@@ -718,6 +729,7 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
     ok: true,
     newsItems: collapseDuplicates(merged.sort(byPublishedDesc)),
     truncated,
+    partial: succeeded.length < results.length,
   };
 }
 
@@ -738,6 +750,12 @@ export async function fetchLocalNews(
         newsItems: result.newsItems,
         errorMessage: null,
         truncated: result.truncated,
+        partial: result.partial,
       }
-    : { newsItems: [], errorMessage: result.reason, truncated: false };
+    : {
+        newsItems: [],
+        errorMessage: result.reason,
+        truncated: false,
+        partial: false,
+      };
 }

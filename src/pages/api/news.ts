@@ -33,6 +33,7 @@ export const prerender = false;
 interface CachedNews {
   items: NewsItem[];
   truncated: boolean;
+  partial: boolean;
 }
 
 const ALLOWED_WINDOWS = [1, 7, 30, 365]; // days — beyond 1y rarely changes
@@ -100,7 +101,11 @@ export const GET: APIRoute = async ({ url }) => {
     async () => {
       const fetched = await fetchNews(windowDays);
       if (fetched.ok) {
-        return { items: fetched.newsItems, truncated: fetched.truncated };
+        return {
+          items: fetched.newsItems,
+          truncated: fetched.truncated,
+          partial: fetched.partial,
+        };
       }
       // Only a real failure returns null. An empty-but-successful fetch is a
       // fact about a quiet week and gets cached as one — otherwise a quiet week
@@ -116,6 +121,7 @@ export const GET: APIRoute = async ({ url }) => {
         newsItems: result.value.items,
         errorMessage: null,
         truncated: result.value.truncated,
+        partial: result.value.partial,
       }
     : {
         newsItems: [],
@@ -123,6 +129,7 @@ export const GET: APIRoute = async ({ url }) => {
         // so say that rather than implying we just tried and Google refused.
         errorMessage: failure ?? "News feed temporarily unavailable.",
         truncated: false,
+        partial: false,
       };
 
   // Client max-age stays short so a reader with a tab open picks up new

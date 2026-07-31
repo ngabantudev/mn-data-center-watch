@@ -7,12 +7,27 @@ interface Props extends NewsPayload {
   initialDays?: number;
 }
 
-const { newsItems, errorMessage, truncated, initialDays = 7 } = Astro.props;
+const {
+  newsItems,
+  errorMessage,
+  truncated,
+  partial,
+  initialDays = 7,
+} = Astro.props;
 
 // Said once, here, so the server's first paint and the client's re-render
 // below can't drift into telling the reader two different things.
-const TRUNCATION_NOTICE =
+//
+// Two sentences rather than one, because the two gaps aren't the same gap and
+// a reader deciding whether they've seen everything deserves to know which:
+// the cap thins the whole range evenly, while a failed search removes a
+// specific stretch of it.
+const CAP_NOTICE =
   "Google returns at most 100 results per search, and this range hit that limit. These are a sample of the period, not every story in it.";
+const PARTIAL_NOTICE =
+  "Part of this range couldn't be loaded, so some dates may be missing entirely. Try again shortly.";
+
+const notice = truncated ? CAP_NOTICE : partial ? PARTIAL_NOTICE : "";
 
 const RANGE_OPTIONS = [
   { label: "24H", days: 1 },
@@ -141,9 +156,9 @@ const RANGE_OPTIONS = [
         </p>
       ) : (
         <Fragment>
-          {truncated && (
+          {notice && (
             <p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">
-              {TRUNCATION_NOTICE}
+              {notice}
             </p>
           )}
           {newsItems.map((item) => (
@@ -199,7 +214,7 @@ const RANGE_OPTIONS = [
   is:inline
   type="application/json"
   id="nf-initial-data"
-  set:html={JSON.stringify({ newsItems, errorMessage, truncated, notice: TRUNCATION_NOTICE }).replace(/</g, "\\u003c")}
+  set:html={JSON.stringify({ newsItems, errorMessage, truncated, partial, notices: { cap: CAP_NOTICE, partial: PARTIAL_NOTICE } }).replace(/</g, "\\u003c")}
 />
 
 <script>
@@ -269,17 +284,26 @@ const RANGE_OPTIONS = [
   }
 
   // Carried over from the server render rather than restated here, so the two
-  // copies of this sentence can't drift apart.
-  let truncationNotice = "";
+  // copies of these sentences can't drift apart.
+  let notices = { cap: "", partial: "" };
 
-  // Truncation is a property of the window being shown, not of the accumulated
+  // Coverage is a property of the window being shown, not of the accumulated
   // pool, so it's tracked per window: switching from 1Y back to 7D has to drop
   // the caveat along with the year's extra articles.
-  const truncatedWindows = new Set<number>();
+  const windowNotice = new Map<number, "cap" | "partial">();
 
-  function readInitialPayload(): NewsPayload & { notice?: string } {
+  type InitialPayload = NewsPayload & {
+    notices?: { cap: string; partial: string };
+  };
+
+  function readInitialPayload(): InitialPayload {
     const el = document.getElementById("nf-initial-data");
-    const empty = { newsItems: [], errorMessage: null, truncated: false };
+    const empty = {
+      newsItems: [],
+      errorMessage: null,
+      truncated: false,
+      partial: false,
+    };
     if (!el?.textContent) return empty;
     try {
       return JSON.parse(el.textContent);
@@ -341,10 +365,11 @@ const RANGE_OPTIONS = [
     } else if (newsItems.length === 0) {
       area.innerHTML = `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`;
     } else {
-      const notice =
-        truncatedWindows.has(currentDays) && truncationNotice
-          ? `<p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">${escapeHtml(truncationNotice)}</p>`
-          : "";
+      const kind = windowNotice.get(currentDays);
+      const text = kind ? notices[kind] : "";
+      const notice = text
+        ? `<p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">${escapeHtml(text)}</p>`
+        : "";
       area.innerHTML = notice + newsItems.map(itemHTML).join("");
     }
 
@@ -402,9 +427,12 @@ const RANGE_OPTIONS = [
         lastFetchError = null;
         // Recorded, not just read, because the pool this window renders from
         // accumulates across fetches: once 1Y has been shown to be cut off,
-        // coming back to it later must still say so.
-        if (data.truncated) truncatedWindows.add(days);
-        else truncatedWindows.delete(days);
+        // coming back to it later must still say so. The cap is stated ahead
+        // of a failed segment when both apply — it's the permanent limit,
+        // where the other clears on the next successful fetch.
+        if (data.truncated) windowNotice.set(days, "cap");
+        else if (data.partial) windowNotice.set(days, "partial");
+        else windowNotice.delete(days);
       }
       // Best-effort: if we still have relevant cached items (from a prior
       // successful fetch of a different window) show those rather than
@@ -442,14 +470,16 @@ const RANGE_OPTIONS = [
     // away and back.
     articleCache = new Map();
     lastFetchError = null;
-    truncatedWindows.clear();
+    windowNotice.clear();
     const initialPayload = readInitialPayload();
-    truncationNotice = initialPayload.notice ?? "";
+    notices = initialPayload.notices ?? { cap: "", partial: "" };
     if (initialPayload.errorMessage) {
       lastFetchError = initialPayload.errorMessage;
     } else {
       mergeItems(initialPayload.newsItems);
-      if (initialPayload.truncated) truncatedWindows.add(currentDays);
+      if (initialPayload.truncated) windowNotice.set(currentDays, "cap");
+      else if (initialPayload.partial)
+        windowNotice.set(currentDays, "partial");
     }
     renderTicker(
       initialPayload.errorMessage ? [] : initialPayload.newsItems,
