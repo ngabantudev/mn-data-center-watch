@@ -109,22 +109,21 @@ export function dataCenterLoadPressure(
   };
 }
 
+/**
+ * Everything on this readout is a function of the year asked about. That is
+ * the whole membership rule, and it is why `share` and `dataYear` are not here
+ * even though they were: both are `MN_CARBON_FREE_SHARE` copied through
+ * unchanged, no consumer ever read them from here, and a widget that can reach
+ * the same figure by two routes is a widget that can render it two ways.
+ * CleanGridTracker.astro imports the constant directly.
+ */
 export interface CleanGridProgress {
-  /** Published carbon-free share of in-state generation, 0–1. */
-  share: number;
-  /** The year that share describes. */
-  dataYear: number;
   /** Years from `asOfYear` to 2040. */
   yearsLeft: number;
   /** The next milestone still ahead, or `null` once 2040 has passed. */
   next: CarbonFreeMilestone | null;
   /** Points from the published share to the 100% mandate. */
   pointsToMandate: number;
-  /**
-   * Points from the published share to the next milestone's investor-owned
-   * target, or `null` when there is no milestone left to be short of.
-   */
-  pointsToNext: number | null;
 }
 
 /**
@@ -135,14 +134,9 @@ export interface CleanGridProgress {
  * imply the 55% is a live reading.
  */
 export function cleanGridProgress(asOfYear: number): CleanGridProgress {
-  const next = nextMilestone(asOfYear);
-
   return {
-    share: MN_CARBON_FREE_SHARE.share,
-    dataYear: MN_CARBON_FREE_SHARE.dataYear,
     yearsLeft: yearsUntilDeadline(asOfYear),
-    next,
+    next: nextMilestone(asOfYear),
     pointsToMandate: pointsBehind(MN_CARBON_FREE_SHARE.share, 1),
-    pointsToNext: next ? pointsBehind(MN_CARBON_FREE_SHARE.share, next.publicUtility) : null,
   };
 }
