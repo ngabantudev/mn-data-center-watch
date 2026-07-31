@@ -109,14 +109,23 @@ const total = JURISDICTIONS.length;
   // class also carries the unavailable-archive handling in FilterLayer.astro,
   // which is meaningless for a layer compiled into the bundle. Both dispatch
   // the same `mapfilterchange` patch, so MapParent sees no difference.
+  // Dropped and re-bound per run, for the reason FilterLayer.astro states: the
+  // checkbox outlives an Astro navigation, so a second `onReady` pass would
+  // leave it dispatching `mapfilterchange` twice per click.
+  let moratoriumCleanups: (() => void)[] = [];
+
   function setupMoratoriumToggle() {
+    while (moratoriumCleanups.length > 0) {
+      moratoriumCleanups.pop()?.();
+    }
+
     const toggle = document.getElementById(
       "mf-toggle-moratoriums",
     ) as HTMLInputElement | null;
     const legend = document.getElementById("mf-moratorium-legend");
     if (!toggle) return;
 
-    toggle.addEventListener("change", () => {
+    const onChange = () => {
       const apiKey = toggle.dataset.apiKey;
       if (!apiKey) return;
 
@@ -127,7 +136,11 @@ const total = JURISDICTIONS.length;
           detail: { [apiKey]: toggle.checked },
         }),
       );
-    });
+    };
+    toggle.addEventListener("change", onChange);
+    moratoriumCleanups.push(() =>
+      toggle.removeEventListener("change", onChange),
+    );
   }
 
   onReady(setupMoratoriumToggle);

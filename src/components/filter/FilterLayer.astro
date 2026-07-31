@@ -131,13 +131,23 @@ const SWATCHES: Record<
     type LayerUnavailableReason,
   } from "~/data/mapLayers";
 
+  // `onReady` re-runs this after every Astro navigation (see domReady.ts). The
+  // listeners below are on elements rather than on `document`, but the elements
+  // survive a navigation too — so a second run without this would leave each
+  // checkbox dispatching `mapfilterchange` twice per click.
+  let toggleCleanups: (() => void)[] = [];
+
   function setupLayerToggles() {
+    while (toggleCleanups.length > 0) {
+      toggleCleanups.pop()?.();
+    }
+
     const toggles = document.querySelectorAll<HTMLInputElement>(
       ".environmental-layer-toggle",
     );
 
     toggles.forEach((toggle) => {
-      toggle.addEventListener("change", () => {
+      const onChange = () => {
         const apiKey = toggle.dataset.apiKey;
         if (!apiKey) return;
 
@@ -147,7 +157,9 @@ const SWATCHES: Record<
             detail: { [apiKey]: toggle.checked },
           }),
         );
-      });
+      };
+      toggle.addEventListener("change", onChange);
+      toggleCleanups.push(() => toggle.removeEventListener("change", onChange));
     });
   }
 

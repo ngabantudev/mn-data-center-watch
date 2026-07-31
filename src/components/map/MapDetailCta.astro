@@ -133,15 +133,29 @@ const ACTIONS = [
 <script>
   import { onReady } from '~/lib/domReady';
 
+  // Stacking two more `stopPropagation` listeners on a second `onReady` pass
+  // would do no visible harm, which is exactly why it is worth dropping them
+  // anyway: the invariant domReady.ts asks for is that every island is
+  // idempotent, and an island that is only accidentally harmless is the one
+  // that stops being harmless when someone adds a second line to it.
+  let ctaCleanups: (() => void)[] = [];
+
   function initCampaignCta(): void {
     const block = document.getElementById('mcta-block');
     if (!block) return;
 
+    while (ctaCleanups.length > 0) {
+      ctaCleanups.pop()?.();
+    }
+
     // A click inside the popup must not reach the map — MapLibre would read it
     // as a click on empty basemap and deselect the marker, closing this popup
     // out from under the person using it.
-    block.addEventListener('click', (e) => e.stopPropagation());
-    block.addEventListener('mousedown', (e) => e.stopPropagation());
+    const swallow = (e: Event) => e.stopPropagation();
+    for (const type of ['click', 'mousedown'] as const) {
+      block.addEventListener(type, swallow);
+      ctaCleanups.push(() => block.removeEventListener(type, swallow));
+    }
   }
 
   onReady(initCampaignCta);
