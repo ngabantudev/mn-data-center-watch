@@ -1,0 +1,179 @@
+---
+// src/components/grid/CleanGridBar.astro
+//
+// The 2040 mandate as a headline, at the top of the map.
+//
+// WHY A SECOND SURFACE FOR SOMETHING THE RAIL ALREADY HAS
+//
+// CleanGridTracker.astro renders the whole readout — the meter, the milestone
+// list with both 2030 tracks, the risk card, the sources — as a section of the
+// filters rail. That is still where it lives. But every section of that rail
+// ships closed, so the mandate this whole map argues against was a 10px grey
+// accordion label reading "2040 CLEAN GRID TRACKER", styled to recede, sitting
+// among five filter sections that look exactly like it. It was present and
+// invisible.
+//
+// This bar is the headline for it: three facts, in the masthead's own voice,
+// visible without a click. It is not a duplicate readout — it deliberately
+// carries no meter, no milestones and no sources, because a reader who wants
+// those should land in the section that has room to qualify them properly.
+// Clicking the bar is what takes them there.
+//
+// WHAT IT IS ALLOWED TO SAY, which is the part to be careful about.
+//
+// The buildout figure is a CONDITIONAL and has to read as one at a glance.
+// Most of the capacity on this map is proposed rather than energised, so a flat
+// "data centers use 45% of Minnesota's power" would be false today — and it is
+// the single sentence an opponent would need to discredit everything else here.
+// CleanGridTracker states it as "If every non-rejected site on this map were
+// built and running at 80% utilisation…"; this bar has one line for the same
+// claim, so the "if all are built" clause leads it and is not abbreviated away.
+//
+// It is also a LOAD figure and nothing more. It says how much electricity the
+// buildout wants. It does not say that electricity is fossil-fired — whether
+// new load is served cleanly is precisely what is contested, and asserting the
+// answer in a bar over the map would concede the argument the map exists to
+// have.
+//
+// DESKTOP ONLY, like the campaign pill it stacks with. On a phone the top of
+// the screen is map, the toolbar owns the bottom, and a third permanent surface
+// is what the single-sheet refactor removed. The tracker is still one tap away
+// in the Filters sheet.
+import { ChevronRight } from "lucide-astro";
+import { MN_CARBON_FREE_SHARE } from "~/data/mnCleanGridStandard";
+import {
+  cleanGridProgress,
+  dataCenterLoadPressure,
+} from "~/lib/cleanGridProgress";
+
+// Build-time year, corrected on the client by ~/lib/cleanGridClient.ts — see the
+// `data-cg="years-phrase"` slot below. Rendered server-side anyway so the bar
+// is not blank on first paint and is correct with no JS at all.
+const progress = cleanGridProgress(new Date().getFullYear());
+const pressure = dataCenterLoadPressure();
+
+const sharePct = Math.round(MN_CARBON_FREE_SHARE.share * 100);
+
+// Same precision rule the tracker's own readout uses: this figure runs from a
+// fraction of a percent to double digits across plausible datasets, so a fixed
+// precision is wrong at one end or the other.
+const drawPct = (() => {
+  const value = pressure.shareOfStateLoad * 100;
+  if (value >= 10) return `${value.toFixed(0)}%`;
+  if (value >= 1) return `${value.toFixed(1)}%`;
+  return `${value.toFixed(2)}%`;
+})();
+
+const yearsPhrase =
+  progress.yearsLeft > 0
+    ? `${progress.yearsLeft} ${progress.yearsLeft === 1 ? "yr" : "yrs"} to 2040`
+    : "2040 mandate due";
+---
+
+<!--
+  `band` for the same reason CampaignBanner opts into it: this sits over the map
+  in the flag's Night Sky Blue in the light theme, and near-black in the dark
+  one, so the two floating surfaces at the top of the screen read as one piece
+  of chrome. The eyebrow-over-figure rhythm is FilterHeader.astro's masthead —
+  accent eyebrow, `font-black` number — which is what makes this legible as the
+  same publication rather than as a notification.
+
+  `hidden md:block`: see the note on desktop-only above.
+-->
+<button
+  id="cg-bar"
+  type="button"
+  aria-label="Minnesota 2040 clean grid mandate — open the full tracker"
+  class="band group hidden md:block w-full text-left rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) px-3.5 py-2 pointer-events-auto font-sans hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+>
+  <span class="flex items-center gap-2">
+    <span
+      class="text-[9px] font-bold uppercase tracking-[0.2em] text-accent leading-none truncate"
+      >MN 2040 Clean Grid</span
+    >
+    <ChevronRight
+      size={13}
+      class="ml-auto shrink-0 text-ink-4 group-hover:text-ink-2 transition-colors"
+    />
+  </span>
+
+  <!--
+    The share and the countdown, on one baseline. `font-black` on the figure
+    matches the masthead's MINNESOTA; the qualifier beside it is what keeps the
+    number from being read as a score — it is generation mix, not compliance,
+    and the tracker's Sources block spells out why those differ.
+  -->
+  <span class="mt-1 flex items-baseline gap-1.5 flex-wrap">
+    <span class="text-xl font-black tabular-nums text-ink leading-none"
+      >{sharePct}%</span
+    >
+    <span class="text-[11px] font-semibold text-ink-2 leading-none"
+      >carbon-free</span
+    >
+    <!--
+      The separator travels with the countdown rather than standing on its own,
+      so a wrap can't strand it at the end of a line. Below ~1080px the clamp
+      takes this box down to 13rem and these two facts do land on separate
+      lines; grouped, that reads as a continuation ("· 14 yrs to 2040") instead
+      of as a line ending in a stray middot. `nowrap` for the same reason one
+      level down — "14 yrs to" / "2040" is not a break worth allowing.
+    -->
+    <span class="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+      <span class="text-[11px] text-ink-4 leading-none" aria-hidden="true">·</span>
+      <span
+        class="text-[11px] font-bold text-ink tabular-nums leading-none"
+        data-cg="years-phrase">{yearsPhrase}</span
+      >
+    </span>
+  </span>
+
+  <!--
+    The conditional, in full. "If all are built" leads the sentence rather than
+    trailing it, because a reader who takes only the first half of this line has
+    to come away with a hypothetical rather than a claim about today. See the
+    header note.
+  -->
+  <span class="mt-1 block text-[10px] leading-snug text-ink-3">
+    If all are built, the {pressure.totalGW.toFixed(2)} GW tracked here adds load
+    equal to {drawPct} of MN retail electricity sales.
+  </span>
+</button>
+
+<script>
+  import { onReady } from "~/lib/domReady";
+  import {
+    OPEN_CLEAN_GRID_EVENT,
+    syncCleanGridYear,
+  } from "~/lib/cleanGridClient";
+  
+
+  // Called here as well as from CleanGridTracker, rather than relying on that
+  // component having mounted: the correction is idempotent (it only writes text
+  // derived from the current year), and a bar whose countdown depends on
+  // another island being present is a bar that silently goes stale the day
+  // somebody unmounts the rail.
+  let barCleanups: (() => void)[] = [];
+
+  function initCleanGridBar(): void {
+    const bar = document.getElementById("cg-bar");
+    if (!bar) return;
+
+    while (barCleanups.length > 0) {
+      barCleanups.pop()?.();
+    }
+
+    syncCleanGridYear();
+
+    // The bar is a headline, so it has to lead somewhere. MapFilterParent owns
+    // the rail's exclusive accordion and its collapsed state, and it is the
+    // only thing that can honour this — reaching into its DOM from here would
+    // be the two-owners bug the layout notes keep warning about.
+    const onClick = () => {
+      document.dispatchEvent(new CustomEvent(OPEN_CLEAN_GRID_EVENT));
+    };
+    bar.addEventListener("click", onClick);
+    barCleanups.push(() => bar.removeEventListener("click", onClick));
+  }
+
+  onReady(initCleanGridBar);
+</script>

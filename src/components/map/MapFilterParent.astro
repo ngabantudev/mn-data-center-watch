@@ -171,6 +171,7 @@ const totalCount = clientProjects.length;
   import { countVisible, type FilterCriteria } from "~/lib/projectFilters";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
   import { isMobile, onSheetChange } from "~/lib/mobileSheet";
+  import { OPEN_CLEAN_GRID_EVENT } from "~/lib/cleanGridClient";
 
   const STORAGE_KEY = "mapFiltersCollapsed";
 
@@ -269,6 +270,42 @@ const totalCount = clientProjects.length;
     const accordionSections = document.querySelectorAll(
       ".mf-accordion-section",
     );
+
+    /** Close every section. The exclusive accordion's shared step, and what
+     *  `openSection` below opens *out of*. */
+    const closeAllSections = () => {
+      accordionSections.forEach((s) => {
+        const t = s.querySelector(
+          ".mf-accordion-trigger",
+        ) as HTMLButtonElement | null;
+        const c = s.querySelector(
+          ".mf-accordion-content",
+        ) as HTMLElement | null;
+        if (t && c) {
+          t.setAttribute("aria-expanded", "false");
+          c.classList.remove("grid-rows-[1fr]");
+          c.classList.add("grid-rows-[0fr]");
+          t.querySelector("svg")?.classList.add("-rotate-90");
+        }
+      });
+    };
+
+    const openSection = (section: Element) => {
+      const trigger = section.querySelector(
+        ".mf-accordion-trigger",
+      ) as HTMLButtonElement | null;
+      const content = section.querySelector(
+        ".mf-accordion-content",
+      ) as HTMLElement | null;
+      if (!trigger || !content) return;
+
+      closeAllSections();
+      trigger.setAttribute("aria-expanded", "true");
+      content.classList.remove("grid-rows-[0fr]");
+      content.classList.add("grid-rows-[1fr]");
+      trigger.querySelector("svg")?.classList.remove("-rotate-90");
+    };
+
     accordionSections.forEach((section) => {
       const trigger = section.querySelector(
         ".mf-accordion-trigger",
@@ -280,28 +317,12 @@ const totalCount = clientProjects.length;
       if (!trigger || !contentWrapper) return;
 
       const onTriggerClick = () => {
-        const isOpening = trigger.getAttribute("aria-expanded") === "false";
-
-        accordionSections.forEach((s) => {
-          const t = s.querySelector(
-            ".mf-accordion-trigger",
-          ) as HTMLButtonElement | null;
-          const c = s.querySelector(
-            ".mf-accordion-content",
-          ) as HTMLElement | null;
-          if (t && c) {
-            t.setAttribute("aria-expanded", "false");
-            c.classList.remove("grid-rows-[1fr]");
-            c.classList.add("grid-rows-[0fr]");
-            t.querySelector("svg")?.classList.add("-rotate-90");
-          }
-        });
-
-        if (isOpening) {
-          trigger.setAttribute("aria-expanded", "true");
-          contentWrapper.classList.remove("grid-rows-[0fr]");
-          contentWrapper.classList.add("grid-rows-[1fr]");
-          trigger.querySelector("svg")?.classList.remove("-rotate-90");
+        // Clicking the open section closes it, so this is a toggle rather than
+        // a select — hence the read before anything is closed.
+        if (trigger.getAttribute("aria-expanded") === "false") {
+          openSection(section);
+        } else {
+          closeAllSections();
         }
       };
 
@@ -310,6 +331,51 @@ const totalCount = clientProjects.length;
         trigger.removeEventListener("click", onTriggerClick),
       );
     });
+
+    /**
+     * The 2040 bar over the map asking for its own section — see
+     * OPEN_CLEAN_GRID_EVENT in ~/lib/cleanGridClient.ts. The bar carries the
+     * headline and this rail carries the readout, so the bar has to be able to
+     * lead somewhere; it can't do this itself, because the accordion is
+     * exclusive and this panel is collapsible as a whole, and both of those are
+     * owned here.
+     *
+     * Un-collapsing the rail first is why this isn't just a `.click()` on the
+     * trigger: on a desktop where the rail has been slid shut, opening a
+     * section inside a panel nobody can see is a no-op the reader experiences
+     * as a dead control.
+     *
+     * There is deliberately no phone branch. The bar is `hidden md:block`, so
+     * this event cannot be raised below 768px — and handling it there would
+     * mean naming a sheet, which MobileToolbar.astro alone is allowed to do.
+     * Dispatching SHEET_EVENT from here would show the panel while leaving that
+     * component's `activeSheet` at null, so its tab would read closed and the
+     * scrim would stay down: the two-owners bug this comment is citing, in the
+     * act of citing it.
+     */
+    const onOpenCleanGrid = () => {
+      const section = [...accordionSections].find((s) =>
+        s.querySelector(".mf-accordion-trigger")?.textContent?.includes("2040"),
+      );
+      if (!section || isMobile()) return;
+
+      if (collapsed) {
+        collapsed = false;
+        writeStoredFlag(STORAGE_KEY, false);
+        applyPanelState();
+      }
+
+      openSection(section);
+      // After the panel is showing and the section is open, so the scroller has
+      // a real height to work against.
+      requestAnimationFrame(() =>
+        section.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
+    };
+    document.addEventListener(OPEN_CLEAN_GRID_EVENT, onOpenCleanGrid);
+    filterCleanups.push(() =>
+      document.removeEventListener(OPEN_CLEAN_GRID_EVENT, onOpenCleanGrid),
+    );
 
     /** Desktop pull-tab. The phone's Filters tab lives on the toolbar. */
     const onToggleClick = () => {

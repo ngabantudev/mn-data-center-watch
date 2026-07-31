@@ -7,6 +7,7 @@ import MapDetailParent from "~/components/map/MapDetailParent.astro";
 import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
+import CleanGridBar from "~/components/grid/CleanGridBar.astro";
 import MobileToolbar from "~/components/mobile/MobileToolbar.astro";
 
 // One build-time snapshot for the news rail's first paint. Spread rather than
@@ -30,11 +31,45 @@ const news = await fetchLocalNews();
 
   <NewsFeedParent {...news} />
 
-  <!-- Statewide legislative demands. Page-level and independent of marker
-       selection, unlike MapDetailCta above — the two answer different
-       questions ("what are we fighting for" vs "what do I do about this
-       site"), so they stay separate surfaces. -->
-  <CampaignBanner />
+  <!--
+    THE TOP-CENTRE STACK, and why the two surfaces in it share one wrapper.
+
+    Both float over the map at the top, centred between the rails, and they
+    used to be positioned independently — which is a collision waiting to
+    happen, because the width available to them is not generous and neither box
+    has a fixed height. CampaignBanner's own note works through the arithmetic:
+    the rails take 18rem and 24rem, so `calc(100vw - 50rem)` is the widest a
+    centred box can be while clearing both, and below ~1010px the 13rem floor
+    means it already overlaps them because there is no width at which it
+    wouldn't.
+
+    Stacking them by document flow inside one positioned wrapper — rather than
+    giving the bar its own `top-` and hoping — means they cannot overlap each
+    other at any width or any wrap. The wrapper carries the position, the
+    centring and the clamp; each child carries only its own appearance.
+
+    `pointer-events-none` on the wrapper with `auto` on each child: the gap
+    between the two boxes is over live map, and it stays clickable.
+
+    On a phone the wrapper is `contents`, so it disappears from the layout
+    entirely and each child keeps the phone behaviour it already had — the bar
+    hides itself, and the campaign panel is a `.mobile-sheet` positioned
+    `fixed` by global.css, which an ancestor's `contents` cannot affect.
+  -->
+  <div
+    class="contents md:block md:absolute md:top-3 md:left-1/2 md:-translate-x-1/2 md:w-[clamp(13rem,calc(100vw-50rem),28rem)] z-55 pointer-events-none"
+  >
+    <!-- The 2040 mandate as a headline. The full readout stays in the filters
+         rail; this is what makes it visible without a click, and clicking it
+         opens that section. See CleanGridBar.astro. -->
+    <CleanGridBar />
+
+    <!-- Statewide legislative demands. Page-level and independent of marker
+         selection, unlike MapDetailCta above — the two answer different
+         questions ("what are we fighting for" vs "what do I do about this
+         site"), so they stay separate surfaces. -->
+    <CampaignBanner />
+  </div>
 
   <!--
     Phone chrome, and the controller for every panel above it. Rendered last so
