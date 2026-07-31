@@ -74,9 +74,43 @@ const yearsPhrase =
   `band` for the same reason CampaignBanner opts into it: this sits over the map
   in the flag's Night Sky Blue in the light theme, and near-black in the dark
   one, so the two floating surfaces at the top of the screen read as one piece
-  of chrome. The eyebrow-over-figure rhythm is FilterHeader.astro's masthead —
-  accent eyebrow, `font-black` number — which is what makes this legible as the
-  same publication rather than as a notification.
+  of chrome.
+
+  THE TYPOGRAPHY IS THE MASTHEAD'S, deliberately and at its scale. FilterHeader
+  sets "DATA CENTER WATCH" as `text-sm font-semibold tracking-[0.25em] uppercase`
+  over "MINNESOTA" at `text-4xl font-black tracking-tight uppercase`, and the
+  urgency in that pairing is the size jump between the two lines, not either one
+  on its own. A 9px eyebrow over a 20px figure — which is what this was — reads
+  as a status chip. Matched to the masthead it reads as a headline, which is
+  what a statutory deadline the whole map argues against should be.
+
+  THE GREEN IS mn.gov's OWN, #78be21, verified in the portal's core.css where it
+  appears fifteen times. It is used there exactly as it is used here — as type
+  on the navy, not as a fill:
+
+    button.search-toggle          { color: #78be21; background: 0 }
+    #jumbo-search-form button     { background: rgba(0,56,101,0.8); color: #78be21 }
+    .button-brand-secondary:hover { background: #86d425 }
+
+  so #86d425 is the portal's own hover for it and is what this uses too.
+
+  Written as literal arbitrary values rather than as a theme token, which is the
+  rule global.css states: a colour that encodes identity rather than chrome must
+  stay stable across themes, so it does not get a `--color-*` token that `.dark`
+  could re-point. Same treatment billStageMeta.ts gives its stage hexes, and for
+  the same reason — Tailwind only emits classes it can find as literal text.
+
+  MEASURED on both surfaces this band resolves to, since the light and dark
+  themes put it on different grounds:
+
+    #78be21 on #002d5d (light band, the flag's Night Sky Blue)  5.99:1
+    #78be21 on #09090b (dark band)                              8.71:1
+    #86d425 on #002d5d (hover)                                  7.47:1
+    #86d425 on #09090b (hover)                                 10.85:1
+
+  All clear of 4.5:1 for text at any size. For reference the portal's own navy
+  is #003865, where this green measures 5.24:1 — the flag blue we use is very
+  slightly kinder to it.
 
   `hidden md:block`: see the note on desktop-only above.
 -->
@@ -86,46 +120,49 @@ const yearsPhrase =
   aria-label="Minnesota 2040 clean grid mandate — open the full tracker"
   class="band group hidden md:block w-full text-left rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) px-3.5 py-2 pointer-events-auto font-sans hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
 >
-  <span class="flex items-center gap-2">
+  <!-- The eyebrow, at the masthead's own size and tracking. Not truncated: at
+       the 13rem clamp floor it wraps to two lines, which is legible, where
+       clipping "MN 2040 CLEAN GR…" is not. -->
+  <span class="flex items-start gap-2">
     <span
-      class="text-[9px] font-bold uppercase tracking-[0.2em] text-accent leading-none truncate"
+      class="text-xs xl:text-sm font-semibold uppercase tracking-[0.25em] leading-none text-[#78be21]"
       >MN 2040 Clean Grid</span
     >
     <ChevronRight
-      size={13}
-      class="ml-auto shrink-0 text-ink-4 group-hover:text-ink-2 transition-colors"
+      size={16}
+      class="ml-auto shrink-0 -mt-0.5 text-[#78be21] opacity-70 group-hover:opacity-100 transition-opacity"
     />
   </span>
 
   <!--
-    The share and the countdown, on one baseline. `font-black` on the figure
-    matches the masthead's MINNESOTA; the qualifier beside it is what keeps the
-    number from being read as a score — it is generation mix, not compliance,
-    and the tracker's Sources block spells out why those differ.
+    The headline, at MINNESOTA's weight and scale. The qualifier is set with it
+    rather than under it because it is not decoration: 55% is the share of
+    in-state *generation* that is carbon-free, which is not a compliance score —
+    the statute is enforced per utility against retail sales, and the tracker's
+    Sources block is where that distinction has room. A bare "55%" over the map
+    would be the misread this whole file is trying to avoid.
   -->
-  <span class="mt-1 flex items-baseline gap-1.5 flex-wrap">
-    <span class="text-xl font-black tabular-nums text-ink leading-none"
-      >{sharePct}%</span
-    >
-    <span class="text-[11px] font-semibold text-ink-2 leading-none"
-      >carbon-free</span
-    >
-    <!--
-      The separator travels with the countdown rather than standing on its own,
-      so a wrap can't strand it at the end of a line. Below ~1080px the clamp
-      takes this box down to 13rem and these two facts do land on separate
-      lines; grouped, that reads as a continuation ("· 14 yrs to 2040") instead
-      of as a line ending in a stray middot. `nowrap` for the same reason one
-      level down — "14 yrs to" / "2040" is not a break worth allowing.
-    -->
-    <span class="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-      <span class="text-[11px] text-ink-4 leading-none" aria-hidden="true">·</span>
-      <span
-        class="text-[11px] font-bold text-ink tabular-nums leading-none"
-        data-cg="years-phrase">{yearsPhrase}</span
-      >
-    </span>
+  <!--
+    `xl:` is where the width clamp stops biting. Below 1280px
+    `calc(100vw - 50rem)` resolves under the full 28rem, so this headline wraps
+    to two or three lines and the box grows against the map — 213px tall at
+    1024px with the type at one fixed size, which is a lot of map spent on four
+    facts. One step down through that band keeps it a headline without letting
+    it become a panel.
+  -->
+  <span class="mt-1.5 block text-2xl xl:text-3xl font-black uppercase tracking-tight leading-none text-[#78be21]">
+    <span class="tabular-nums">{sharePct}%</span> carbon-free
   </span>
+
+  <!--
+    The countdown as its own line, in the ink rather than the green, so the two
+    facts don't merge into one green block. `nowrap` because "14 yrs to" / "2040"
+    is not a break worth allowing at any width.
+  -->
+  <span
+    class="mt-2 block text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-none text-ink whitespace-nowrap"
+    data-cg="years-phrase">{yearsPhrase}</span
+  >
 
   <!--
     The conditional, in full. "If all are built" leads the sentence rather than
@@ -133,7 +170,7 @@ const yearsPhrase =
     to come away with a hypothetical rather than a claim about today. See the
     header note.
   -->
-  <span class="mt-1 block text-[10px] leading-snug text-ink-3">
+  <span class="mt-2 block text-[10px] leading-snug text-ink-3">
     If all are built, the {pressure.totalGW.toFixed(2)} GW tracked here adds load
     equal to {drawPct} of MN retail electricity sales.
   </span>
