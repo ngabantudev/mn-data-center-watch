@@ -310,62 +310,72 @@ export async function withCache<T>(
   })();
   inflight.set(key, task);
 
-  let fresh: T | null;
+  // Held for the whole refresh — the build AND the write that records it — and
+  // released in one `finally` at the end.
+  //
+  // The release used to sit immediately after `await task`, which is a
+  // microtask before `write()` populates module memory. A follower waiting on
+  // this same promise wakes in that gap, finds no envelope, and falls back to
+  // stamping the value with its own clock. `storedAt` is what the news panel's
+  // "showing saved headlines from 3 hours ago" is computed from, and its whole
+  // contract is that it names the moment of the fetch rather than the moment of
+  // some later read — so the two callers must not be able to disagree about it,
+  // however narrowly.
   try {
-    fresh = await task;
+    const fresh = await task;
+
+    if (fresh !== null) {
+      const storedAt = new Date(now).toISOString();
+      const freshSeconds =
+        typeof opts.freshSeconds === "function"
+          ? opts.freshSeconds(fresh)
+          : opts.freshSeconds;
+      await write(
+        key,
+        { value: fresh, storedAt, freshUntil: now + freshSeconds * 1000 },
+        opts.keepSeconds,
+      );
+      return { value: fresh, storedAt, stale: false };
+    }
+
+    // Refresh failed. Keep the stale copy exactly as it was — same `storedAt`,
+    // so the age we show the reader stays honest — and only push out the next
+    // attempt. `freshUntil` deliberately stays in the past: this is a cooldown,
+    // not a promotion of stale data back to fresh.
+    if (lastGood) {
+      // Also non-durable, for a second reason on top of the write quota: the
+      // value is unchanged, so a KV write here would re-send the identical
+      // payload purely to stamp a new cooldown — and in doing so would push the
+      // entry's expiry back by another `keepSeconds`. Repeated failures would
+      // then keep renewing the fallback indefinitely, so a copy could stay
+      // "kept for a week" for a month. Leaving KV alone means it expires a week
+      // after the fetch that produced it, which is what keepSeconds means.
+      await write(
+        key,
+        { ...lastGood, retryAfter: now + backoffMs },
+        opts.keepSeconds,
+        { durable: false },
+      );
+      return { value: lastGood.value, storedAt: lastGood.storedAt, stale: true };
+    }
+
+    // Nothing to fall back on, so record the failure itself. This is what every
+    // other isolate — and every other colo, once a KV binding exists — reads to
+    // learn that the upstream is down without asking it again.
+    //
+    // Held only for the backoff, not for `keepSeconds`: it is a cooldown, and a
+    // week-long one would keep answering "unavailable" long after the upstream
+    // came back. `freshUntil: now` keeps it permanently stale by construction,
+    // so the single path that could mistake it for servable data never sees it
+    // as fresh even if the TTL is ignored by a layer.
+    await write(
+      key,
+      { value: null, storedAt: new Date(now).toISOString(), freshUntil: now, retryAfter: now + backoffMs },
+      Math.max(Math.ceil(backoffMs / 1000), 1),
+      { durable: false },
+    );
+    return null;
   } finally {
     inflight.delete(key);
   }
-
-  if (fresh !== null) {
-    const storedAt = new Date(now).toISOString();
-    const freshSeconds =
-      typeof opts.freshSeconds === "function"
-        ? opts.freshSeconds(fresh)
-        : opts.freshSeconds;
-    await write(
-      key,
-      { value: fresh, storedAt, freshUntil: now + freshSeconds * 1000 },
-      opts.keepSeconds,
-    );
-    return { value: fresh, storedAt, stale: false };
-  }
-
-  // Refresh failed. Keep the stale copy exactly as it was — same `storedAt`, so
-  // the age we show the reader stays honest — and only push out the next
-  // attempt. `freshUntil` deliberately stays in the past: this is a cooldown,
-  // not a promotion of stale data back to fresh.
-  if (lastGood) {
-    // Also non-durable, for a second reason on top of the write quota: the
-    // value is unchanged, so a KV write here would re-send the identical
-    // payload purely to stamp a new cooldown — and in doing so would push the
-    // entry's expiry back by another `keepSeconds`. Repeated failures would
-    // then keep renewing the fallback indefinitely, so a copy could stay
-    // "kept for a week" for a month. Leaving KV alone means it expires a week
-    // after the fetch that produced it, which is what keepSeconds means.
-    await write(
-      key,
-      { ...lastGood, retryAfter: now + backoffMs },
-      opts.keepSeconds,
-      { durable: false },
-    );
-    return { value: lastGood.value, storedAt: lastGood.storedAt, stale: true };
-  }
-
-  // Nothing to fall back on, so record the failure itself. This is what every
-  // other isolate — and every other colo, once a KV binding exists — reads to
-  // learn that the upstream is down without asking it again.
-  //
-  // Held only for the backoff, not for `keepSeconds`: it is a cooldown, and a
-  // week-long one would keep answering "unavailable" long after the upstream
-  // came back. `freshUntil: now` keeps it permanently stale by construction, so
-  // the single path that could mistake it for servable data never sees it as
-  // fresh even if the TTL is ignored by a layer.
-  await write(
-    key,
-    { value: null, storedAt: new Date(now).toISOString(), freshUntil: now, retryAfter: now + backoffMs },
-    Math.max(Math.ceil(backoffMs / 1000), 1),
-    { durable: false },
-  );
-  return null;
 }
