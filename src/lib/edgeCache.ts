@@ -121,7 +121,16 @@ const inflight = new Map<string, Promise<unknown>>();
  */
 const DEFAULT_FAILURE_BACKOFF_MS = 60_000;
 
-function kv(): KvLike | null {
+/**
+ * The KV namespace, or null when it isn't bound.
+ *
+ * Exported because `~/lib/newsMirror.ts` reads a different key out of the same
+ * namespace and this structural check is the thing worth having once: it is
+ * what lets every caller run unchanged on a checkout with no binding
+ * configured, rather than each inventing its own guard against a generated
+ * type that may not exist.
+ */
+export function kvNamespace(): KvLike | null {
   const candidate = (env as Record<string, unknown> | undefined)?.[KV_BINDING];
   if (!candidate || typeof candidate !== "object") return null;
   const maybe = candidate as Partial<KvLike>;
@@ -129,6 +138,8 @@ function kv(): KvLike | null {
     ? (candidate as KvLike)
     : null;
 }
+
+const kv = kvNamespace;
 
 function workerCache(): Cache | null {
   try {
