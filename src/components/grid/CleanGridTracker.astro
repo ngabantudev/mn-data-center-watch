@@ -1,0 +1,454 @@
+---
+// src/components/grid/CleanGridTracker.astro
+//
+// Minnesota's 100%-carbon-free-by-2040 mandate, tracked against the last
+// published figure for where the state actually is — and against the load the
+// data centers on this map would add to the grid that has to get there.
+//
+// WHY IT SITS IN THE FILTERS RAIL, AS AN ACCORDION SECTION
+//
+// It is the context FilterHeader's "Total Power" stat is missing: that tile
+// says how many gigawatts are being proposed, this section says what they are
+// being proposed *on top of*, and on a deadline with a date attached. Docking
+// it anywhere else would have meant a fourth mobile toolbar tab and a fourth
+// sheet for one read-only panel. As a section it inherits the rail's exclusive
+// accordion, both layouts, and the phone sheet for free, and costs one 40px
+// row when closed.
+//
+// TWO AXES, AND WHY THE BAR ONLY PLOTS ONE
+//
+// The obvious build is a bar that runs "today → 2040" with the milestones as
+// waypoints along it. That bar cannot show a shortfall: time advances whether
+// or not the grid decarbonises, so a time-axis fill would sit at ~30% in 2030
+// and read as *progress* in a year the state might have missed its first
+// statutory target. The axis here is therefore carbon-free share, 0–100%, with
+// the milestones plotted at the percentages the law requires. Time is carried
+// by the countdown tile and the milestone years, where it can't be mistaken
+// for achievement.
+//
+// See ~/data/mnCleanGridStandard.ts before touching any number in here: the
+// 2030 milestone has two different statutory tracks, and the widely-quoted
+// Xcel "80% by 2030" is an emissions reduction against 2005 rather than a
+// carbon-free share, so it is not plottable on this axis at all.
+import { AlertTriangle, ExternalLink, Zap } from "lucide-astro";
+import {
+  CARBON_FREE_DEADLINE_YEAR,
+  CARBON_FREE_MILESTONES,
+  CARBON_FREE_OFF_RAMP,
+  CARBON_FREE_STATUTE,
+  MN_CARBON_FREE_SHARE,
+  MN_RENEWABLE_SHARE_2025,
+  RENEWABLE_STANDARD_2035,
+  XCEL_CONTRACTED_QUEUE_GW,
+  XCEL_UPPER_MIDWEST_CARBON_FREE,
+} from "~/data/mnCleanGridStandard";
+import { cleanGridProgress, dataCenterLoadPressure } from "~/lib/cleanGridProgress";
+import AccordionSection from "~/components/ui/AccordionSection.astro";
+
+// Build-time year. The page is prerendered, so this is the year of the last
+// deploy rather than the reader's — the script at the bottom re-runs the same
+// function against their clock and rewrites the slots it affects. Rendering it
+// server-side anyway keeps the countdown correct without JS and stops the tile
+// from being blank on first paint.
+const buildYear = new Date().getFullYear();
+const progress = cleanGridProgress(buildYear);
+const pressure = dataCenterLoadPressure();
+
+const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
+
+// The share-of-state-load figure runs from a fraction of a percent to double
+// digits across plausible datasets, so it needs a precision that survives both
+// ends rather than a fixed one.
+const sharePct = (fraction: number) => {
+  const value = fraction * 100;
+  if (value >= 10) return `${value.toFixed(0)}%`;
+  if (value >= 1) return `${value.toFixed(1)}%`;
+  return `${value.toFixed(2)}%`;
+};
+
+const currentPct = Math.round(MN_CARBON_FREE_SHARE.share * 100);
+
+// Ticks are drawn for every distinct required percentage, not for every
+// milestone: 2030 contributes two (80 investor-owned, 60 co-op/municipal) and
+// 2040's 100 sits on the track's end cap. Deduped so the two converged tracks
+// in 2035 and 2040 don't stack two lines in one place.
+const tickPercents = [
+  ...new Set(
+    CARBON_FREE_MILESTONES.flatMap((m) => [
+      Math.round(m.publicUtility * 100),
+      Math.round(m.otherUtility * 100),
+    ]),
+  ),
+].sort((a, b) => a - b);
+---
+
+<AccordionSection title="2040 Clean Grid Tracker">
+  <div data-cg-root class="px-3.5 md:px-4 pb-4 pt-1 flex flex-col gap-4">
+    <!-- Header. The accordion trigger above carries the short name; this is the
+         full one, plus the sentence that says what the widget is for. -->
+    <div class="flex flex-col gap-1.5">
+      <h2 class="text-sm font-bold text-ink leading-tight">
+        MN 2040 Clean Grid Tracker
+      </h2>
+      <p class="text-[11px] text-ink-3 leading-snug">
+        Minnesota's statutory 100% carbon-free electricity mandate, against the
+        real-world load data centers are asking the same grid to carry.
+      </p>
+    </div>
+
+    <!--
+      THE METER.
+
+      `role="progressbar"` with an explicit `aria-valuetext`: the bare "55" a
+      screen reader would otherwise announce is the least useful half of this
+      readout — the gap to the mandate is the point. The milestone ticks are
+      `aria-hidden` and their content is carried by the real list underneath,
+      so nothing here is available only as a visual position or a tooltip.
+    -->
+    <div class="flex flex-col gap-2">
+      <div class="flex items-baseline justify-between gap-2">
+        <span class="text-2xl font-bold text-accent tabular-nums leading-none">
+          {currentPct}%
+        </span>
+        <span class="text-[10px] text-ink-4 text-right leading-tight">
+          carbon-free<br />as of {MN_CARBON_FREE_SHARE.dataYear}
+        </span>
+      </div>
+
+      <div
+        class="relative h-3 w-full rounded-full bg-hover border border-hair overflow-hidden"
+        role="progressbar"
+        aria-valuenow={currentPct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuetext={`${currentPct}% carbon-free as of ${MN_CARBON_FREE_SHARE.dataYear} — ${progress.pointsToMandate} percentage points below the 100% mandate due by ${CARBON_FREE_DEADLINE_YEAR}.`}
+      >
+        <div
+          class="absolute inset-y-0 left-0 bg-accent rounded-full"
+          style={`width: ${currentPct}%`}
+        >
+        </div>
+
+        <!--
+          The remaining ground, hatched rather than left empty. An empty track
+          reads as "not filled in yet"; a hatched one reads as work outstanding,
+          which is what 45 points in 14 years is. `currentColor` so it inherits
+          the ink ramp and needs no light/dark twin.
+        -->
+        <div
+          class="absolute inset-y-0 right-0 text-ink-4 opacity-30"
+          style={`width: ${100 - currentPct}%; background-image: repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 5px);`}
+          aria-hidden="true"
+        >
+        </div>
+
+        {
+          tickPercents.map((tick) => (
+            <span
+              class="absolute inset-y-0 w-px bg-ink-3"
+              style={`left: ${tick}%; ${tick === 100 ? "transform: translateX(-1px);" : ""}`}
+              aria-hidden="true"
+            />
+          ))
+        }
+      </div>
+
+      <p class="text-[10px] text-ink-4 leading-snug">
+        Scale is share of electricity that is carbon-free — not time elapsed.
+        Ticks mark each percentage the law requires.
+      </p>
+    </div>
+
+    <!--
+      The milestones as a list, which is also the accessible rendering of the
+      ticks above. Each row states the year, what is required, and how far the
+      last published figure is from it — so the shortfall is text, not a
+      distance a reader has to eyeball on a 288px track.
+    -->
+    <ul class="flex flex-col gap-px" data-cg="milestones">
+      {
+        CARBON_FREE_MILESTONES.map((m) => {
+          const gap = Math.round((m.publicUtility - MN_CARBON_FREE_SHARE.share) * 100);
+          const isNext = progress.next?.year === m.year;
+          return (
+            <li
+              class="flex flex-col gap-0.5 rounded-md px-2 py-1.5 border border-transparent data-next:border-hair-strong data-next:bg-hover"
+              data-cg-milestone={m.year}
+              data-next={isNext ? "" : undefined}
+            >
+              <div class="flex items-baseline justify-between gap-2">
+                <span class="text-[11px] font-bold text-ink tabular-nums">
+                  {m.year}
+                </span>
+                <span class="text-[11px] font-semibold text-ink-2 tabular-nums">
+                  {m.split
+                    ? `${pct(m.publicUtility)} / ${pct(m.otherUtility)}`
+                    : pct(m.publicUtility)}
+                </span>
+              </div>
+              <span class="text-[10px] text-ink-4 leading-snug">{m.note}</span>
+              <span class="text-[10px] text-ink-3 leading-snug tabular-nums">
+                {gap > 0
+                  ? `${gap} points above where the state stands today.`
+                  : "Already met by the statewide generation mix."}
+              </span>
+            </li>
+          );
+        })
+      }
+    </ul>
+
+    <!-- Stats grid. `.stat-well` is the same recessed treatment the header's
+         totals use, so these read as the same class of readout. -->
+    <div class="grid grid-cols-2 gap-2">
+      <div class="stat-well rounded-lg p-2.5 flex flex-col gap-1 min-w-0">
+        <span
+          class="text-[9px] font-medium text-ink-3 uppercase tracking-wider leading-tight"
+        >
+          Years Remaining
+        </span>
+        <span
+          class="text-xl font-bold text-ink tabular-nums leading-none"
+          data-cg="years-left">{progress.yearsLeft}</span
+        >
+        <span class="text-[9px] text-ink-4 leading-tight" data-cg="deadline-note">
+          to {CARBON_FREE_DEADLINE_YEAR}
+        </span>
+      </div>
+
+      <div class="stat-well rounded-lg p-2.5 flex flex-col gap-1 min-w-0">
+        <span
+          class="text-[9px] font-medium text-ink-3 uppercase tracking-wider leading-tight"
+        >
+          Renewable Share
+        </span>
+        <span class="text-xl font-bold text-ink tabular-nums leading-none">
+          {pct(MN_RENEWABLE_SHARE_2025)}
+        </span>
+        <span class="text-[9px] text-ink-4 leading-tight">
+          of {pct(MN_CARBON_FREE_SHARE.share)} carbon-free; rest is nuclear
+        </span>
+      </div>
+    </div>
+
+    <!--
+      THE RISK CARD.
+
+      Colour is doing no work here, deliberately. The obvious treatment is an
+      amber warning panel, but this palette's amber measures ~2.1:1 on the light
+      theme's off-white body — under AA for text and under 3:1 even for an icon
+      carrying meaning. So the emphasis is the recessed well, the rule, and the
+      wording; the figures stay on the contrast-checked ink ramp.
+    -->
+    <div class="stat-well rounded-lg p-3 flex flex-col gap-2">
+      <div class="flex items-center gap-1.5">
+        <AlertTriangle size={13} class="text-ink-2 shrink-0" aria-hidden="true" />
+        <span
+          class="text-[9px] font-bold text-ink uppercase tracking-wider leading-none"
+        >
+          The Risk Factor
+        </span>
+      </div>
+
+      <!-- Stated as a conditional, not a current draw. Most of this capacity is
+           proposed rather than energised, and a flat "the buildout uses 45% of
+           the state's power" would be false today — which is the one sentence
+           an opponent would need to discredit the rest of the panel. -->
+      <p class="text-[11px] text-ink-2 leading-snug">
+        If every non-rejected site on this map were built and running at {
+          pct(pressure.loadFactor)
+        } utilisation, the <span class="font-semibold tabular-nums"
+          >{pressure.totalGW.toFixed(2)} GW</span
+        > tracked here would draw about{" "}<span class="font-semibold tabular-nums"
+          >{sharePct(pressure.shareOfStateLoad)}</span
+        > of Minnesota's entire annual retail electricity sales.
+      </p>
+
+      <p class="text-[11px] text-ink-2 leading-snug">
+        Xcel alone reports more than {XCEL_CONTRACTED_QUEUE_GW.nowGW} GW of data
+        center capacity already under contract, and expects {
+          XCEL_CONTRACTED_QUEUE_GW.byYearGW
+        } GW in queue by {XCEL_CONTRACTED_QUEUE_GW.byYear}.
+      </p>
+
+      <p class="text-[11px] text-ink-3 leading-snug border-t border-hair pt-2">
+        <span class="font-semibold text-ink-2">Why that bears on 2040:</span> the
+        deadline is not self-executing. Under {CARBON_FREE_OFF_RAMP.citation} the
+        PUC may delay or modify a utility's compliance on cost, reliability or
+        feasibility grounds. New load of this scale is the argument that
+        off-ramp gets made with.
+      </p>
+    </div>
+
+    <!--
+      Sources and method. A native `<details>`, not another `.mf-accordion-*`
+      section: the rail's accordion script is *exclusive*, so a second section
+      opening here would close the tracker that contains it. `<details>` also
+      keeps this working with no JS at all, which the sources block of a
+      public-records widget is the last thing that should depend on.
+    -->
+    <details class="group border-t border-hair pt-2">
+      <summary
+        class="flex items-center justify-between gap-2 cursor-pointer list-none text-[10px] font-bold text-ink-3 hover:text-ink uppercase tracking-wider focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+      >
+        Sources &amp; Methodology
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+          class="text-ink-4 shrink-0 transition-transform duration-200 group-open:rotate-180"
+        >
+          <path
+            d="M6 9l6 6 6-6"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+        </svg>
+      </summary>
+
+      <div class="flex flex-col gap-2.5 pt-2.5 text-[10px] text-ink-3 leading-snug">
+        <p>
+          <span class="font-semibold text-ink-2">The mandate.</span>{" "}
+          {CARBON_FREE_STATUTE.citation}, enacted by {
+            CARBON_FREE_STATUTE.actLabel
+          }. The 2030 milestone has two tracks — {
+            pct(CARBON_FREE_MILESTONES[0].publicUtility)
+          } for investor-owned utilities, {
+            pct(CARBON_FREE_MILESTONES[0].otherUtility)
+          } for municipals and co-ops. A separate renewable standard requires {
+            pct(RENEWABLE_STANDARD_2035)
+          } renewable by 2035; nuclear counts as carbon-free but not as
+          renewable, which is why the two are tracked apart.
+        </p>
+
+        <p>
+          <span class="font-semibold text-ink-2">The {currentPct}%.</span>{" "}
+          {MN_CARBON_FREE_SHARE.sourceLabel}, covering {
+            MN_CARBON_FREE_SHARE.dataYear
+          }. This is the share of electricity <em>generated in</em> Minnesota. The
+          statute is enforced per utility against <em>retail sales</em> to that
+          utility's own Minnesota customers, and the state sits inside MISO, so
+          this is an indicator of the state's trajectory rather than a
+          compliance score. No statewide compliance figure is published, because
+          compliance is not a statewide quantity.
+        </p>
+
+        <p>
+          <span class="font-semibold text-ink-2">Largest utility.</span> Xcel put
+          its Upper Midwest system at {
+            pct(XCEL_UPPER_MIDWEST_CARBON_FREE.share)
+          } carbon-free in {XCEL_UPPER_MIDWEST_CARBON_FREE.asOfYear} and has not
+          published an updated share since; its figures since are emissions
+          reductions against a 2005 baseline, which is a different measure and is
+          not plotted here. That system also covers parts of the Dakotas,
+          Wisconsin and Michigan, so it is not a Minnesota-only figure.
+        </p>
+
+        <p>
+          <span class="font-semibold text-ink-2">Data center load.</span>{" "}
+          Nameplate capacity of the {pressure.projectCount} non-rejected sites in
+          this map's dataset, at {pct(pressure.loadFactor)} utilisation, against
+          Minnesota's total annual retail sales. It measures how much electricity
+          the buildout wants — not how that electricity is generated, which is
+          the open question, not a settled one.
+        </p>
+
+        <ul class="flex flex-col gap-1.5 pt-0.5">
+          {
+            [
+              { label: CARBON_FREE_STATUTE.citation, url: CARBON_FREE_STATUTE.url },
+              { label: CARBON_FREE_STATUTE.actLabel, url: CARBON_FREE_STATUTE.actUrl },
+              {
+                label: MN_CARBON_FREE_SHARE.sourceLabel,
+                url: MN_CARBON_FREE_SHARE.sourceUrl,
+              },
+              {
+                label: XCEL_UPPER_MIDWEST_CARBON_FREE.sourceLabel,
+                url: XCEL_UPPER_MIDWEST_CARBON_FREE.sourceUrl,
+              },
+              {
+                label: XCEL_CONTRACTED_QUEUE_GW.sourceLabel,
+                url: XCEL_CONTRACTED_QUEUE_GW.sourceUrl,
+              },
+            ].map((source) => (
+              <li>
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-start gap-1 text-accent hover:text-accent-hover hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+                >
+                  <span class="min-w-0">{source.label}</span>
+                  <ExternalLink size={9} class="shrink-0 mt-0.5" aria-hidden="true" />
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </details>
+
+    <p class="flex items-start gap-1.5 text-[10px] text-ink-4 leading-snug">
+      <Zap size={11} class="shrink-0 mt-0.5" aria-hidden="true" />
+      <span>
+        Figures are the most recent published; there is no live feed for the
+        statewide mix. Corrections welcome — this is a public record, not an
+        estimate.
+      </span>
+    </p>
+  </div>
+</AccordionSection>
+
+<script>
+  import { onReady } from "~/lib/domReady";
+  import { cleanGridProgress } from "~/lib/cleanGridProgress";
+  import { CARBON_FREE_DEADLINE_YEAR } from "~/data/mnCleanGridStandard";
+
+  /**
+   * Re-runs the countdown against the reader's clock.
+   *
+   * index.astro is prerendered, so everything above ships stamped with the year
+   * of the last deploy. That is right for the carbon-free share — it is a
+   * measurement of a named year and must not drift — but wrong for "years
+   * remaining" and for which milestone is highlighted as next, both of which
+   * are statements about now. A site that has not been redeployed since
+   * December would otherwise count one year too many, and would keep pointing
+   * at a milestone the state had already reached the deadline for.
+   *
+   * Rewrites only the slots the year affects, for the same reason
+   * ratepayerWidget.ts hydrates by `data-` slot rather than re-templating: the
+   * markup stays the server's, and there is one place where each number is
+   * decided.
+   */
+  function syncCleanGridYear(): void {
+    const root = document.querySelector<HTMLElement>("[data-cg-root]");
+    if (!root) return;
+
+    const progress = cleanGridProgress(new Date().getFullYear());
+
+    const yearsLeft = root.querySelector<HTMLElement>('[data-cg="years-left"]');
+    if (yearsLeft) yearsLeft.textContent = String(progress.yearsLeft);
+
+    // Past the deadline the countdown stops being a countdown. Saying "0 to
+    // 2040" would read as a rounding artifact rather than as the mandate having
+    // come due.
+    const note = root.querySelector<HTMLElement>('[data-cg="deadline-note"]');
+    if (note) {
+      note.textContent =
+        progress.yearsLeft > 0 ? `to ${CARBON_FREE_DEADLINE_YEAR}` : "mandate due";
+    }
+
+    root
+      .querySelectorAll<HTMLElement>("[data-cg-milestone]")
+      .forEach((row) => {
+        const year = Number(row.dataset.cgMilestone);
+        if (progress.next?.year === year) row.setAttribute("data-next", "");
+        else row.removeAttribute("data-next");
+      });
+  }
+
+  onReady(syncCleanGridYear);
+</script>
