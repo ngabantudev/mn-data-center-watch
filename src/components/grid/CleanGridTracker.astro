@@ -404,51 +404,13 @@ const tickPercents = [
 
 <script>
   import { onReady } from "~/lib/domReady";
-  import { cleanGridProgress } from "~/lib/cleanGridProgress";
-  import { CARBON_FREE_DEADLINE_YEAR } from "~/data/mnCleanGridStandard";
-
-  /**
-   * Re-runs the countdown against the reader's clock.
-   *
-   * index.astro is prerendered, so everything above ships stamped with the year
-   * of the last deploy. That is right for the carbon-free share — it is a
-   * measurement of a named year and must not drift — but wrong for "years
-   * remaining" and for which milestone is highlighted as next, both of which
-   * are statements about now. A site that has not been redeployed since
-   * December would otherwise count one year too many, and would keep pointing
-   * at a milestone the state had already reached the deadline for.
-   *
-   * Rewrites only the slots the year affects, for the same reason
-   * ratepayerWidget.ts hydrates by `data-` slot rather than re-templating: the
-   * markup stays the server's, and there is one place where each number is
-   * decided.
-   */
-  function syncCleanGridYear(): void {
-    const root = document.querySelector<HTMLElement>("[data-cg-root]");
-    if (!root) return;
-
-    const progress = cleanGridProgress(new Date().getFullYear());
-
-    const yearsLeft = root.querySelector<HTMLElement>('[data-cg="years-left"]');
-    if (yearsLeft) yearsLeft.textContent = String(progress.yearsLeft);
-
-    // Past the deadline the countdown stops being a countdown. Saying "0 to
-    // 2040" would read as a rounding artifact rather than as the mandate having
-    // come due.
-    const note = root.querySelector<HTMLElement>('[data-cg="deadline-note"]');
-    if (note) {
-      note.textContent =
-        progress.yearsLeft > 0 ? `to ${CARBON_FREE_DEADLINE_YEAR}` : "mandate due";
-    }
-
-    root
-      .querySelectorAll<HTMLElement>("[data-cg-milestone]")
-      .forEach((row) => {
-        const year = Number(row.dataset.cgMilestone);
-        if (progress.next?.year === year) row.setAttribute("data-next", "");
-        else row.removeAttribute("data-next");
-      });
-  }
+  // The countdown correction moved to ~/lib/cleanGridClient.ts when the top bar
+  // started rendering the same figure. It rewrites only the `data-cg` slots the
+  // reader's year affects — the markup above stays the server's, the same way
+  // ratepayerWidget.ts hydrates by slot rather than re-templating — and it is
+  // now document-wide, so this section and the bar cannot show two different
+  // numbers of years remaining.
+  import { syncCleanGridYear } from "~/lib/cleanGridClient";
 
   onReady(syncCleanGridYear);
 </script>
