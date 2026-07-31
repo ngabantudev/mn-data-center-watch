@@ -17,7 +17,6 @@ import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
 import FilterSize from "~/components/filter/FilterSize.astro";
-import CleanGridTracker from "~/components/grid/CleanGridTracker.astro";
 import { SlidersHorizontal } from "lucide-astro";
 
 // Takes no props: it read the whole dataset from `clientProjects` even when it
@@ -107,12 +106,11 @@ const totalCount = clientProjects.length;
     id="mf-content"
     class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
   >
-    <!-- Statewide context before the per-site filters: the header above reports
-         how many gigawatts are being proposed, and this reports the carbon-free
-         deadline they're being proposed against. It ships closed like every
-         other section, so leading with it costs one row rather than displacing
-         the status filter. -->
-    <CleanGridTracker />
+    <!-- The 2040 clean grid tracker used to lead this rail as a sixth section.
+         It is the banner over the map now, and the record behind it is the
+         modal that banner opens — see CleanGridBar.astro. It left because it
+         was invisible here: every section ships closed, so the mandate read as
+         one more 10px grey label in a stack of filters. -->
 
     <FilterStatus countsByStatus={countsByStatus} />
 
@@ -171,7 +169,6 @@ const totalCount = clientProjects.length;
   import { countVisible, type FilterCriteria } from "~/lib/projectFilters";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
   import { isMobile, onSheetChange } from "~/lib/mobileSheet";
-  import { OPEN_CLEAN_GRID_EVENT } from "~/lib/cleanGridClient";
 
   const STORAGE_KEY = "mapFiltersCollapsed";
 
@@ -332,50 +329,6 @@ const totalCount = clientProjects.length;
       );
     });
 
-    /**
-     * The 2040 bar over the map asking for its own section — see
-     * OPEN_CLEAN_GRID_EVENT in ~/lib/cleanGridClient.ts. The bar carries the
-     * headline and this rail carries the readout, so the bar has to be able to
-     * lead somewhere; it can't do this itself, because the accordion is
-     * exclusive and this panel is collapsible as a whole, and both of those are
-     * owned here.
-     *
-     * Un-collapsing the rail first is why this isn't just a `.click()` on the
-     * trigger: on a desktop where the rail has been slid shut, opening a
-     * section inside a panel nobody can see is a no-op the reader experiences
-     * as a dead control.
-     *
-     * There is deliberately no phone branch. The bar is `hidden md:block`, so
-     * this event cannot be raised below 768px — and handling it there would
-     * mean naming a sheet, which MobileToolbar.astro alone is allowed to do.
-     * Dispatching SHEET_EVENT from here would show the panel while leaving that
-     * component's `activeSheet` at null, so its tab would read closed and the
-     * scrim would stay down: the two-owners bug this comment is citing, in the
-     * act of citing it.
-     */
-    const onOpenCleanGrid = () => {
-      const section = [...accordionSections].find((s) =>
-        s.querySelector(".mf-accordion-trigger")?.textContent?.includes("2040"),
-      );
-      if (!section || isMobile()) return;
-
-      if (collapsed) {
-        collapsed = false;
-        writeStoredFlag(STORAGE_KEY, false);
-        applyPanelState();
-      }
-
-      openSection(section);
-      // After the panel is showing and the section is open, so the scroller has
-      // a real height to work against.
-      requestAnimationFrame(() =>
-        section.scrollIntoView({ behavior: "smooth", block: "start" }),
-      );
-    };
-    document.addEventListener(OPEN_CLEAN_GRID_EVENT, onOpenCleanGrid);
-    filterCleanups.push(() =>
-      document.removeEventListener(OPEN_CLEAN_GRID_EVENT, onOpenCleanGrid),
-    );
 
     /** Desktop pull-tab. The phone's Filters tab lives on the toolbar. */
     const onToggleClick = () => {

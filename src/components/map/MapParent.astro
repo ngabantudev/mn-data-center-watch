@@ -8,6 +8,7 @@ import MapDetailCta from "~/components/map/MapDetailCta.astro";
 import MapThemeSelector from "~/components/ui/MapThemeSelector.astro";
 import CampaignBanner from "~/components/campaign/CampaignBanner.astro";
 import CleanGridBar from "~/components/grid/CleanGridBar.astro";
+import CleanGridTracker from "~/components/grid/CleanGridTracker.astro";
 import MobileToolbar from "~/components/mobile/MobileToolbar.astro";
 
 // One build-time snapshot for the news rail's first paint. Spread rather than
@@ -70,6 +71,15 @@ const news = await fetchLocalNews();
          site"), so they stay separate surfaces. -->
     <CampaignBanner />
   </div>
+
+  <!--
+    The record behind the banner: milestones, vintages, the statutory off-ramp
+    and the sources. A modal rather than a rail section — see CleanGridTracker
+    for why it left the sidebar and why it did not simply get deleted along with
+    it. Rendered outside the top-centre stack because a `<dialog>` in the top
+    layer is positioned by the UA, not by an ancestor.
+  -->
+  <CleanGridTracker />
 
   <!--
     Phone chrome, and the controller for every panel above it. Rendered last so
