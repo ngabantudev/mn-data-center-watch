@@ -206,6 +206,7 @@ const RANGE_OPTIONS = [
   import { onReady } from "~/lib/domReady";
   import {
     byPublishedDesc,
+    collapseDuplicates,
     formatNewsDate,
     type NewsItem,
     type NewsPayload,
@@ -260,9 +261,11 @@ const RANGE_OPTIONS = [
 
   function itemsWithinWindow(days: number): NewsItem[] {
     const cutoff = Date.now() - days * DAY_MS;
-    return Array.from(articleCache.values())
-      .filter((item) => new Date(item.published).getTime() >= cutoff)
-      .sort(byPublishedDesc);
+    return collapseDuplicates(
+      Array.from(articleCache.values())
+        .filter((item) => new Date(item.published).getTime() >= cutoff)
+        .sort(byPublishedDesc),
+    );
   }
 
   // Carried over from the server render rather than restated here, so the two

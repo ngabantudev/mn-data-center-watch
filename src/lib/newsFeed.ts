@@ -463,6 +463,15 @@ function overlap(a: Set<string>, b: Set<string>): number {
  * threshold separates those. This one collapses what is provably duplicate and
  * leaves the rest alone.
  *
+ * Weighting rare words instead of counting them equally is the obvious next
+ * idea and does not work — it was tried. Scoring by inverse document frequency
+ * over the year's headlines moved "Google announces data center near Rochester"
+ * against "Google set to build data center near Rochester", one story, from
+ * 0.50 to 0.47, and "Google seeks tax break for massive data center in
+ * Hermantown" against "Hermantown delays vote on tax break", two stories, from
+ * 0.50 to 0.44. It compresses the gap rather than opening it. Separating those
+ * needs the article, and RSS gives us a headline.
+ *
  * The date window is what stops a recurring story from eating itself: the same
  * outlet's "Mpls City Council to vote on data center moratorium" and "Mpls City
  * Council discusses data center moratorium" score 0.67, and are twenty days and
@@ -478,8 +487,16 @@ const DUPLICATE_WINDOW_DAYS = 7;
  * grounds that a reader following a local fight is better served by the paper
  * covering it than by the aggregator that reprinted it. Otherwise keeps the
  * first, which — the list arriving sorted — is the most recent.
+ *
+ * Exported because the rail has to run it a second time. Its client keeps a
+ * pool of every article seen this session and renders a window by filtering
+ * that pool, so collapsing each response on its own is not enough: two versions
+ * of one story can arrive in two different responses and meet for the first
+ * time in the pool. That is exactly what happened with the Star Tribune
+ * printing plant sale, where the 7-day and 1-year fetches each carried a
+ * different CBS headline for it.
  */
-function collapseDuplicates(items: NewsItem[]): NewsItem[] {
+export function collapseDuplicates(items: NewsItem[]): NewsItem[] {
   const kept: { item: NewsItem; words: Set<string>; at: number }[] = [];
 
   for (const item of items) {
