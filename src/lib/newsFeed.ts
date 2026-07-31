@@ -79,12 +79,78 @@ export function formatNewsDate(published: string): string {
 // Must match at least one of these — establishes it's actually about a data center.
 const DATA_CENTER_TERMS = ["data center", "data centre", "hyperscale", "server farm"];
 
+/**
+ * Twin Cities metro counties, matched as "<name> county" phrases rather than
+ * bare county names — "Dakota" alone pulls in every North and South Dakota
+ * story, which is a large share of the country's data center news.
+ *
+ * Five of the seven metro counties are here. Washington and Scott are left out
+ * on purpose, and the omission is measured rather than assumed: over a 30-day
+ * window, `"data center" "Washington County"` returned 57 stories and not one
+ * of them was Minnesota's — Hillsboro and Washington County, Oregon are one of
+ * the largest data center clusters in the country, and Maryland and Alabama
+ * supplied most of the rest. `"Scott County"` returned 33, of which exactly one
+ * was Minnesota; the rest were Kentucky and Iowa. Admitting either name would
+ * put other states' data center fights on a Minnesota map. Both counties are
+ * covered below by their city names instead, which don't collide.
+ */
+const METRO_COUNTY_TERMS = [
+  "anoka county",
+  "carver county",
+  "dakota county",
+  "hennepin county",
+  "ramsey county",
+];
+
+/**
+ * Minnesota news outlets, matched against an item's `<source>`.
+ *
+ * The place-name list below can only see the headline and Google's one-line
+ * description, so it misses any story that names a town in its body and not its
+ * title — which is most of them. Measured over 30 days, the place list alone
+ * dropped 25 data center stories that Google had already matched to Minnesota,
+ * including the Pine Island fight, three separate Elk River council votes, the
+ * Monticello application, Otsego's pause, and both Mankato moratoriums.
+ *
+ * The outlet is the signal that recovers those: a data center story filed by
+ * the Star Tribune or hometownsource is Minnesota coverage by construction.
+ * The trade is that a Minnesota paper's wire story about somebody else's data
+ * center now passes too — MinnPost on rural America, say. For a Minnesota data
+ * center watch that reads as coverage worth showing, and it is a far smaller
+ * error than silently dropping half the state's local reporting.
+ */
+const MINNESOTA_SOURCE_TERMS = [
+  "star tribune",
+  "minnpost",
+  "pioneer press",
+  "hometownsource",
+  "southernminn",
+  "post bulletin",
+  "west central tribune",
+  "bring me the news",
+  "5 eyewitness news", // KSTP
+  "kare11",
+  "wcco",
+  "mpr news",
+  "minnesota public radio",
+  "sahan journal",
+  "minnesota reformer",
+  "finance & commerce",
+  "duluth news tribune",
+  "mankato free press",
+  "brainerd dispatch",
+  "st. cloud live",
+  "alpha news",
+  "minnesota women's press",
+];
+
 // Must match at least one of these — establishes Minnesota relevance without
 // depending on the literal word "Minnesota" appearing in the article.
 const MINNESOTA_TERMS = [
   "minnesota",
   " mn ",
   "twin cities",
+  ...METRO_COUNTY_TERMS,
   // Largest MN cities by population
   "minneapolis",
   "st. paul",
@@ -113,7 +179,58 @@ const MINNESOTA_TERMS = [
   "rosemount",
   "chaska",
   "faribault",
+  // Washington and Scott county seats and larger cities. These stand in for the
+  // two county names held out above, and unlike those names they're Minnesota's
+  // alone in practice.
+  "stillwater",
+  "cottage grove",
+  "oakdale",
+  "forest lake",
+  "savage",
+  "prior lake",
+  // Remaining Anoka County population centers, which the metro list reached
+  // only through Coon Rapids and Blaine.
+  "anoka",
+  "andover",
+  "fridley",
+  "champlin",
+  // Towns with live data center proceedings that the 30-day measurement caught
+  // this list dropping. Wright and Sherburne counties are the reason several of
+  // these appear; the county names themselves are ambiguous — Wright County,
+  // Iowa is running its own data center fight and files under the same phrase —
+  // so the towns carry the geography instead.
+  "monticello",
+  "otsego",
+  "elk river",
+  "big lake",
+  "albertville",
+  "st. michael",
+  "pine island",
+  "lonsdale",
+  "mankato",
 ];
+
+/**
+ * The geography half of the Google News query.
+ *
+ * Was the bare word `Minnesota`, which gated everything on Google having
+ * indexed that literal token — a story headlined "Anoka County board delays
+ * data center vote" is Minnesota news whether or not the word appears. Google
+ * News RSS honours `OR` inside parentheses; this was checked against the live
+ * feed rather than taken from the docs, which don't specify it.
+ *
+ * Only the county names that survive the ambiguity test in METRO_COUNTY_TERMS
+ * are here. Widening the upstream query is not free: the feed caps out around
+ * 100 items, so admitting `"Washington County"` would spend that budget on
+ * Oregon and crowd out the Minnesota coverage this exists to find.
+ */
+const GEOGRAPHY_QUERY = [
+  "Minnesota",
+  '"Twin Cities"',
+  ...METRO_COUNTY_TERMS.map(
+    (county) => `"${county.replace(/\b\w/g, (c) => c.toUpperCase())}"`,
+  ),
+].join(" OR ");
 
 function buildDateQuery(windowDays: number): string {
   // when: is documented and reliable up to 1y; anything longer uses
@@ -200,7 +317,14 @@ async function attemptNews(
     const newsItems = parsed
       .filter((item) => {
         const hasDataCenter = DATA_CENTER_TERMS.some((t) => item.haystack.includes(t));
-        const hasMinnesota = MINNESOTA_TERMS.some((t) => item.haystack.includes(t));
+        // Geography is satisfied either by a place named in the headline or by
+        // the outlet being a Minnesota one. The source is checked separately
+        // from the haystack rather than folded into it, so that an outlet name
+        // can never stand in for the data center half of the test.
+        const sourceName = item.source.toLowerCase();
+        const hasMinnesota =
+          MINNESOTA_TERMS.some((t) => item.haystack.includes(t)) ||
+          MINNESOTA_SOURCE_TERMS.some((t) => sourceName.includes(t));
         return hasDataCenter && hasMinnesota;
       })
       .sort(byPublishedDesc)
@@ -240,7 +364,7 @@ async function attemptNews(
  * has a cached fallback behind it anyway.
  */
 export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
-  const rawQuery = `"data center" Minnesota ${buildDateQuery(windowDays)}`;
+  const rawQuery = `"data center" (${GEOGRAPHY_QUERY}) ${buildDateQuery(windowDays)}`;
   const query = encodeURIComponent(rawQuery);
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
