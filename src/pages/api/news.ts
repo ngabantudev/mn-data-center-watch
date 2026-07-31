@@ -26,6 +26,15 @@ import { fetchNews, type NewsItem, type NewsPayload } from "~/lib/newsFeed";
 
 export const prerender = false;
 
+/** What one window's cache entry holds. The truncation flag is cached with the
+ *  items because it describes that same fetch — recomputing it later, or
+ *  defaulting it to false when serving a stale copy, would tell the reader the
+ *  period is fully covered when the fetch that produced it said otherwise. */
+interface CachedNews {
+  items: NewsItem[];
+  truncated: boolean;
+}
+
 const ALLOWED_WINDOWS = [1, 7, 30, 365]; // days — beyond 1y rarely changes
                                           // results given Google News RSS's
                                           // ~100-item cap, so we stop here.
@@ -70,17 +79,19 @@ export const GET: APIRoute = async ({ url }) => {
   // covers up which of the two happened.
   let failure: string | null = null;
 
-  const result = await withCache<NewsItem[]>(
-    // Bump this version whenever the query or the relevance filter changes.
-    // Entries outlive a deploy by design — KEEP_SECONDS is a week — so without
-    // a bump the new code serves the old code's results until they age out.
+  const result = await withCache<CachedNews>(
+    // Bump this version whenever the query, the relevance filter, or the shape
+    // cached here changes. Entries outlive a deploy by design — KEEP_SECONDS is
+    // a week — so without a bump the new code serves the old code's results
+    // until they age out, and a changed shape would be read back as the wrong
+    // type entirely.
     //
     // It also matters for review: the cache key contains no deployment
     // identity, so a PR preview and production address the same entries. Both
     // returned an identical 19 and 26 here while the branch's own numbers were
     // 29 and 49, which reads as a change that did nothing rather than a change
     // that hadn't been reached yet.
-    `news:v2:${windowDays}d`,
+    `news:v3:${windowDays}d`,
     {
       freshSeconds,
       keepSeconds: KEEP_SECONDS,
@@ -88,7 +99,9 @@ export const GET: APIRoute = async ({ url }) => {
     },
     async () => {
       const fetched = await fetchNews(windowDays);
-      if (fetched.ok) return fetched.newsItems;
+      if (fetched.ok) {
+        return { items: fetched.newsItems, truncated: fetched.truncated };
+      }
       // Only a real failure returns null. An empty-but-successful fetch is a
       // fact about a quiet week and gets cached as one — otherwise a quiet week
       // would refetch on every request and, worse, keep serving last month's
@@ -99,12 +112,17 @@ export const GET: APIRoute = async ({ url }) => {
   );
 
   const payload: NewsPayload = result
-    ? { newsItems: result.value, errorMessage: null }
+    ? {
+        newsItems: result.value.items,
+        errorMessage: null,
+        truncated: result.value.truncated,
+      }
     : {
         newsItems: [],
         // `failure` is null when the backoff short-circuited before any fetch,
         // so say that rather than implying we just tried and Google refused.
         errorMessage: failure ?? "News feed temporarily unavailable.",
+        truncated: false,
       };
 
   // Client max-age stays short so a reader with a tab open picks up new

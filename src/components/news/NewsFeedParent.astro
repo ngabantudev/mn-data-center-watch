@@ -7,7 +7,12 @@ interface Props extends NewsPayload {
   initialDays?: number;
 }
 
-const { newsItems, errorMessage, initialDays = 7 } = Astro.props;
+const { newsItems, errorMessage, truncated, initialDays = 7 } = Astro.props;
+
+// Said once, here, so the server's first paint and the client's re-render
+// below can't drift into telling the reader two different things.
+const TRUNCATION_NOTICE =
+  "Google returns at most 100 results per search, and this range hit that limit. These are a sample of the period, not every story in it.";
 
 const RANGE_OPTIONS = [
   { label: "24H", days: 1 },
@@ -135,7 +140,13 @@ const RANGE_OPTIONS = [
           No new local updates found.
         </p>
       ) : (
-        newsItems.map((item) => (
+        <Fragment>
+          {truncated && (
+            <p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">
+              {TRUNCATION_NOTICE}
+            </p>
+          )}
+          {newsItems.map((item) => (
           <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
             <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-1">
               {item.source}
@@ -149,7 +160,8 @@ const RANGE_OPTIONS = [
               {formatNewsDate(item.published)}
             </span>
           </article>
-        ))
+          ))}
+        </Fragment>
       )
     }
   </div>
@@ -187,7 +199,7 @@ const RANGE_OPTIONS = [
   is:inline
   type="application/json"
   id="nf-initial-data"
-  set:html={JSON.stringify({ newsItems, errorMessage }).replace(/</g, "\\u003c")}
+  set:html={JSON.stringify({ newsItems, errorMessage, truncated, notice: TRUNCATION_NOTICE }).replace(/</g, "\\u003c")}
 />
 
 <script>
@@ -253,13 +265,23 @@ const RANGE_OPTIONS = [
       .sort(byPublishedDesc);
   }
 
-  function readInitialPayload(): NewsPayload {
+  // Carried over from the server render rather than restated here, so the two
+  // copies of this sentence can't drift apart.
+  let truncationNotice = "";
+
+  // Truncation is a property of the window being shown, not of the accumulated
+  // pool, so it's tracked per window: switching from 1Y back to 7D has to drop
+  // the caveat along with the year's extra articles.
+  const truncatedWindows = new Set<number>();
+
+  function readInitialPayload(): NewsPayload & { notice?: string } {
     const el = document.getElementById("nf-initial-data");
-    if (!el?.textContent) return { newsItems: [], errorMessage: null };
+    const empty = { newsItems: [], errorMessage: null, truncated: false };
+    if (!el?.textContent) return empty;
     try {
       return JSON.parse(el.textContent);
     } catch {
-      return { newsItems: [], errorMessage: null };
+      return empty;
     }
   }
 
@@ -316,7 +338,11 @@ const RANGE_OPTIONS = [
     } else if (newsItems.length === 0) {
       area.innerHTML = `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`;
     } else {
-      area.innerHTML = newsItems.map(itemHTML).join("");
+      const notice =
+        truncatedWindows.has(currentDays) && truncationNotice
+          ? `<p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">${escapeHtml(truncationNotice)}</p>`
+          : "";
+      area.innerHTML = notice + newsItems.map(itemHTML).join("");
     }
 
     renderTicker(errorMessage ? [] : newsItems);
@@ -371,6 +397,11 @@ const RANGE_OPTIONS = [
       } else {
         mergeItems(data.newsItems ?? []);
         lastFetchError = null;
+        // Recorded, not just read, because the pool this window renders from
+        // accumulates across fetches: once 1Y has been shown to be cut off,
+        // coming back to it later must still say so.
+        if (data.truncated) truncatedWindows.add(days);
+        else truncatedWindows.delete(days);
       }
       // Best-effort: if we still have relevant cached items (from a prior
       // successful fetch of a different window) show those rather than
@@ -408,11 +439,14 @@ const RANGE_OPTIONS = [
     // away and back.
     articleCache = new Map();
     lastFetchError = null;
+    truncatedWindows.clear();
     const initialPayload = readInitialPayload();
+    truncationNotice = initialPayload.notice ?? "";
     if (initialPayload.errorMessage) {
       lastFetchError = initialPayload.errorMessage;
     } else {
       mergeItems(initialPayload.newsItems);
+      if (initialPayload.truncated) truncatedWindows.add(currentDays);
     }
     renderTicker(
       initialPayload.errorMessage ? [] : initialPayload.newsItems,

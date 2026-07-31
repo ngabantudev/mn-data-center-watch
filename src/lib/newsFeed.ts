@@ -19,7 +19,7 @@ export interface NewsItem {
  * serve last week's articles on a day that really had none. Neither is true.
  */
 export type NewsResult =
-  | { ok: true; newsItems: NewsItem[] }
+  | { ok: true; newsItems: NewsItem[]; truncated: boolean }
   | { ok: false; reason: string };
 
 /**
@@ -32,7 +32,24 @@ export type NewsResult =
 export interface NewsPayload {
   newsItems: NewsItem[];
   errorMessage: string | null;
+  /**
+   * True when Google returned all it will return for at least one of the
+   * searches behind this window, so the list is a sample of the period rather
+   * than a record of it. Surfaced in the panel — a civic feed that quietly
+   * truncates a year reads as "this is what happened", which is a claim we
+   * cannot support.
+   */
+  truncated: boolean;
 }
+
+/**
+ * Most items Google News RSS will return for one search, whatever is asked.
+ *
+ * Measured, not documented: `"data center" when:365d`, a bare `data center`,
+ * and even `news when:365d` all come back with exactly 100. A search returning
+ * exactly this many has almost certainly been cut off rather than exhausted.
+ */
+const GOOGLE_RESULT_CEILING = 100;
 
 /**
  * Wall-clock budget for the Google News RSS call.
@@ -187,6 +204,28 @@ const MINNESOTA_SOURCE_TERMS = [
  * about it: a story that names another state and nowhere here is the ambiguous
  * case, and dropping it is the better error.
  */
+function isLocalOutlet(source: string): boolean {
+  const name = source.toLowerCase();
+  return MINNESOTA_SOURCE_TERMS.some((t) => name.includes(t));
+}
+
+/**
+ * The second check on the outlet signal, for scope rather than place.
+ *
+ * The state guard below only catches copy that names somewhere else. It does
+ * nothing about a Minnesota paper's coverage of the industry at large, which
+ * is how "Five things to know as data centers spread across rural America" and
+ * "Trump expands a voluntary pledge to protect consumers from high utility
+ * bills from AI data centers" reached a map of Minnesota sites.
+ *
+ * Same narrow application as the state guard: only items resting entirely on
+ * their outlet. A story that names a Minnesota place is unaffected however
+ * national its framing, so the Star Tribune explaining a federal rule's effect
+ * on Becker still belongs here and still arrives.
+ */
+const NATIONAL_SCOPE_PATTERN =
+  /\b(rural america|across america|nationwide|across the country|the u\.?s\.?|united states|nationally|nation's|federal government|white house|congress|trump|globally|worldwide|every state|other states)\b/;
+
 const OTHER_STATE_PATTERN = new RegExp(
   `\\b(${[
     "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
@@ -269,6 +308,12 @@ const MINNESOTA_TERMS = [
   "pine island",
   "lonsdale",
   "mankato",
+  // Towns and counties that only reached the feed through their outlet, which
+  // meant MPR's Hermantown and Inver Grove Heights coverage — two of the
+  // largest fights in the state — rested on a signal meant as a backstop.
+  "hermantown",
+  "inver grove heights",
+  "nobles county",
 ];
 
 /**
@@ -311,19 +356,153 @@ const GEOGRAPHY_QUERIES = [
   ].join(" OR ")})`,
 ];
 
-function buildDateQuery(windowDays: number): string {
-  // when: is documented and reliable up to 1y; anything longer uses
-  // after:/before: date ranges instead, since when: beyond ~1y is
-  // undocumented and its behavior isn't guaranteed by Google.
+/**
+ * Longest stretch asked for in one search.
+ *
+ * The ceiling above is per search, not per window, so a long window asked for
+ * in one go loses whatever doesn't fit. Splitting it into consecutive date
+ * ranges gives each stretch its own allowance: a year asked for once returned
+ * 176 items across both searches, and asked for in quarters returned 612.
+ *
+ * Ninety days rather than something smaller because the gain flattens while the
+ * cost doesn't. Sixty-one-day segments only reached 762, and every extra
+ * segment is two more calls to an upstream that already drops connections from
+ * a Worker — where a failure costs a whole quarter of the year, four segments
+ * fail more gracefully than twelve. Minnesota's data center coverage is dense
+ * enough that the most recent quarters still hit the ceiling even split this
+ * way, which is exactly what `truncated` exists to admit rather than hide.
+ */
+const MAX_SEGMENT_DAYS = 90;
+
+/**
+ * The date half of the query, as one clause per stretch of the window.
+ *
+ * Returns a single `when:Nd` for anything inside a month, which is both what
+ * Google documents and what it handles best. Longer windows become explicit
+ * `after:/before:` ranges, since `when:` beyond ~1y is undocumented and its
+ * behaviour isn't guaranteed.
+ */
+function buildDateQueries(windowDays: number): string[] {
   if (windowDays <= 30) {
-    return `when:${windowDays}d`;
+    return [`when:${windowDays}d`];
   }
 
-  const now = new Date();
-  const after = new Date(now);
-  after.setDate(after.getDate() - windowDays);
   const fmt = (d: Date) => d.toISOString().slice(0, 10); // YYYY-MM-DD
-  return `after:${fmt(after)} before:${fmt(now)}`;
+  const now = new Date();
+  const oldest = new Date(now);
+  oldest.setDate(oldest.getDate() - windowDays);
+
+  // Even segments, rather than filling from the near end and leaving whatever
+  // is left over: 365 days cut into 90s ends with a five-day tail that costs a
+  // full pair of upstream calls to cover five days of news.
+  const segments = Math.ceil(windowDays / MAX_SEGMENT_DAYS);
+  const segmentDays = windowDays / segments;
+
+  return Array.from({ length: segments }, (_, i) => {
+    const before = new Date(now);
+    before.setDate(before.getDate() - Math.round(i * segmentDays));
+    const after = new Date(now);
+    after.setDate(after.getDate() - Math.round((i + 1) * segmentDays));
+    return `after:${fmt(after)} before:${fmt(before)}`;
+  });
+}
+
+/**
+ * Words carried by so much of this feed that counting them would make any two
+ * headlines look alike, plus ordinary English filler. Removing them is what
+ * makes the overlap below measure the story rather than the topic.
+ */
+const DUPLICATE_STOP_WORDS = new Set(
+  ("a an the and or but of in on at to for with from by as is are was were be " +
+    "been that this it its into over under after before more most new news say " +
+    "says said will would can could what when where who why how than then them " +
+    "they their there here about against during up down out off " +
+    "data center centers centre minnesota mn").split(" "),
+);
+
+function contentWords(title: string): Set<string> {
+  return new Set(
+    title
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !DUPLICATE_STOP_WORDS.has(w)),
+  );
+}
+
+function overlap(a: Set<string>, b: Set<string>): number {
+  let shared = 0;
+  for (const word of a) if (b.has(word)) shared++;
+  const union = a.size + b.size - shared;
+  return union === 0 ? 0 : shared / union;
+}
+
+/**
+ * How alike two headlines must be to count as the same story, and how close
+ * together they must have run.
+ *
+ * Both numbers are deliberately conservative, because the two errors are not
+ * equally bad: showing one story twice is untidy, and collapsing two different
+ * stories into one hides local reporting from someone trying to follow a fight
+ * in their own town. Only the second is a lie.
+ *
+ * 0.55 is the lowest setting at which every collapse over a year of this feed
+ * was checked by hand and found to be a genuine repeat — nine of them, mostly
+ * the same Google announcement rewritten by five outlets in a day. At 0.50 it
+ * starts merging "Google seeks tax break for massive data center in Hermantown"
+ * into "Hermantown delays vote on tax break for Google data center", which are
+ * two different events a fortnight apart, so 0.50 is where it stops being true.
+ *
+ * There is a hard ceiling on what this can do, and it isn't worth pretending
+ * otherwise: "Data center company acquires former Minnesota Star Tribune
+ * printing site" and "Data center developer signs deal to buy Minnesota Star
+ * Tribune's shuttered plant" are one story and score 0.18, while "Inver Grove
+ * Heights approves one-year moratorium" and "Inver Grove Heights meeting erupts
+ * into shouts after moratorium delayed" are two meetings and score 0.36. No
+ * threshold separates those. This one collapses what is provably duplicate and
+ * leaves the rest alone.
+ *
+ * The date window is what stops a recurring story from eating itself: the same
+ * outlet's "Mpls City Council to vote on data center moratorium" and "Mpls City
+ * Council discusses data center moratorium" score 0.67, and are twenty days and
+ * two meetings apart.
+ */
+const DUPLICATE_OVERLAP = 0.55;
+const DUPLICATE_WINDOW_DAYS = 7;
+
+/**
+ * Collapse syndicated and wire-copy repeats of one story.
+ *
+ * Keeps the Minnesota outlet's version when the cluster has one, on the
+ * grounds that a reader following a local fight is better served by the paper
+ * covering it than by the aggregator that reprinted it. Otherwise keeps the
+ * first, which — the list arriving sorted — is the most recent.
+ */
+function collapseDuplicates(items: NewsItem[]): NewsItem[] {
+  const kept: { item: NewsItem; words: Set<string>; at: number }[] = [];
+
+  for (const item of items) {
+    const words = contentWords(item.title);
+    const at = new Date(item.published).getTime();
+    const twin = kept.find(
+      (k) =>
+        Math.abs(at - k.at) <= DUPLICATE_WINDOW_DAYS * 86_400_000 &&
+        overlap(words, k.words) >= DUPLICATE_OVERLAP,
+    );
+
+    if (!twin) {
+      kept.push({ item, words, at });
+      continue;
+    }
+
+    // Same story. Prefer whichever version is the local one.
+    if (isLocalOutlet(item.source) && !isLocalOutlet(twin.item.source)) {
+      twin.item = item;
+    }
+  }
+
+  return kept.map((k) => k.item);
 }
 
 /**
@@ -407,6 +586,10 @@ async function attemptNews(
       };
     });
 
+    // Compared before filtering: the ceiling applies to what Google returned,
+    // not to what survived our relevance test.
+    const truncated = itemMatches.length >= GOOGLE_RESULT_CEILING;
+
     const newsItems = parsed
       .filter((item) => {
         const hasDataCenter = DATA_CENTER_TERMS.some((t) => item.haystack.includes(t));
@@ -415,19 +598,17 @@ async function attemptNews(
         // from the haystack rather than folded into it, so that an outlet name
         // can never stand in for the data center half of the test.
         const namesPlace = MINNESOTA_TERMS.some((t) => item.haystack.includes(t));
-        const sourceName = item.source.toLowerCase();
-        const isLocalOutlet = MINNESOTA_SOURCE_TERMS.some((t) =>
-          sourceName.includes(t),
-        );
         const hasMinnesota =
           namesPlace ||
-          (isLocalOutlet && !OTHER_STATE_PATTERN.test(item.haystack));
+          (isLocalOutlet(item.source) &&
+            !OTHER_STATE_PATTERN.test(item.haystack) &&
+            !NATIONAL_SCOPE_PATTERN.test(item.haystack));
         return hasDataCenter && hasMinnesota;
       })
       .sort(byPublishedDesc)
       .map(({ haystack, ...item }) => item);
 
-    return { ok: true, newsItems };
+    return { ok: true, newsItems, truncated };
 
   } catch (error) {
     // The old message here claimed "unavailable in dev environment", which was
@@ -473,10 +654,12 @@ async function fetchOneQuery(rawQuery: string): Promise<NewsResult> {
 }
 
 export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
-  const dateQuery = buildDateQuery(windowDays);
+  const dateQueries = buildDateQueries(windowDays);
   const results = await Promise.all(
-    GEOGRAPHY_QUERIES.map((geography) =>
-      fetchOneQuery(`"data center" ${geography} ${dateQuery}`),
+    GEOGRAPHY_QUERIES.flatMap((geography) =>
+      dateQueries.map((dates) =>
+        fetchOneQuery(`"data center" ${geography} ${dates}`),
+      ),
     ),
   );
 
@@ -507,7 +690,18 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
     merged.push(item);
   }
 
-  return { ok: true, newsItems: merged.sort(byPublishedDesc) };
+  // A search that failed tells us nothing about whether it would have been
+  // truncated, so only the ones that answered can report it. A window is
+  // reported as truncated if any of them was: the reader is being told the
+  // period isn't fully covered, and one cut-off search is enough for that to
+  // be true.
+  const truncated = succeeded.some((r) => r.truncated);
+
+  return {
+    ok: true,
+    newsItems: collapseDuplicates(merged.sort(byPublishedDesc)),
+    truncated,
+  };
 }
 
 /**
@@ -523,6 +717,10 @@ export async function fetchLocalNews(
 ): Promise<NewsPayload> {
   const result = await fetchNews(windowDays);
   return result.ok
-    ? { newsItems: result.newsItems, errorMessage: null }
-    : { newsItems: [], errorMessage: result.reason };
+    ? {
+        newsItems: result.newsItems,
+        errorMessage: null,
+        truncated: result.truncated,
+      }
+    : { newsItems: [], errorMessage: result.reason, truncated: false };
 }
