@@ -35,15 +35,21 @@
 // ---------------------------------------------------------------------------
 // 2. THE ONE MESSAGE BETWEEN THEM
 // ---------------------------------------------------------------------------
-// The bar is a headline, so it has to lead to the readout. It cannot open that
-// section itself: the rail's accordion is exclusive, it is collapsible as a
-// whole, and MapFilterParent.astro owns both of those. Reaching across into its
-// DOM from the bar would be exactly the two-owners bug the mobile-sheet and
-// map-control notes were written to remove.
+// The banner is a headline, so it has to lead to the record. It does not reach
+// into the modal to open it: the two are separate components mounted as
+// siblings by MapParent, and a `<dialog>` is opened by calling `showModal()` on
+// it, which is the dialog's own business — a caller that reached across for the
+// element and called it directly would be a second owner of that element's
+// state, which is the bug the mobile-sheet and map-control notes were written
+// to remove.
 //
-// So the bar asks and the rail answers, through one event on `document` — the
-// same shape `mapfilterchange`, `mapmarkerselect` and `mobilesheetchange`
+// So the banner asks and the record answers, through one event on `document` —
+// the same shape `mapfilterchange`, `mapmarkerselect` and `mobilesheetchange`
 // already use, and one direction only.
+//
+// (This used to be answered by MapFilterParent, which opened the tracker's
+// accordion section in the filters rail. That section is gone; the event
+// survived the move unchanged, which is the point of it being an event.)
 
 import { cleanGridProgress } from './cleanGridProgress';
 import { CARBON_FREE_DEADLINE_YEAR } from '~/data/mnCleanGridStandard';

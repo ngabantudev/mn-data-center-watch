@@ -296,13 +296,12 @@ const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
     OPEN_CLEAN_GRID_EVENT,
     syncCleanGridYear,
   } from "~/lib/cleanGridClient";
-  
 
   // Called here as well as from CleanGridTracker, rather than relying on that
   // component having mounted: the correction is idempotent (it only writes text
-  // derived from the current year), and a bar whose countdown depends on
-  // another island being present is a bar that silently goes stale the day
-  // somebody unmounts the rail.
+  // derived from the current year), and a banner whose countdown depends on
+  // another island being present is a banner that silently goes stale the day
+  // somebody unmounts the modal.
   let barCleanups: (() => void)[] = [];
 
   function initCleanGridBar(): void {
@@ -315,10 +314,10 @@ const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
 
     syncCleanGridYear();
 
-    // The bar is a headline, so it has to lead somewhere. MapFilterParent owns
-    // the rail's exclusive accordion and its collapsed state, and it is the
-    // only thing that can honour this — reaching into its DOM from here would
-    // be the two-owners bug the layout notes keep warning about.
+    // The banner is a headline, so it has to lead to the record. It announces
+    // rather than reaching for the modal: CleanGridTracker owns that `<dialog>`
+    // and is the only thing that calls `showModal()` on it. See the note on
+    // OPEN_CLEAN_GRID_EVENT in ~/lib/cleanGridClient.ts.
     const onClick = () => {
       document.dispatchEvent(new CustomEvent(OPEN_CLEAN_GRID_EVENT));
     };

@@ -137,7 +137,12 @@ const tickPercents = [
     </button>
   </div>
 
-  <div data-cg-root class="min-h-0 flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+  <!-- No `data-cg-root` here any more. It scoped this component's own year
+       correction to its own subtree, back when that correction lived in this
+       file; ~/lib/cleanGridClient.ts queries the document instead, precisely so
+       the banner and this record cannot disagree about the countdown. The
+       attribute survived the move as a hook nothing reads. -->
+  <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
     <!--
       The meter is deliberately NOT here any more — it is the banner over the
       map (CleanGridBar.astro), which is where a reader meets this widget now.
