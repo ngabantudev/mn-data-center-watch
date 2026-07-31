@@ -26,11 +26,18 @@
 //      caches.default put/match is not the same mechanism as automatic response
 //      caching. Confirmed by a cached payload outliving a version upload, which
 //      necessarily replaces the isolate;
-//   4. KV, if and only if a binding is present — the only layer shared between
-//      colos, so the only one that helps when traffic arrives from several
-//      regions at once. Optional by design: no binding means no setup, and
-//      adding one later upgrades the cache with no change to this file or its
-//      callers.
+//   4. KV — the only layer shared between colos, and the only one that
+//      survives both an isolate restart and eviction. It went unbound for a
+//      long time on the grounds that the layers above were enough; an outage
+//      disproved that, with the Cache API dropping a last-good news copy under
+//      memory pressure while the upstream was refusing us, leaving nothing to
+//      fall back to. Still read through a structural check rather than a
+//      generated type, so this file compiles and runs correctly whether or not
+//      the binding is configured.
+//
+// Layer 4 is checked last and is the slowest, which is the right order but
+// worth stating plainly: KV speeds up nothing that memory or the Cache API
+// already holds. What it changes is the cold case and the outage case.
 //
 // And the property that matters most on a civic site: a refresh that fails
 // serves the last good copy, labelled with when it was fetched, rather than an
@@ -48,7 +55,18 @@ export interface CacheResult<T> {
 }
 
 interface Envelope<T> {
-  value: T;
+  /**
+   * The cached value, or null for a *negative* entry — a refresh that failed
+   * with no last-good copy to fall back on.
+   *
+   * Negative entries exist to carry `retryAfter` through the shared layers.
+   * Before them the cold-failure backoff was a module-level Map, which is
+   * per-isolate: a colo spinning up a fresh isolate had no memory that the
+   * upstream was down, so it went and found out for itself, at whatever the
+   * upstream's timeout happened to be. Measured against the live deployment
+   * during a Google News outage, every single request paid that in full.
+   */
+  value: T | null;
   storedAt: string;
   /** Epoch ms after which we should try to refresh. */
   freshUntil: number;
@@ -78,31 +96,28 @@ interface KvLike {
   ): Promise<void>;
 }
 
-/** Binding name to look for. Absent is the expected case, not an error. */
+/** Binding name to look for. Configured in wrangler.jsonc; absence is handled
+ *  rather than assumed, so a checkout without it still runs. */
 const KV_BINDING = "LEGISLATION_CACHE";
 
 const memory = new Map<string, Envelope<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
 
 /**
- * Epoch ms of the next permitted attempt per key, for the case where a refresh
- * failed and there is no cached value to hang a `retryAfter` on. Memory-only
- * and per-isolate on purpose: it throttles retries, it isn't data, and losing
- * it on eviction costs one extra attempt.
- */
-const coldRetryAfter = new Map<string, number>();
-
-/**
  * Default wait after a failed refresh before trying again, matched to Open
  * States' one-minute rate-limit window: retrying inside it only collects
  * another 429.
  *
- * Callers override it, because the right value depends entirely on *why* the
- * upstream failed. A rate-limited API needs the full window. An upstream that
- * simply dropped one connection — Google News RSS does this — should be retried
- * in seconds, since backing off for a minute there converts one transient blip
- * into a minute of empty UI. Getting this wrong is invisible until you watch a
- * cold cache in production, which is exactly how it was found.
+ * Callers override it, because the right value depends on *why* the upstream
+ * failed and on what has already been tried before reaching this layer.
+ *
+ * This used to argue that Google News should override it down to seconds,
+ * since its failures are dropped connections and a long backoff would turn one
+ * blip into a minute of empty UI. That reasoning no longer applies to this
+ * layer: the blip case is now handled inside `fetchOneQuery`, which retries a
+ * dropped connection within a single request. A failure that reaches here has
+ * already survived that retry, which makes it an outage rather than a blip —
+ * and the news route now overrides *up* to a minute for exactly that reason.
  */
 const DEFAULT_FAILURE_BACKOFF_MS = 60_000;
 
@@ -170,10 +185,23 @@ async function read<T>(key: string): Promise<Envelope<T> | null> {
   return null;
 }
 
+/**
+ * `durable: false` keeps an entry out of KV, writing it only to the layers that
+ * cost nothing — module memory and the colo's Cache API.
+ *
+ * For cooldown markers, which are not data. KV's free tier allows 1,000 writes
+ * a day; a sustained upstream outage at a 60s backoff across the news route's
+ * four windows would spend 5,760 of them on entries whose whole content is
+ * "don't ask again yet". That would exhaust the quota that the *real* last-good
+ * copies depend on — so the failure state would evict the thing it exists to
+ * protect. Cooldowns are cheap to lose and cheap to recreate: the worst case
+ * for an isolate that never sees one is a single extra upstream attempt.
+ */
 async function write<T>(
   key: string,
   envelope: Envelope<T>,
   keepSeconds: number,
+  opts: { durable?: boolean } = {},
 ): Promise<void> {
   memory.set(key, envelope);
   const body = JSON.stringify(envelope);
@@ -194,7 +222,7 @@ async function write<T>(
       .catch(() => {});
   }
 
-  const store = kv();
+  const store = opts.durable === false ? null : kv();
   if (store) {
     await store.put(key, body, { expirationTtl: keepSeconds }).catch(() => {});
   }
@@ -211,11 +239,17 @@ async function write<T>(
  * `freshSeconds` is how long a value is served without contacting the API.
  * `keepSeconds` is how long it's retained as a stale fallback — deliberately
  * much longer, because a week-old bill list with a visible date beats nothing.
+ *
+ * `freshSeconds` may be a function of the value just built, for upstreams that
+ * can succeed *partially*. A degraded answer is still worth serving and still
+ * worth caching — but caching it for as long as a complete one lets one bad
+ * minute define the next several hours, and the caller is the only layer that
+ * can tell the two apart.
  */
 export async function withCache<T>(
   key: string,
   opts: {
-    freshSeconds: number;
+    freshSeconds: number | ((value: T) => number);
     keepSeconds: number;
     /** Wait before retrying after a failed refresh. Defaults to one minute;
      *  set it low for upstreams that fail transiently rather than by quota. */
@@ -230,19 +264,23 @@ export async function withCache<T>(
 
   const now = Date.now();
   const cached = await read<T>(key);
+  // A negative entry is present-but-empty: it carries a backoff and no data,
+  // so every "do we have something to serve" test below has to ask about the
+  // value rather than about the entry.
+  const lastGood = cached && cached.value !== null ? (cached as Envelope<T> & { value: T }) : null;
 
-  if (cached && now < cached.freshUntil) {
-    return { value: cached.value, storedAt: cached.storedAt, stale: false };
+  if (lastGood && now < lastGood.freshUntil) {
+    return { value: lastGood.value, storedAt: lastGood.storedAt, stale: false };
   }
 
   // A recent attempt already failed. Serve what we have and don't touch the
   // API — during an outage this is the difference between one probe a minute
   // and four calls per visitor.
   if (cached?.retryAfter && now < cached.retryAfter) {
-    return { value: cached.value, storedAt: cached.storedAt, stale: true };
+    return lastGood
+      ? { value: lastGood.value, storedAt: lastGood.storedAt, stale: true }
+      : null;
   }
-  const coldUntil = coldRetryAfter.get(key);
-  if (!cached && coldUntil !== undefined && now < coldUntil) return null;
 
   // Single-flight. Without this, N simultaneous cold requests each fire their
   // own page walk and collectively trip the per-minute limit — the exact
@@ -258,8 +296,8 @@ export async function withCache<T>(
         stale: false,
       };
     }
-    return cached
-      ? { value: cached.value, storedAt: cached.storedAt, stale: true }
+    return lastGood
+      ? { value: lastGood.value, storedAt: lastGood.storedAt, stale: true }
       : null;
   }
 
@@ -280,11 +318,14 @@ export async function withCache<T>(
   }
 
   if (fresh !== null) {
-    coldRetryAfter.delete(key);
     const storedAt = new Date(now).toISOString();
+    const freshSeconds =
+      typeof opts.freshSeconds === "function"
+        ? opts.freshSeconds(fresh)
+        : opts.freshSeconds;
     await write(
       key,
-      { value: fresh, storedAt, freshUntil: now + opts.freshSeconds * 1000 },
+      { value: fresh, storedAt, freshUntil: now + freshSeconds * 1000 },
       opts.keepSeconds,
     );
     return { value: fresh, storedAt, stale: false };
@@ -294,15 +335,37 @@ export async function withCache<T>(
   // the age we show the reader stays honest — and only push out the next
   // attempt. `freshUntil` deliberately stays in the past: this is a cooldown,
   // not a promotion of stale data back to fresh.
-  if (cached) {
+  if (lastGood) {
+    // Also non-durable, for a second reason on top of the write quota: the
+    // value is unchanged, so a KV write here would re-send the identical
+    // payload purely to stamp a new cooldown — and in doing so would push the
+    // entry's expiry back by another `keepSeconds`. Repeated failures would
+    // then keep renewing the fallback indefinitely, so a copy could stay
+    // "kept for a week" for a month. Leaving KV alone means it expires a week
+    // after the fetch that produced it, which is what keepSeconds means.
     await write(
       key,
-      { ...cached, retryAfter: now + backoffMs },
+      { ...lastGood, retryAfter: now + backoffMs },
       opts.keepSeconds,
+      { durable: false },
     );
-    return { value: cached.value, storedAt: cached.storedAt, stale: true };
+    return { value: lastGood.value, storedAt: lastGood.storedAt, stale: true };
   }
 
-  coldRetryAfter.set(key, now + backoffMs);
+  // Nothing to fall back on, so record the failure itself. This is what every
+  // other isolate — and every other colo, once a KV binding exists — reads to
+  // learn that the upstream is down without asking it again.
+  //
+  // Held only for the backoff, not for `keepSeconds`: it is a cooldown, and a
+  // week-long one would keep answering "unavailable" long after the upstream
+  // came back. `freshUntil: now` keeps it permanently stale by construction, so
+  // the single path that could mistake it for servable data never sees it as
+  // fresh even if the TTL is ignored by a layer.
+  await write(
+    key,
+    { value: null, storedAt: new Date(now).toISOString(), freshUntil: now, retryAfter: now + backoffMs },
+    Math.max(Math.ceil(backoffMs / 1000), 1),
+    { durable: false },
+  );
   return null;
 }

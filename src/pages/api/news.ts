@@ -36,6 +36,38 @@ interface CachedNews {
   partial: boolean;
 }
 
+/**
+ * Read a cache entry back into the payload's shape, tolerating one written by
+ * an older deploy.
+ *
+ * Entries outlive the code that wrote them by up to KEEP_SECONDS — a week — and
+ * the version in the key is the intended guard against reading them as the
+ * wrong shape. It only works if every shape change remembers to bump it, and
+ * `partial` was added to this interface without one: entries from before it
+ * came back with the field simply absent, which `JSON.stringify` then dropped
+ * from the response, so the client saw no `partial` key at all rather than
+ * `false`. It reads that as falsy and quietly stops mentioning that a window
+ * lost some of its searches.
+ *
+ * Defaulting here fixes the class rather than the instance. Bumping the version
+ * would fix this one and cost more than it's worth right now — it discards
+ * every last-good copy at exactly the moment Google is refusing us, which is
+ * when those copies are the only thing the panel has to show.
+ */
+function toPayload(
+  cached: CachedNews,
+  meta: { stale: boolean; storedAt: string },
+): NewsPayload {
+  return {
+    newsItems: cached.items ?? [],
+    errorMessage: null,
+    truncated: cached.truncated ?? false,
+    partial: cached.partial ?? false,
+    stale: meta.stale,
+    storedAt: meta.storedAt,
+  };
+}
+
 const ALLOWED_WINDOWS = [1, 7, 30, 365]; // days — beyond 1y rarely changes
                                           // results given Google News RSS's
                                           // ~100-item cap, so we stop here.
@@ -60,15 +92,43 @@ const FRESH_SECONDS: Record<number, number> = {
 const KEEP_SECONDS = 604800; // 7 days
 
 /**
- * Short, unlike the one-minute default the legislative tracker needs.
+ * Freshness for a window that only came back in part.
  *
- * That default exists to avoid re-tripping a per-minute quota. Google News RSS
- * imposes no such quota here — its failures are dropped connections, which
- * `fetchNews` already retries once. Holding a minute-long backoff on top would
- * turn one blip into a minute of empty panel, which is exactly what a cold
- * cache did on the first live test of this change.
+ * `fetchNews` reports success when at least one of a window's searches
+ * answered, which is right — a year fetched as ten searches shouldn't be thrown
+ * away because one of them dropped its connection. But the result was then
+ * cached as though it were whole, so a single bad moment during a 1Y refresh
+ * defined that window for the next six hours, and could overwrite a complete
+ * copy with a thinner one having done so.
+ *
+ * Five minutes is long enough to keep a flapping upstream from being re-asked
+ * per request, and short enough that the gap is filled by the next reader
+ * rather than by the next deploy. The result is still served and still labelled
+ * `partial` in the payload — this governs only how long we decline to improve
+ * on it.
  */
-const FAILURE_BACKOFF_SECONDS = 10;
+const PARTIAL_FRESH_SECONDS = 300;
+
+/**
+ * How long to leave Google alone after a failed refresh.
+ *
+ * This was 10s, on the reasoning that Google News RSS enforces no per-minute
+ * quota and its failures are dropped connections, so a long backoff would turn
+ * one blip into a minute of empty panel.
+ *
+ * The first half of that is still true and the conclusion no longer follows,
+ * because the blip case is now handled a layer down: `fetchOneQuery` retries a
+ * dropped connection immediately, within one request. Nothing is left for a
+ * short backoff here to rescue — by the time a failure reaches this level it
+ * has already survived a retry, which makes it an outage rather than a blip.
+ *
+ * And an outage is what 10s handled badly. Google does refuse this Worker's
+ * egress for long stretches — 503, sustained, reproducible — and at 10s each
+ * window re-probed roughly six times a minute, indefinitely, with whoever
+ * arrived mid-probe waiting on it. A minute costs a returning reader nothing
+ * (the tightest window is only fresh for 15) and cuts that by six.
+ */
+const FAILURE_BACKOFF_SECONDS = 60;
 
 export const GET: APIRoute = async ({ url }) => {
   const requested = Number(url.searchParams.get("days"));
@@ -94,7 +154,12 @@ export const GET: APIRoute = async ({ url }) => {
     // that hadn't been reached yet.
     `news:v3:${windowDays}d`,
     {
-      freshSeconds,
+      // A window that lost some of its searches is re-attempted sooner, so a
+      // thin copy can't hold the slot a complete one should occupy.
+      freshSeconds: (value) =>
+        value.partial === true
+          ? Math.min(PARTIAL_FRESH_SECONDS, freshSeconds)
+          : freshSeconds,
       keepSeconds: KEEP_SECONDS,
       failureBackoffSeconds: FAILURE_BACKOFF_SECONDS,
     },
@@ -117,12 +182,7 @@ export const GET: APIRoute = async ({ url }) => {
   );
 
   const payload: NewsPayload = result
-    ? {
-        newsItems: result.value.items,
-        errorMessage: null,
-        truncated: result.value.truncated,
-        partial: result.value.partial,
-      }
+    ? toPayload(result.value, { stale: result.stale, storedAt: result.storedAt })
     : {
         newsItems: [],
         // `failure` is null when the backoff short-circuited before any fetch,
@@ -130,13 +190,23 @@ export const GET: APIRoute = async ({ url }) => {
         errorMessage: failure ?? "News feed temporarily unavailable.",
         truncated: false,
         partial: false,
+        stale: false,
+        storedAt: null,
       };
 
   // Client max-age stays short so a reader with a tab open picks up new
   // coverage. s-maxage is what would matter behind a zone cache and is
   // harmless where there isn't one.
   const maxAge = windowDays >= 365 ? 3600 : 120;
-  const sMaxAge = result?.stale ? 60 : freshSeconds;
+  // Mirrors the freshness actually stored above. Advertising the full window
+  // for a stale or partial answer would have any shared cache in front of us
+  // hold the degraded copy exactly as long as a complete one — the same bug as
+  // the entry itself, one layer out.
+  const sMaxAge = result?.stale
+    ? 60
+    : payload.partial
+      ? Math.min(PARTIAL_FRESH_SECONDS, freshSeconds)
+      : freshSeconds;
 
   return jsonResponse(payload, {
     maxAge,

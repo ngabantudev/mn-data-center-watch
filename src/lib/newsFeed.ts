@@ -20,7 +20,16 @@ export interface NewsItem {
  */
 export type NewsResult =
   | { ok: true; newsItems: NewsItem[]; truncated: boolean; partial: boolean }
-  | { ok: false; reason: string };
+  | {
+      ok: false;
+      reason: string;
+      /**
+       * Whether trying the identical request again could plausibly answer
+       * differently. See `fetchOneQuery` — this is what stops a refusal from
+       * being paid for twice.
+       */
+      retryable: boolean;
+    };
 
 /**
  * The flattened shape the UI consumes, and the JSON body of /api/news.
@@ -51,6 +60,25 @@ export interface NewsPayload {
    * segments looks exactly like a year in which little happened.
    */
   partial: boolean;
+  /**
+   * True when the live refresh failed and these items are the last good copy.
+   *
+   * The route has always known this — it sets an `X-News-Source` header for
+   * debugging — but the panel never did, so during an outage a reader saw
+   * headlines fetched hours ago with nothing to distinguish them from live
+   * ones. A civic feed that serves yesterday as today is making a claim about
+   * the world it can't support.
+   */
+  stale: boolean;
+  /**
+   * When these items were fetched, ISO. Null when there is nothing to date —
+   * an outage with no cached copy behind it.
+   *
+   * Paired with `stale` rather than folded into it: "these are cached" and
+   * "cached *when*" are separate facts, and the second is what decides whether
+   * a reader should trust the list or go and look elsewhere.
+   */
+  storedAt: string | null;
 }
 
 /**
@@ -63,7 +91,7 @@ export interface NewsPayload {
 const GOOGLE_RESULT_CEILING = 100;
 
 /**
- * Wall-clock budget for the Google News RSS call.
+ * Wall-clock budget for one query — *including* its retry, not per attempt.
  *
  * Was 2000ms, which failed roughly one request in three from a Worker —
  * measured across all four windows on a live deployment. Google itself answers
@@ -71,8 +99,25 @@ const GOOGLE_RESULT_CEILING = 100;
  * too tight to absorb a cold isolate and a TLS handshake on top. There is no
  * cost to waiting longer on the rare slow call: the result is cached, so the
  * next visitor doesn't wait at all.
+ *
+ * "Including its retry" is the part that was wrong until now. Each attempt got
+ * its own 8s, so a window where Google was simply not answering cost 16s before
+ * anyone was told — measured at 13-16s per request against the live deployment
+ * while Google was 503ing the Worker's egress. The budget is the promise to the
+ * caller, so the retry has to spend what's left of it rather than opening a
+ * second one.
  */
-const FETCH_TIMEOUT_MS = 8000;
+const QUERY_BUDGET_MS = 8000;
+
+/**
+ * Least time worth starting a second attempt with.
+ *
+ * Under this, a retry can only turn one timeout into two and report the later
+ * one. The retry exists for connections that drop in milliseconds, and those
+ * leave nearly the whole budget behind — so the cases it was written for all
+ * clear this comfortably, and the case it was accidentally doubling does not.
+ */
+const MIN_RETRY_BUDGET_MS = 1500;
 
 /**
  * Newest first. Written out twice before — here and again in the news rail's
@@ -100,6 +145,36 @@ export function formatNewsDate(published: string): string {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+/**
+ * How long ago a cached copy was fetched, for the degraded banner.
+ *
+ * Coarse on purpose. The number exists to answer "should I trust this list",
+ * and "saved 3 hours ago" answers that where "saved 2h 47m ago" only looks
+ * like it does — the underlying `storedAt` is the moment a cache entry was
+ * written, not the moment the news happened, and precision would suggest we
+ * know more about the gap than we do.
+ *
+ * Returns null for anything unparseable rather than a fallback string, so the
+ * caller drops the phrase instead of rendering "saved NaN ago".
+ */
+export function formatCacheAge(storedAt: string | null, now: number = Date.now()): string | null {
+  if (!storedAt) return null;
+  const then = new Date(storedAt).getTime();
+  if (!Number.isFinite(then)) return null;
+
+  const minutes = Math.floor((now - then) / 60_000);
+  // Clock skew between the edge that wrote the entry and the reader's own
+  // machine can make a fresh copy look like it arrives from the future.
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 // --- Tune these lists to control precision without touching the fetch/parse logic ---
@@ -540,6 +615,7 @@ export function collapseDuplicates(items: NewsItem[]): NewsItem[] {
  */
 async function attemptNews(
   googleNewsUrl: string,
+  timeoutMs: number,
 ): Promise<NewsResult> {
   try {
     // Force an early escape rather than hanging a request on a slow upstream.
@@ -550,7 +626,7 @@ async function attemptNews(
     // the budgets stay separate constants — they're the same 8s for unrelated
     // reasons, and tuning one shouldn't move the other.
     const response = await fetch(googleNewsUrl, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
@@ -560,7 +636,18 @@ async function attemptNews(
       // Carry the status. "Feed unavailable" and "Google answered 429 to this
       // datacenter IP" call for completely different fixes, and the old code
       // made them indistinguishable from outside.
-      return { ok: false, reason: `Google News returned ${response.status}.` };
+      //
+      // Not retryable. A status is Google having answered — it read the
+      // request and refused it — and an immediate identical request gets the
+      // identical refusal. Confirmed against the live deployment during a 503:
+      // both attempts returned 503, so the second only ever added a round trip
+      // to a request that was already going to fail. Recovery is the cache's
+      // backoff to schedule, not this function's to keep guessing at.
+      return {
+        ok: false,
+        reason: `Google News returned ${response.status}.`,
+        retryable: false,
+      };
     }
 
     const xmlText = await response.text();
@@ -648,17 +735,25 @@ async function attemptNews(
     // `AbortController.abort()` (what this used to use) gives `AbortError`.
     const name = (error as Error | undefined)?.name;
     const timedOut = name === "TimeoutError" || name === "AbortError";
+
+    // Both kinds are worth another go — the retry below is the fix for a
+    // measured flake where the first connection dropped and an immediate repeat
+    // succeeded. A timeout says so too, but having spent the budget saying it,
+    // it will be refused a retry for want of time rather than for want of
+    // cause. That split is why the decision lives in `fetchOneQuery` and not
+    // in this flag.
     return {
       ok: false,
       reason: timedOut
-        ? `No response from Google News within ${FETCH_TIMEOUT_MS / 1000}s.`
+        ? `No response from Google News within ${Math.round(timeoutMs / 1000)}s.`
         : "Couldn't reach Google News.",
+      retryable: true,
     };
   }
 }
 
 /**
- * Fetch one window, retrying once.
+ * Fetch one window, retrying once — but only when a retry could still answer.
  *
  * The retry is not belt-and-braces, it's the fix for a measured failure: on a
  * live deployment the *first* call for a given window intermittently failed
@@ -666,19 +761,35 @@ async function attemptNews(
  * what's flaky. Unlike Open States, Google News RSS enforces no per-minute
  * quota here, so an immediate second attempt is free and almost always works.
  *
- * Two attempts, not more. Past that we'd be adding latency to a request that
- * has a cached fallback behind it anyway.
+ * What that reasoning missed is that it only holds for a connection that never
+ * got an answer. Two other cases were being retried on the same terms and paid
+ * for it twice:
+ *
+ *   a status — Google answered, and answered no. The repeat is refused
+ *   identically, so it buys a round trip and nothing else.
+ *
+ *   a timeout — plausibly transient, but the first attempt has already spent
+ *   the whole budget establishing that, and a second full budget on top is how
+ *   one unanswered window came to cost 16 seconds of a reader's time.
+ *
+ * So both attempts now draw on one budget, and the retry has to be affordable
+ * out of what's left. A dropped connection fails in milliseconds and leaves
+ * nearly all of it, which is exactly the case the retry was written for.
  */
 async function fetchOneQuery(rawQuery: string): Promise<NewsResult> {
   const query = encodeURIComponent(rawQuery);
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
-  const first = await attemptNews(googleNewsUrl);
-  if (first.ok) return first;
+  const startedAt = Date.now();
+  const first = await attemptNews(googleNewsUrl, QUERY_BUDGET_MS);
+  if (first.ok || !first.retryable) return first;
+
+  const remaining = QUERY_BUDGET_MS - (Date.now() - startedAt);
+  if (remaining < MIN_RETRY_BUDGET_MS) return first;
 
   // Whatever the second attempt says stands: on success it's the data, and on
   // failure it's the more recent truth about why.
-  return attemptNews(googleNewsUrl);
+  return attemptNews(googleNewsUrl, remaining);
 }
 
 export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
@@ -699,7 +810,13 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
   // search we added for extra reach happened to drop its connection.
   if (succeeded.length === 0) {
     const firstFailure = results.find((r) => !r.ok);
-    return firstFailure ?? { ok: false, reason: "Couldn't reach Google News." };
+    return (
+      firstFailure ?? {
+        ok: false,
+        reason: "Couldn't reach Google News.",
+        retryable: true,
+      }
+    );
   }
 
   // The two searches overlap heavily by design — anything naming both a county
@@ -751,11 +868,19 @@ export async function fetchLocalNews(
         errorMessage: null,
         truncated: result.truncated,
         partial: result.partial,
+        // Not stale: this ran moments ago, at build time. It becomes stale in
+        // the only sense the panel cares about when the client's own refresh
+        // fails and falls back to it — which is the client's fact to record,
+        // not this snapshot's, so it is stamped rather than pre-judged.
+        stale: false,
+        storedAt: new Date().toISOString(),
       }
     : {
         newsItems: [],
         errorMessage: result.reason,
         truncated: false,
         partial: false,
+        stale: false,
+        storedAt: null,
       };
 }

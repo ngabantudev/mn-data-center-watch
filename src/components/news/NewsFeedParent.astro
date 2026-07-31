@@ -1,7 +1,7 @@
 ---
 // src/components/news/NewsFeedParent.astro
 import { formatNewsDate, type NewsPayload } from "~/lib/newsFeed";
-import { Newspaper } from "lucide-astro";
+import { CloudOff, Newspaper, RefreshCw } from "lucide-astro";
 
 interface Props extends NewsPayload {
   initialDays?: number;
@@ -12,6 +12,8 @@ const {
   errorMessage,
   truncated,
   partial,
+  stale,
+  storedAt,
   initialDays = 7,
 } = Astro.props;
 
@@ -26,6 +28,30 @@ const CAP_NOTICE =
   "Google returns at most 100 results per search, and this range hit that limit. These are a sample of the period, not every story in it.";
 const PARTIAL_NOTICE =
   "Part of this range couldn't be loaded, so some dates may be missing entirely. Try again shortly.";
+
+/**
+ * The outage copy, and the reason it doesn't read like an error.
+ *
+ * What this state actually means is that one upstream feed is quiet — the map,
+ * the filters and the bill tracker are all fine, and nothing the reader did
+ * caused it or can fix it. The old treatment was a red panel reading
+ * "Error: Google News returned 503.", which hands a member of the public an
+ * HTTP status code and implies the site is broken. Both are wrong, and the
+ * second is the kind of thing that makes someone close the tab on a map they
+ * came to for something else.
+ *
+ * So: no red, plain language, and an explicit line saying what still works.
+ * The status code is kept — someone debugging genuinely wants it — but behind
+ * a disclosure, where it informs without alarming.
+ */
+const OUTAGE_TITLE = "Live headlines are unavailable";
+const OUTAGE_BODY =
+  "Google News isn't answering our server right now. The map, filters and bill tracker are unaffected.";
+/* Reads as a whole sentence on its own, so the age slot after it is a suffix
+   the script can leave empty when it can't date the copy. */
+const STALE_LEAD = "Live feed unavailable — showing saved headlines";
+const STALE_AGE_PREFIX = " from";
+const EMPTY_NOTICE = "No new local updates found.";
 
 const notice = truncated ? CAP_NOTICE : partial ? PARTIAL_NOTICE : "";
 
@@ -135,8 +161,16 @@ const RANGE_OPTIONS = [
         </button>
       ))
     }
+    <!--
+      `aria-live`, because the skeleton below it is `aria-hidden` — it's four
+      decorative boxes, and a screen reader should hear that the range is
+      loading rather than nothing at all. This span already carried the visible
+      "Loading…"; announcing it is what makes the two audiences equivalent.
+    -->
     <span
       id="nf-range-status"
+      role="status"
+      aria-live="polite"
       class="text-[9px] text-ink-4 ml-auto uppercase tracking-wider"
     />
   </div>
@@ -147,13 +181,27 @@ const RANGE_OPTIONS = [
   >
     {
       errorMessage ? (
-        <div class="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs border border-red-500/30 dark:border-red-400/40">
-          <strong>Error:</strong> {errorMessage}
+        /*
+          No-JS / build-time-failure rendering of the outage.
+
+          Almost always unreachable: the payload behind this first paint is
+          fetched at build time from CI, whose egress Google does answer, so the
+          state a live reader hits is the client one in the template below. This
+          exists for the case where the build itself couldn't reach Google, and
+          for anyone without JS — which is why it carries no Retry button, that
+          being the one part of the client state that can't work here.
+        */
+        <div class="flex flex-col items-center text-center gap-2 py-8 px-2">
+          <span class="w-9 h-9 rounded-full bg-hover flex items-center justify-center">
+            <Newspaper size={16} class="text-ink-4" aria-hidden="true" />
+          </span>
+          <p class="text-xs font-semibold text-ink-2">{OUTAGE_TITLE}</p>
+          <p class="text-[10px] text-ink-4 leading-snug max-w-60">
+            {OUTAGE_BODY}
+          </p>
         </div>
       ) : newsItems.length === 0 ? (
-        <p class="text-ink-4 text-xs font-medium px-1">
-          No new local updates found.
-        </p>
+        <p class="text-ink-4 text-xs font-medium px-1">{EMPTY_NOTICE}</p>
       ) : (
         <Fragment>
           {notice && (
@@ -180,6 +228,118 @@ const RANGE_OPTIONS = [
       )
     }
   </div>
+
+  <!--
+    The three states the client swaps into #nf-content-area, authored here as
+    templates rather than as HTML strings in the script.
+
+    The script already builds one kind of markup by hand (`itemHTML`), and that
+    is one too many: every class in a string is invisible to the Tailwind scan
+    that decides which utilities get emitted, and invisible to the linter that
+    keeps them canonical. These are real markup in a real component, so both
+    tools see them, and the copy above has exactly one owner for the server's
+    rendering and the client's alike.
+
+    Slots the script fills, all optional:
+      [data-nf-age]     how long ago the saved copy was fetched
+      [data-nf-detail]  the upstream reason, behind a disclosure
+  -->
+  <template id="nf-tpl-skeleton">
+    <!--
+      Four rows, matching the shape of a real article — source, two title
+      lines, date — so the panel keeps its rhythm while a range loads instead
+      of collapsing to a single line of text and springing back.
+
+      `aria-hidden` with a live-region label supplied by the script: a screen
+      reader should hear "loading", not four rows of empty boxes.
+    -->
+    <div class="space-y-4 motion-safe:animate-pulse" aria-hidden="true">
+      {
+        [0, 1, 2, 3].map(() => (
+          <div class="border-b border-hair pb-3.5 last:border-0 last:pb-0">
+            <div class="h-2 w-20 rounded bg-hover mb-2" />
+            <div class="h-2.5 w-full rounded bg-hover mb-1.5" />
+            <div class="h-2.5 w-4/5 rounded bg-hover mb-2.5" />
+            <div class="h-2 w-16 rounded bg-hover" />
+          </div>
+        ))
+      }
+    </div>
+  </template>
+
+  <template id="nf-tpl-stale">
+    <!--
+      Shown above headlines that are real but were fetched some time ago. It is
+      a caveat on otherwise-good content, so it sits inline above the list at
+      notice weight rather than replacing anything.
+    -->
+    <div
+      class="stat-well rounded-lg p-2.5 flex items-start gap-2 mb-1"
+      role="status"
+    >
+      <CloudOff size={12} class="text-ink-3 shrink-0 mt-px" aria-hidden="true" />
+      <p class="text-[10px] text-ink-3 leading-snug flex-1 min-w-0">
+        <!-- The prefix rides on the element the script fills rather than going
+             through the JSON island, so every word of this sentence stays
+             declared once, up in the frontmatter, next to the rest of the
+             copy. -->
+        {STALE_LEAD}<span data-nf-age data-prefix={STALE_AGE_PREFIX}></span>.
+      </p>
+      <button
+        type="button"
+        data-nf-retry
+        class="text-[9px] font-bold uppercase tracking-wider text-accent hover:text-accent-hover shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+      >
+        Retry
+      </button>
+    </div>
+  </template>
+
+  <!-- A genuinely quiet range, which is not an outage and must not look like
+       one — the whole `ok` / `failed` distinction in ~/lib/newsFeed.ts exists
+       to keep these two apart, and it would be undone by rendering them the
+       same way here. -->
+  <template id="nf-tpl-empty">
+    <p class="text-ink-4 text-xs font-medium px-1">{EMPTY_NOTICE}</p>
+  </template>
+
+  <template id="nf-tpl-outage">
+    <div class="flex flex-col items-center text-center gap-2.5 py-10 px-2">
+      <span
+        class="w-9 h-9 rounded-full bg-hover flex items-center justify-center"
+      >
+        <Newspaper size={16} class="text-ink-4" aria-hidden="true" />
+      </span>
+      <p class="text-xs font-semibold text-ink-2">{OUTAGE_TITLE}</p>
+      <p class="text-[10px] text-ink-4 leading-snug max-w-60">{OUTAGE_BODY}</p>
+      <button
+        type="button"
+        data-nf-retry
+        class="mt-0.5 inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border border-hair text-ink-3 hover:text-ink hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+      >
+        <RefreshCw size={10} aria-hidden="true" />
+        Try again
+      </button>
+      <!--
+        The status code, kept and demoted. Someone debugging this genuinely
+        wants "503" and a member of the public genuinely does not, and a
+        disclosure is the one control that serves both without a second
+        surface.
+      -->
+      <details class="mt-1 w-full max-w-60">
+        <summary
+          class="text-[9px] uppercase tracking-wider text-ink-4 hover:text-ink-3 cursor-pointer list-none focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+        >
+          Technical detail
+        </summary>
+        <p
+          data-nf-detail
+          class="text-[9px] text-ink-4 leading-snug pt-1.5 wrap-break-word"
+        >
+        </p>
+      </details>
+    </div>
+  </template>
 
   <!-- Desktop pull-tab toggle -->
   <button
@@ -214,7 +374,7 @@ const RANGE_OPTIONS = [
   is:inline
   type="application/json"
   id="nf-initial-data"
-  set:html={JSON.stringify({ newsItems, errorMessage, truncated, partial, notices: { cap: CAP_NOTICE, partial: PARTIAL_NOTICE } }).replace(/</g, "\\u003c")}
+  set:html={JSON.stringify({ newsItems, errorMessage, truncated, partial, stale, storedAt, notices: { cap: CAP_NOTICE, partial: PARTIAL_NOTICE } }).replace(/</g, "\\u003c")}
 />
 
 <script>
@@ -222,6 +382,7 @@ const RANGE_OPTIONS = [
   import {
     byPublishedDesc,
     collapseDuplicates,
+    formatCacheAge,
     formatNewsDate,
     type NewsItem,
     type NewsPayload,
@@ -242,6 +403,9 @@ const RANGE_OPTIONS = [
   let currentDays = 7;
   let desktopMql: MediaQueryList | null = null;
 
+  /** Ceiling on one /api/news call — see the note at the fetch itself. */
+  const NEWS_FETCH_TIMEOUT_MS = 12_000;
+
   // Every article ever fetched this session, keyed by normalized
   // title+source (see dedupeKey below) — not by url. Google News RSS
   // doesn't return consistent results across *differently scoped* queries
@@ -261,6 +425,29 @@ const RANGE_OPTIONS = [
   // live query returned a different URL/date for the identical headline.
   let articleCache = new Map<string, NewsItem>();
   let lastFetchError: string | null = null;
+
+  /**
+   * When the items currently in the pool were fetched, ISO.
+   *
+   * Tracked across fetches rather than read per response, because the banner
+   * that uses it appears exactly when the latest response has no date of its
+   * own: the refresh failed, and what's on screen is whatever the last
+   * *successful* one left behind. Overwritten only on success, so a run of
+   * failures keeps dating the copy the reader is actually looking at.
+   */
+  let lastStoredAt: string | null = null;
+
+  /**
+   * Whether what's on screen is current.
+   *
+   * Separate from `lastFetchError` rather than folded into it, because the two
+   * answer different questions and only one of them is a problem. A refresh can
+   * fail outright, or it can succeed and hand back the route's own last-good
+   * copy — both leave the reader looking at old headlines, which is what the
+   * banner is about, but only the first is an error and only the first should
+   * ever reach the outage state.
+   */
+  let degraded = false;
 
   // Google's per-query redirect URLs aren't a stable identity for "the
   // same story" (see note above), but a title from the same outlet is —
@@ -298,11 +485,13 @@ const RANGE_OPTIONS = [
 
   function readInitialPayload(): InitialPayload {
     const el = document.getElementById("nf-initial-data");
-    const empty = {
+    const empty: InitialPayload = {
       newsItems: [],
       errorMessage: null,
       truncated: false,
       partial: false,
+      stale: false,
+      storedAt: null,
     };
     if (!el?.textContent) return empty;
     try {
@@ -356,24 +545,95 @@ const RANGE_OPTIONS = [
     ticker.classList.add("flex");
   }
 
+  /** Clone one of the state templates authored in the markup above. */
+  function stateNode(id: string): DocumentFragment | null {
+    const tpl = document.getElementById(id) as HTMLTemplateElement | null;
+    return tpl ? (tpl.content.cloneNode(true) as DocumentFragment) : null;
+  }
+
+  /**
+   * Replace the list with the loading skeleton.
+   *
+   * Only for an explicit range click. The refresh on mount is silent by design
+   * (see `showRange`), and tearing down headlines someone is reading to show
+   * them four grey boxes would undo the point of that.
+   */
+  function renderSkeleton(): void {
+    const area = document.getElementById("nf-content-area");
+    const node = stateNode("nf-tpl-skeleton");
+    if (!area || !node) return;
+    area.setAttribute("aria-busy", "true");
+    area.replaceChildren(node);
+  }
+
+  /**
+   * Render the list, plus whatever caveat applies to it.
+   *
+   * Three outcomes, and they are deliberately not the same shape:
+   *
+   *   items, live      the list, with the cap/partial notice if either applies
+   *   items, stale     the same list under a banner dating it, because
+   *                    headlines fetched hours ago are still true and still
+   *                    worth reading — they just aren't news
+   *   nothing at all   the outage state, which explains itself and offers a
+   *                    retry rather than reporting a status code
+   *
+   * The middle one is the case this panel used to get wrong: a failed refresh
+   * fell back to the pool and rendered it with no indication that it had, so
+   * an outage looked exactly like a quiet afternoon.
+   */
   function renderNews(newsItems: NewsItem[], errorMessage: string | null): void {
     const area = document.getElementById("nf-content-area");
     if (!area) return;
+    area.removeAttribute("aria-busy");
 
-    if (errorMessage) {
-      area.innerHTML = `<div class="p-3 bg-red-500/10 text-red-700 dark:text-red-300 rounded-lg text-xs border border-red-500/30 dark:border-red-400/40"><strong>Error:</strong> ${escapeHtml(errorMessage)}</div>`;
-    } else if (newsItems.length === 0) {
-      area.innerHTML = `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`;
-    } else {
-      const kind = windowNotice.get(currentDays);
-      const text = kind ? notices[kind] : "";
-      const notice = text
-        ? `<p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">${escapeHtml(text)}</p>`
-        : "";
-      area.innerHTML = notice + newsItems.map(itemHTML).join("");
+    if (newsItems.length === 0) {
+      const node = stateNode(errorMessage ? "nf-tpl-outage" : "nf-tpl-empty");
+      if (node) {
+        // `textContent`, so an upstream string can never reach the DOM as
+        // markup. It originates in our own route, but it quotes Google.
+        const detail = (node as DocumentFragment).querySelector("[data-nf-detail]");
+        if (detail && errorMessage) detail.textContent = errorMessage;
+        area.replaceChildren(node);
+      }
+      renderTicker([]);
+      return;
     }
 
-    renderTicker(errorMessage ? [] : newsItems);
+    const parts: Node[] = [];
+
+    if (degraded) {
+      const banner = stateNode("nf-tpl-stale");
+      const age = formatCacheAge(lastStoredAt);
+      if (banner) {
+        const slot = banner.querySelector<HTMLElement>("[data-nf-age]");
+        // The lead reads "…showing saved headlines", so the age is a suffix
+        // and simply omitted when we can't date the copy — rather than the
+        // sentence admitting it doesn't know, which helps nobody.
+        if (slot) {
+          slot.textContent = age ? `${slot.dataset.prefix ?? ""} ${age}` : "";
+        }
+        parts.push(banner);
+      }
+    }
+
+    const kind = windowNotice.get(currentDays);
+    const text = kind ? notices[kind] : "";
+    if (text) {
+      const p = document.createElement("p");
+      p.className =
+        "text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair";
+      p.textContent = text;
+      parts.push(p);
+    }
+
+    const list = document.createElement("div");
+    list.className = "space-y-4";
+    list.innerHTML = newsItems.map(itemHTML).join("");
+    parts.push(list);
+
+    area.replaceChildren(...parts);
+    renderTicker(newsItems);
   }
 
   // `bg-accent-soft`, not `bg-accent/10`: the campaign banner's chamber pills are
@@ -414,17 +674,42 @@ const RANGE_OPTIONS = [
     if (status && !opts.silent) status.textContent = "Loading…";
 
     const buttons = root.querySelectorAll<HTMLButtonElement>(".nf-range-btn");
-    if (!opts.silent) buttons.forEach((btn) => (btn.disabled = true));
+    if (!opts.silent) {
+      buttons.forEach((btn) => (btn.disabled = true));
+      // The skeleton replaces the previous window's headlines, which is right
+      // here and wrong on the silent mount refresh — those articles belong to
+      // a range the reader has just navigated away from, so leaving them up
+      // would show them results for a window they didn't ask for.
+      renderSkeleton();
+    }
 
     try {
-      const res = await fetch(`/api/news?days=${days}`);
+      // Bounded, because the failure this guards against isn't a slow answer —
+      // it's no answer. Every exit from this function that re-enables the range
+      // buttons is in the `finally`, so a fetch that never settles leaves the
+      // controls disabled and the panel reading "Loading…" for as long as the
+      // tab is open. The route's own upstream budget is 8s per query (see
+      // QUERY_BUDGET_MS in ~/lib/newsFeed.ts) and its queries run in parallel,
+      // so this sits above a legitimately slow-but-working refresh rather than
+      // cutting one off.
+      const res = await fetch(`/api/news?days=${days}`, {
+        signal: AbortSignal.timeout(NEWS_FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) throw new Error("Request failed");
       const data = (await res.json()) as NewsPayload;
       if (data.errorMessage) {
         lastFetchError = data.errorMessage;
+        // Nothing live arrived, so whatever the pool renders from here is by
+        // definition not current.
+        degraded = true;
       } else {
         mergeItems(data.newsItems ?? []);
         lastFetchError = null;
+        // A response the route served from its *own* last-good copy is still a
+        // successful fetch — it just isn't live, and `stale` is how the route
+        // says so. `storedAt` dates the copy in both cases.
+        degraded = data.stale === true;
+        if (data.storedAt) lastStoredAt = data.storedAt;
         // Recorded, not just read, because the pool this window renders from
         // accumulates across fetches: once 1Y has been shown to be cut off,
         // coming back to it later must still say so. The cap is stated ahead
@@ -443,6 +728,9 @@ const RANGE_OPTIONS = [
         renderNews([], lastFetchError ?? "No updates found.");
       }
     } catch {
+      // Reached by the abort above as well as by a network failure, so the
+      // pool is just as much the right answer here as in the branch above.
+      degraded = true;
       if (articleCache.size > 0) {
         renderNews(itemsWithinWindow(days), null);
       } else {
@@ -465,11 +753,33 @@ const RANGE_OPTIONS = [
     const parsedInitialDays = Number(root.dataset.initialDays);
     currentDays = Number.isNaN(parsedInitialDays) ? 7 : parsedInitialDays;
 
+    // Retry, delegated to the content area rather than bound to the buttons.
+    // Both live inside markup that `renderNews` replaces wholesale, so a direct
+    // listener would be attached to a node that is thrown away the first time
+    // it is used — and re-binding after every render is the bookkeeping this
+    // avoids. The listener outlives the buttons because the container does.
+    const contentArea = document.getElementById("nf-content-area");
+    const onRetryClick = (event: Event) => {
+      const trigger = (event.target as HTMLElement | null)?.closest(
+        "[data-nf-retry]",
+      );
+      if (!trigger) return;
+      // Not silent: this is the most explicit request there is, and it must
+      // show that something happened even if it fails the same way again.
+      void showRange(root, currentDays);
+    };
+    contentArea?.addEventListener("click", onRetryClick);
+    newsCleanups.push(() =>
+      contentArea?.removeEventListener("click", onRetryClick),
+    );
+
     // Seed the shared pool with whatever the server already fetched for
     // the initial (default) range, so it's not lost if the user switches
     // away and back.
     articleCache = new Map();
     lastFetchError = null;
+    degraded = false;
+    lastStoredAt = null;
     windowNotice.clear();
     const initialPayload = readInitialPayload();
     notices = initialPayload.notices ?? { cap: "", partial: "" };
@@ -477,6 +787,10 @@ const RANGE_OPTIONS = [
       lastFetchError = initialPayload.errorMessage;
     } else {
       mergeItems(initialPayload.newsItems);
+      // Dates the build-time snapshot. If the refresh below then fails, this is
+      // what the banner reports — and on a site deployed days ago that is
+      // exactly the number a reader needs to see.
+      lastStoredAt = initialPayload.storedAt;
       if (initialPayload.truncated) windowNotice.set(currentDays, "cap");
       else if (initialPayload.partial)
         windowNotice.set(currentDays, "partial");
