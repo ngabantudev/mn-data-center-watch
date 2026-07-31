@@ -71,7 +71,16 @@ export const GET: APIRoute = async ({ url }) => {
   let failure: string | null = null;
 
   const result = await withCache<NewsItem[]>(
-    `news:v1:${windowDays}d`,
+    // Bump this version whenever the query or the relevance filter changes.
+    // Entries outlive a deploy by design — KEEP_SECONDS is a week — so without
+    // a bump the new code serves the old code's results until they age out.
+    //
+    // It also matters for review: the cache key contains no deployment
+    // identity, so a PR preview and production address the same entries. Both
+    // returned an identical 19 and 26 here while the branch's own numbers were
+    // 29 and 49, which reads as a change that did nothing rather than a change
+    // that hadn't been reached yet.
+    `news:v2:${windowDays}d`,
     {
       freshSeconds,
       keepSeconds: KEEP_SECONDS,
