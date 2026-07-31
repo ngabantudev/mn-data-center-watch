@@ -7,7 +7,27 @@ interface Props extends NewsPayload {
   initialDays?: number;
 }
 
-const { newsItems, errorMessage, initialDays = 7 } = Astro.props;
+const {
+  newsItems,
+  errorMessage,
+  truncated,
+  partial,
+  initialDays = 7,
+} = Astro.props;
+
+// Said once, here, so the server's first paint and the client's re-render
+// below can't drift into telling the reader two different things.
+//
+// Two sentences rather than one, because the two gaps aren't the same gap and
+// a reader deciding whether they've seen everything deserves to know which:
+// the cap thins the whole range evenly, while a failed search removes a
+// specific stretch of it.
+const CAP_NOTICE =
+  "Google returns at most 100 results per search, and this range hit that limit. These are a sample of the period, not every story in it.";
+const PARTIAL_NOTICE =
+  "Part of this range couldn't be loaded, so some dates may be missing entirely. Try again shortly.";
+
+const notice = truncated ? CAP_NOTICE : partial ? PARTIAL_NOTICE : "";
 
 const RANGE_OPTIONS = [
   { label: "24H", days: 1 },
@@ -135,7 +155,13 @@ const RANGE_OPTIONS = [
           No new local updates found.
         </p>
       ) : (
-        newsItems.map((item) => (
+        <Fragment>
+          {notice && (
+            <p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">
+              {notice}
+            </p>
+          )}
+          {newsItems.map((item) => (
           <article class="border-b border-hair pb-3.5 last:border-0 last:pb-0 group">
             <span class="text-[9px] font-bold text-accent tracking-wider uppercase block mb-1">
               {item.source}
@@ -149,7 +175,8 @@ const RANGE_OPTIONS = [
               {formatNewsDate(item.published)}
             </span>
           </article>
-        ))
+          ))}
+        </Fragment>
       )
     }
   </div>
@@ -187,13 +214,14 @@ const RANGE_OPTIONS = [
   is:inline
   type="application/json"
   id="nf-initial-data"
-  set:html={JSON.stringify({ newsItems, errorMessage }).replace(/</g, "\\u003c")}
+  set:html={JSON.stringify({ newsItems, errorMessage, truncated, partial, notices: { cap: CAP_NOTICE, partial: PARTIAL_NOTICE } }).replace(/</g, "\\u003c")}
 />
 
 <script>
   import { onReady } from "~/lib/domReady";
   import {
     byPublishedDesc,
+    collapseDuplicates,
     formatNewsDate,
     type NewsItem,
     type NewsPayload,
@@ -248,18 +276,39 @@ const RANGE_OPTIONS = [
 
   function itemsWithinWindow(days: number): NewsItem[] {
     const cutoff = Date.now() - days * DAY_MS;
-    return Array.from(articleCache.values())
-      .filter((item) => new Date(item.published).getTime() >= cutoff)
-      .sort(byPublishedDesc);
+    return collapseDuplicates(
+      Array.from(articleCache.values())
+        .filter((item) => new Date(item.published).getTime() >= cutoff)
+        .sort(byPublishedDesc),
+    );
   }
 
-  function readInitialPayload(): NewsPayload {
+  // Carried over from the server render rather than restated here, so the two
+  // copies of these sentences can't drift apart.
+  let notices = { cap: "", partial: "" };
+
+  // Coverage is a property of the window being shown, not of the accumulated
+  // pool, so it's tracked per window: switching from 1Y back to 7D has to drop
+  // the caveat along with the year's extra articles.
+  const windowNotice = new Map<number, "cap" | "partial">();
+
+  type InitialPayload = NewsPayload & {
+    notices?: { cap: string; partial: string };
+  };
+
+  function readInitialPayload(): InitialPayload {
     const el = document.getElementById("nf-initial-data");
-    if (!el?.textContent) return { newsItems: [], errorMessage: null };
+    const empty = {
+      newsItems: [],
+      errorMessage: null,
+      truncated: false,
+      partial: false,
+    };
+    if (!el?.textContent) return empty;
     try {
       return JSON.parse(el.textContent);
     } catch {
-      return { newsItems: [], errorMessage: null };
+      return empty;
     }
   }
 
@@ -316,7 +365,12 @@ const RANGE_OPTIONS = [
     } else if (newsItems.length === 0) {
       area.innerHTML = `<p class="text-ink-4 text-xs font-medium px-1">No new local updates found.</p>`;
     } else {
-      area.innerHTML = newsItems.map(itemHTML).join("");
+      const kind = windowNotice.get(currentDays);
+      const text = kind ? notices[kind] : "";
+      const notice = text
+        ? `<p class="text-[10px] text-ink-4 leading-snug px-1 pb-1 border-b border-hair">${escapeHtml(text)}</p>`
+        : "";
+      area.innerHTML = notice + newsItems.map(itemHTML).join("");
     }
 
     renderTicker(errorMessage ? [] : newsItems);
@@ -371,6 +425,14 @@ const RANGE_OPTIONS = [
       } else {
         mergeItems(data.newsItems ?? []);
         lastFetchError = null;
+        // Recorded, not just read, because the pool this window renders from
+        // accumulates across fetches: once 1Y has been shown to be cut off,
+        // coming back to it later must still say so. The cap is stated ahead
+        // of a failed segment when both apply — it's the permanent limit,
+        // where the other clears on the next successful fetch.
+        if (data.truncated) windowNotice.set(days, "cap");
+        else if (data.partial) windowNotice.set(days, "partial");
+        else windowNotice.delete(days);
       }
       // Best-effort: if we still have relevant cached items (from a prior
       // successful fetch of a different window) show those rather than
@@ -408,11 +470,16 @@ const RANGE_OPTIONS = [
     // away and back.
     articleCache = new Map();
     lastFetchError = null;
+    windowNotice.clear();
     const initialPayload = readInitialPayload();
+    notices = initialPayload.notices ?? { cap: "", partial: "" };
     if (initialPayload.errorMessage) {
       lastFetchError = initialPayload.errorMessage;
     } else {
       mergeItems(initialPayload.newsItems);
+      if (initialPayload.truncated) windowNotice.set(currentDays, "cap");
+      else if (initialPayload.partial)
+        windowNotice.set(currentDays, "partial");
     }
     renderTicker(
       initialPayload.errorMessage ? [] : initialPayload.newsItems,
