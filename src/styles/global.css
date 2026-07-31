@@ -315,14 +315,15 @@
 
 /*
   Scrolling panes that shouldn't show a scrollbar chrome — the filters sidebar,
-  the news list, the mobile news carousel, the "largest centers" list.
+  the news list, and the "largest centers" list. (There was a fourth, the phone
+  layout's news carousel; it went with the floating news card that held it.)
 
   Global, not per-component, and that's a fix rather than a preference: this
   lived in a scoped <style> block in two components, so it applied only to the
   elements those two files rendered themselves. FilterProject.astro's list
   carried the class with no rule behind it, and so did every news item the client
   island injects via innerHTML — both showed a scrollbar the design says they
-  shouldn't. One definition covers all four.
+  shouldn't. One definition covers every pane that asks for it.
 */
 .hide-scrollbar {
   -ms-overflow-style: none;
@@ -399,11 +400,16 @@
 
   --map-controls-bottom is the single source of truth for how far the
   whole stack sits off the bottom edge. It defaults to the same 10px inset
-  MapLibre uses natively. On mobile, MapFilterParent.astro raises it dynamically
-  (via inline style on :root) to whatever clears its own current rendered
-  height, since that panel's height changes as it expands/collapses. On
-  desktop it's left at the default, since the filters sidebar lives on the
-  left and never competes for this corner.
+  MapLibre uses natively. On a phone MobileToolbar.astro raises it (via inline
+  style on :root) to clear the toolbar's own measured height, which is not a
+  constant — the ticker row appears only once there is a headline, and the
+  safe-area padding is whatever the device reports. On desktop it is left at
+  the default, since nothing is docked to the bottom edge there.
+
+  MobileToolbar is the sole writer, and that is the whole design: this used to
+  be MapFilterParent.astro tracking its own floating card's height, back when
+  that card sat in this corner. It doesn't any more, and two owners for one
+  variable is the bug the single-sheet layout was written to remove.
 */
 :root {
   --map-ctrl-edge: 10px;

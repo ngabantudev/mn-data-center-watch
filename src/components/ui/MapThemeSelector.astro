@@ -17,8 +17,8 @@ const SITE_THEMES = [
   Collapsed: a single icon button, stacked directly above MapLibre's
   NavigationControl. Both share the --map-ctrl-edge / --map-controls-bottom
   CSS variables defined in global.css, so they always line up and move
-  together — MapFilterParent.astro raises --map-controls-bottom on mobile to
-  clear its own panel, which shifts this whole stack up in sync.
+  together — MobileToolbar.astro raises --map-controls-bottom to clear its own
+  measured height on a phone, which shifts this whole stack up in sync.
   Expanded: a small popover panel listing each style, opening upward so it
   doesn't run off the bottom of the viewport; picking one dispatches a
   `mapstylechange` CustomEvent on `document` with `{ url, id }` for MapParent.astro
