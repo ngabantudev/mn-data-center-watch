@@ -1,0 +1,329 @@
+---
+// src/components/grid/CleanGridBar.astro
+//
+// The 2040 mandate as a headline, at the top of the map.
+//
+// WHAT IT REPLACED
+//
+// All of this used to be an AccordionSection in the filters rail, and it was
+// invisible there: every section of that rail ships closed, so the mandate this
+// whole map argues against rendered as a 10px grey label reading "2040 CLEAN
+// GRID TRACKER", styled to recede, among five filter sections that looked
+// exactly like it. Present and unreadable.
+//
+// So the rail section is gone and this is what a reader meets instead: the
+// share, the meter, the milestone percentages, the countdown and the buildout
+// conditional, in the masthead's own voice and without a click.
+//
+// WHAT IT DELIBERATELY DOES NOT CARRY, and where that went.
+//
+// Everything this has no room to qualify: the 55% being generation mix rather
+// than a compliance score, the vintage on Xcel's figure, the § 216B.1691 subd.
+// 2b off-ramp, and the five sources behind the numbers. That is the record, and
+// it is the modal this banner opens — see CleanGridTracker.astro. A banner that
+// renders civic figures and drops their provenance would be worth less than no
+// banner, which is why deleting the rail section did not mean deleting its
+// contents.
+//
+// WHAT IT IS ALLOWED TO SAY, which is the part to be careful about.
+//
+// The buildout figure is a CONDITIONAL and has to read as one at a glance.
+// Most of the capacity on this map is proposed rather than energised, so a flat
+// "data centers use 45% of Minnesota's power" would be false today — and it is
+// the single sentence an opponent would need to discredit everything else here.
+// CleanGridTracker states it as "If every non-rejected site on this map were
+// built and running at 80% utilisation…"; this bar has one line for the same
+// claim, so the "if all are built" clause leads it and is not abbreviated away.
+//
+// It is also a LOAD figure and nothing more. It says how much electricity the
+// buildout wants. It does not say that electricity is fossil-fired — whether
+// new load is served cleanly is precisely what is contested, and asserting the
+// answer in a bar over the map would concede the argument the map exists to
+// have.
+//
+// ON A PHONE it renders too, and compactly — the eyebrow and the headline only,
+// with the meter, the countdown and the conditional held back to `md:`.
+//
+// That is a reversal, and the reason is that the rail section is gone. This was
+// desktop-only while the tracker still lived in the filters rail, because a
+// phone reader could reach the whole thing through the Filters sheet. Now the
+// record is a modal this banner opens, so a desktop-only banner would mean a
+// phone reader had no route to the 2040 mandate at all — deleting a widget for
+// half the audience while making it more prominent for the other half.
+//
+// It costs less than it looks. The top of a phone screen is the one place this
+// layout leaves empty: the campaign pill is `hidden md:flex` (the toolbar's
+// Bills tab replaced it), and the toolbar owns the bottom. Two lines at the top
+// take ~60px of map and are the only permanent surface up there.
+import { ChevronRight } from "lucide-astro";
+import {
+  CARBON_FREE_DEADLINE_YEAR,
+  CARBON_FREE_MILESTONES,
+  MN_CARBON_FREE_SHARE,
+} from "~/data/mnCleanGridStandard";
+import {
+  cleanGridProgress,
+  dataCenterLoadPressure,
+} from "~/lib/cleanGridProgress";
+
+// Build-time year, corrected on the client by ~/lib/cleanGridClient.ts — see the
+// `data-cg="years-phrase"` slot below. Rendered server-side anyway so the bar
+// is not blank on first paint and is correct with no JS at all.
+const progress = cleanGridProgress(new Date().getFullYear());
+const pressure = dataCenterLoadPressure();
+
+const sharePct = Math.round(MN_CARBON_FREE_SHARE.share * 100);
+
+// Same precision rule the tracker's own readout uses: this figure runs from a
+// fraction of a percent to double digits across plausible datasets, so a fixed
+// precision is wrong at one end or the other.
+const drawPct = (() => {
+  const value = pressure.shareOfStateLoad * 100;
+  if (value >= 10) return `${value.toFixed(0)}%`;
+  if (value >= 1) return `${value.toFixed(1)}%`;
+  return `${value.toFixed(2)}%`;
+})();
+
+const yearsPhrase =
+  progress.yearsLeft > 0
+    ? `${progress.yearsLeft} ${progress.yearsLeft === 1 ? "yr" : "yrs"} to 2040`
+    : "2040 mandate due";
+
+// Ticks are drawn for every distinct required percentage, not for every
+// milestone: 2030 contributes two (80 investor-owned, 60 co-op/municipal) and
+// 2040's 100 sits on the track's end cap. Deduped so the two converged tracks
+// in 2035 and 2040 don't stack two lines in one place. Moved here with the
+// meter; see the note on the legend below for why the years travel with it.
+const tickPercents = [
+  ...new Set(
+    CARBON_FREE_MILESTONES.flatMap((m) => [
+      Math.round(m.publicUtility * 100),
+      Math.round(m.otherUtility * 100),
+    ]),
+  ),
+].sort((a, b) => a - b);
+
+const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
+
+/** Compact legend under the meter — the ticks' accessible twin. See below. */
+const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
+  m.split
+    ? `${m.year} ${pct(m.publicUtility)}/${pct(m.otherUtility)}`
+    : `${m.year} ${pct(m.publicUtility)}`,
+).join(" · ");
+---
+
+<!--
+  A GREEN BANNER, and the one surface on this site that carries no theme tokens
+  at all.
+
+  It does not opt into `.band` the way CampaignBanner does, and it has no `dark:`
+  twin. Both are the same decision: this is brand identity, so it is fixed in
+  both themes, the way `.maplibregl-popup-content` is deliberately white in both
+  (see global.css) and the way billStageMeta.ts pins its stage hexes. A green
+  that became a different green at night would not be mn.gov's green.
+
+  THE GREEN IS mn.gov's OWN, #78be21, verified against the portal's core.css
+  where it appears fifteen times.
+
+  THE TYPE IS NAVY, AND THAT IS ALSO mn.gov's. White on this green measures
+  2.29:1 — it fails AA for normal text (4.5:1) and fails even the large-text
+  floor (3:1), so at the 10px sourcing line below it would be barely readable.
+  The portal ships both treatments and only one of them is safe:
+
+    .btn-success                  { background:#78be21; color:white }   2.29:1
+    .button-brand-secondary       { background:#78be21; color:#003865 } 5.24:1
+    .main-landing-content.branded-green { background-color:#78be21; color:#222 }
+
+  This follows `.button-brand-secondary`, with the flag's Night Sky Blue in
+  place of the portal's older navy — which is both our own masthead colour and
+  slightly the better contrast of the two.
+
+  MEASURED, and the reason every line here is solid rather than a softened
+  navy: the obvious way to get hierarchy on a coloured panel is to drop the
+  secondary text to 75% opacity, and composited over this green that lands at
+  3.91:1 — under AA for the eyebrow. So hierarchy is carried entirely by size
+  and weight, and every ink value is the full navy.
+
+    #002d5d on #78be21                       5.99:1   AA at any size
+    #002d5d on #86d425 (hover, the portal's) 7.47:1
+
+  Solid, not `/95` like the panels around it. Their translucency is frosted
+  chrome over the map; here it would shift the background under the type by
+  however light or dark the basemap happens to be at that spot, which is exactly
+  the variable a measured contrast ratio cannot have.
+
+  POSITIONING is split by width because its parent is. The top-centre stack in
+  MapParent.astro is `contents` below 768px, so there is no positioned ancestor
+  down there and this places itself; at `md:` the wrapper takes over and this
+  goes back to being a flow child of it, which is what keeps it and the campaign
+  pill from ever overlapping.
+-->
+<button
+  id="cg-bar"
+  type="button"
+  aria-label="Minnesota 2040 clean grid mandate — open the full record"
+  class="group block absolute top-2 inset-x-2 z-55 md:static md:inset-auto md:z-auto w-auto md:w-full text-left rounded-xl bg-[#78be21] border border-[#6aa81d] shadow-2xl shadow-(color:--shadow-panel) px-3.5 py-2 md:py-2.5 pointer-events-auto font-sans hover:bg-[#86d425] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#002d5d]/60"
+>
+  <!-- The eyebrow, at the masthead's own size and tracking. Not truncated: at
+       the 13rem clamp floor it wraps to two lines, which is legible, where
+       clipping "MN 2040 CLEAN GR…" is not. -->
+  <span class="flex items-start gap-2">
+    <span
+      class="text-xs xl:text-sm font-semibold uppercase tracking-[0.25em] leading-none text-[#002d5d]"
+      >MN 2040 Clean Grid</span
+    >
+    <ChevronRight
+      size={16}
+      class="ml-auto shrink-0 -mt-0.5 text-[#002d5d] transition-transform group-hover:translate-x-0.5"
+    />
+  </span>
+
+  <!--
+    The headline, at MINNESOTA's weight and scale. The qualifier is set with it
+    rather than under it because it is not decoration: 55% is the share of
+    in-state *generation* that is carbon-free, which is not a compliance score —
+    the statute is enforced per utility against retail sales, and the tracker's
+    Sources block is where that distinction has room. A bare "55%" over the map
+    would be the misread this whole file is trying to avoid.
+  -->
+  <!--
+    `xl:` is where the width clamp stops biting. Below 1280px
+    `calc(100vw - 50rem)` resolves under the full 28rem, so this headline wraps
+    to two or three lines and the box grows against the map — 213px tall at
+    1024px with the type at one fixed size, which is a lot of map spent on four
+    facts. One step down through that band keeps it a headline without letting
+    it become a panel.
+  -->
+  <span class="mt-1 md:mt-1.5 block text-lg md:text-2xl xl:text-3xl font-black uppercase tracking-tight leading-none text-[#002d5d]">
+    <span class="tabular-nums">{sharePct}%</span> carbon-free
+  </span>
+
+  <!--
+    THE METER, moved here from the rail's section.
+
+    The axis is carbon-free share, 0–100%, not time — that distinction is the
+    whole reason this widget is shaped the way it is, and the note in
+    CleanGridTracker.astro spells it out: a bar running "today → 2040" would sit
+    at ~30% in 2030 and read as *progress* in a year the state might have missed
+    its first statutory target. Time is carried by the countdown line below,
+    where it cannot be mistaken for achievement.
+
+    `role="progressbar"` with an explicit `aria-valuetext`, because the bare
+    "55" a screen reader would otherwise announce is the least useful half of
+    this readout — the gap to the mandate is the point.
+
+    Navy on the green, like everything else here: the fill measures 5.99:1
+    against the panel and 4.32:1 against its own track, both clear of the 3.0:1
+    floor for graphics that carry meaning.
+  -->
+  <span
+    class="relative mt-2.5 hidden md:block h-2.5 w-full overflow-hidden rounded-full bg-[#002d5d]/20"
+    role="progressbar"
+    aria-valuenow={sharePct}
+    aria-valuemin={0}
+    aria-valuemax={100}
+    aria-valuetext={`${sharePct}% carbon-free as of ${MN_CARBON_FREE_SHARE.dataYear} — ${progress.pointsToMandate} percentage points below the 100% mandate due by ${CARBON_FREE_DEADLINE_YEAR}.`}
+  >
+    <span
+      class="absolute inset-y-0 left-0 rounded-full bg-[#002d5d]"
+      style={`width: ${sharePct}%`}></span>
+
+    <!-- The remaining ground, hatched rather than left empty. An empty track
+         reads as "not filled in yet"; a hatched one reads as work outstanding,
+         which is what 45 points in 14 years is. -->
+    <span
+      class="absolute inset-y-0 right-0 text-[#002d5d] opacity-40"
+      style={`width: ${100 - sharePct}%; background-image: repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 5px);`}
+      aria-hidden="true"></span>
+
+    {
+      tickPercents.map((tick) => (
+        <span
+          class="absolute inset-y-0 w-px bg-[#002d5d]/70"
+          style={`left: ${tick}%; ${tick === 100 ? "transform: translateX(-1px);" : ""}`}
+          aria-hidden="true"
+        />
+      ))
+    }
+  </span>
+
+  <!--
+    The ticks' accessible twin, and the reason it had to come along.
+
+    In the rail the ticks were `aria-hidden` and their meaning was carried by
+    the full milestone list directly beneath them. That list stays in the
+    record dialog, which is a different view — so without this the ticks would
+    be marks whose meaning lived somewhere the reader isn't. It also happens to
+    be the most useful line on the banner: it is where the statute's 2030 split
+    shows up, and quoting only the 80% track is the commonest error in coverage
+    of this law.
+  -->
+  <span class="mt-1.5 hidden md:block text-[9.5px] font-semibold tabular-nums leading-none text-[#002d5d]">
+    {milestoneLegend}
+  </span>
+
+  <!--
+    The countdown as its own line, separated from the share by a rule rather
+    than by a lighter ink — see the note above on why nothing here is softened.
+    `nowrap` because "14 yrs to" / "2040" is not a break worth allowing at any
+    width.
+  -->
+  <span
+    class="mt-2 hidden md:block border-t border-[#002d5d]/25 pt-2 text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-none text-[#002d5d] whitespace-nowrap"
+    data-cg="years-phrase">{yearsPhrase}</span
+  >
+
+  <!--
+    The conditional, in full. "If all are built" leads the sentence rather than
+    trailing it, because a reader who takes only the first half of this line has
+    to come away with a hypothetical rather than a claim about today. See the
+    header note.
+
+    Full navy at 10px, not a softened one: this is the smallest type on the
+    banner and the line most in need of the full ratio, which is the opposite
+    of how a secondary line is usually treated.
+  -->
+  <span class="mt-1.5 hidden md:block text-[10px] font-medium leading-snug text-[#002d5d]">
+    If all are built, the {pressure.totalGW.toFixed(2)} GW tracked here adds load
+    equal to {drawPct} of MN retail electricity sales.
+  </span>
+</button>
+
+<script>
+  import { onReady } from "~/lib/domReady";
+  import {
+    OPEN_CLEAN_GRID_EVENT,
+    syncCleanGridYear,
+  } from "~/lib/cleanGridClient";
+
+  // Called here as well as from CleanGridTracker, rather than relying on that
+  // component having mounted: the correction is idempotent (it only writes text
+  // derived from the current year), and a banner whose countdown depends on
+  // another island being present is a banner that silently goes stale the day
+  // somebody unmounts the modal.
+  let barCleanups: (() => void)[] = [];
+
+  function initCleanGridBar(): void {
+    const bar = document.getElementById("cg-bar");
+    if (!bar) return;
+
+    while (barCleanups.length > 0) {
+      barCleanups.pop()?.();
+    }
+
+    syncCleanGridYear();
+
+    // The banner is a headline, so it has to lead to the record. It announces
+    // rather than reaching for the modal: CleanGridTracker owns that `<dialog>`
+    // and is the only thing that calls `showModal()` on it. See the note on
+    // OPEN_CLEAN_GRID_EVENT in ~/lib/cleanGridClient.ts.
+    const onClick = () => {
+      document.dispatchEvent(new CustomEvent(OPEN_CLEAN_GRID_EVENT));
+    };
+    bar.addEventListener("click", onClick);
+    barCleanups.push(() => bar.removeEventListener("click", onClick));
+  }
+
+  onReady(initCleanGridBar);
+</script>

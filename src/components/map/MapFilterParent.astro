@@ -17,7 +17,6 @@ import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
 import FilterSize from "~/components/filter/FilterSize.astro";
-import CleanGridTracker from "~/components/grid/CleanGridTracker.astro";
 import { SlidersHorizontal } from "lucide-astro";
 
 // Takes no props: it read the whole dataset from `clientProjects` even when it
@@ -107,12 +106,11 @@ const totalCount = clientProjects.length;
     id="mf-content"
     class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
   >
-    <!-- Statewide context before the per-site filters: the header above reports
-         how many gigawatts are being proposed, and this reports the carbon-free
-         deadline they're being proposed against. It ships closed like every
-         other section, so leading with it costs one row rather than displacing
-         the status filter. -->
-    <CleanGridTracker />
+    <!-- The 2040 clean grid tracker used to lead this rail as a sixth section.
+         It is the banner over the map now, and the record behind it is the
+         modal that banner opens — see CleanGridBar.astro. It left because it
+         was invisible here: every section ships closed, so the mandate read as
+         one more 10px grey label in a stack of filters. -->
 
     <FilterStatus countsByStatus={countsByStatus} />
 
@@ -269,6 +267,42 @@ const totalCount = clientProjects.length;
     const accordionSections = document.querySelectorAll(
       ".mf-accordion-section",
     );
+
+    /** Close every section. The exclusive accordion's shared step, and what
+     *  `openSection` below opens *out of*. */
+    const closeAllSections = () => {
+      accordionSections.forEach((s) => {
+        const t = s.querySelector(
+          ".mf-accordion-trigger",
+        ) as HTMLButtonElement | null;
+        const c = s.querySelector(
+          ".mf-accordion-content",
+        ) as HTMLElement | null;
+        if (t && c) {
+          t.setAttribute("aria-expanded", "false");
+          c.classList.remove("grid-rows-[1fr]");
+          c.classList.add("grid-rows-[0fr]");
+          t.querySelector("svg")?.classList.add("-rotate-90");
+        }
+      });
+    };
+
+    const openSection = (section: Element) => {
+      const trigger = section.querySelector(
+        ".mf-accordion-trigger",
+      ) as HTMLButtonElement | null;
+      const content = section.querySelector(
+        ".mf-accordion-content",
+      ) as HTMLElement | null;
+      if (!trigger || !content) return;
+
+      closeAllSections();
+      trigger.setAttribute("aria-expanded", "true");
+      content.classList.remove("grid-rows-[0fr]");
+      content.classList.add("grid-rows-[1fr]");
+      trigger.querySelector("svg")?.classList.remove("-rotate-90");
+    };
+
     accordionSections.forEach((section) => {
       const trigger = section.querySelector(
         ".mf-accordion-trigger",
@@ -280,28 +314,12 @@ const totalCount = clientProjects.length;
       if (!trigger || !contentWrapper) return;
 
       const onTriggerClick = () => {
-        const isOpening = trigger.getAttribute("aria-expanded") === "false";
-
-        accordionSections.forEach((s) => {
-          const t = s.querySelector(
-            ".mf-accordion-trigger",
-          ) as HTMLButtonElement | null;
-          const c = s.querySelector(
-            ".mf-accordion-content",
-          ) as HTMLElement | null;
-          if (t && c) {
-            t.setAttribute("aria-expanded", "false");
-            c.classList.remove("grid-rows-[1fr]");
-            c.classList.add("grid-rows-[0fr]");
-            t.querySelector("svg")?.classList.add("-rotate-90");
-          }
-        });
-
-        if (isOpening) {
-          trigger.setAttribute("aria-expanded", "true");
-          contentWrapper.classList.remove("grid-rows-[0fr]");
-          contentWrapper.classList.add("grid-rows-[1fr]");
-          trigger.querySelector("svg")?.classList.remove("-rotate-90");
+        // Clicking the open section closes it, so this is a toggle rather than
+        // a select — hence the read before anything is closed.
+        if (trigger.getAttribute("aria-expanded") === "false") {
+          openSection(section);
+        } else {
+          closeAllSections();
         }
       };
 
@@ -310,6 +328,7 @@ const totalCount = clientProjects.length;
         trigger.removeEventListener("click", onTriggerClick),
       );
     });
+
 
     /** Desktop pull-tab. The phone's Filters tab lives on the toolbar. */
     const onToggleClick = () => {

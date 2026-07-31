@@ -5,32 +5,49 @@
 // published figure for where the state actually is — and against the load the
 // data centers on this map would add to the grid that has to get there.
 //
-// WHY IT SITS IN THE FILTERS RAIL, AS AN ACCORDION SECTION
+// WHY IT IS A MODAL AND NOT A RAIL SECTION ANY MORE
 //
-// It is the context FilterHeader's "Total Power" stat is missing: that tile
-// says how many gigawatts are being proposed, this section says what they are
-// being proposed *on top of*, and on a deadline with a date attached. Docking
-// it anywhere else would have meant a fourth mobile toolbar tab and a fourth
-// sheet for one read-only panel. As a section it inherits the rail's exclusive
-// accordion, both layouts, and the phone sheet for free, and costs one 40px
-// row when closed.
+// It was an AccordionSection in the filters rail, and it was invisible there:
+// every section of that rail ships closed, so the mandate rendered as a 10px
+// grey label among five filter sections that looked exactly like it. The fix
+// was a banner over the map (CleanGridBar.astro), and once the banner carried
+// the headline and the meter, a rail section holding the remainder was a third
+// place to look for one subject.
 //
-// TWO AXES, AND WHY THE BAR ONLY PLOTS ONE
+// So the rail section is gone and this is what the banner opens. Which raises
+// the obvious question — why keep any of it, rather than letting the banner be
+// the whole widget?
+//
+// BECAUSE THE BANNER CANNOT QUALIFY WHAT IT SAYS. It has room for a share, a
+// countdown and one conditional. It has no room for: the 2030 milestone having
+// two statutory tracks (80% investor-owned, 60% municipal and co-op — quoting
+// only the 80% is the commonest error in coverage of this law); the 55% being
+// *generation* mix rather than a compliance score, which is a different
+// denominator entirely; Xcel's figure being four years old and its later
+// numbers being emissions reductions rather than carbon-free shares; the
+// § 216B.1691 subd. 2b off-ramp, which is the actual risk to 2040 and the
+// reason a data center watchdog tracks this at all; or the five sources every
+// number here comes from.
+//
+// A civic site that renders the figures and drops the provenance is worth less
+// than one that renders neither. This is where the provenance lives.
+//
+// TWO AXES, AND WHY THE METER ONLY PLOTS ONE
 //
 // The obvious build is a bar that runs "today → 2040" with the milestones as
 // waypoints along it. That bar cannot show a shortfall: time advances whether
 // or not the grid decarbonises, so a time-axis fill would sit at ~30% in 2030
 // and read as *progress* in a year the state might have missed its first
-// statutory target. The axis here is therefore carbon-free share, 0–100%, with
-// the milestones plotted at the percentages the law requires. Time is carried
-// by the countdown tile and the milestone years, where it can't be mistaken
-// for achievement.
+// statutory target. The axis is therefore carbon-free share, 0–100%, with the
+// milestones plotted at the percentages the law requires. Time is carried by
+// the countdown, where it can't be mistaken for achievement. The meter itself
+// now lives on the banner; this note stays because the rule governs both.
 //
 // See ~/data/mnCleanGridStandard.ts before touching any number in here: the
 // 2030 milestone has two different statutory tracks, and the widely-quoted
 // Xcel "80% by 2030" is an emissions reduction against 2005 rather than a
 // carbon-free share, so it is not plottable on this axis at all.
-import { AlertTriangle, ExternalLink, Zap } from "lucide-astro";
+import { AlertTriangle, ExternalLink, X, Zap } from "lucide-astro";
 import {
   CARBON_FREE_DEADLINE_YEAR,
   CARBON_FREE_MILESTONES,
@@ -43,7 +60,6 @@ import {
   XCEL_UPPER_MIDWEST_CARBON_FREE,
 } from "~/data/mnCleanGridStandard";
 import { cleanGridProgress, dataCenterLoadPressure } from "~/lib/cleanGridProgress";
-import AccordionSection from "~/components/ui/AccordionSection.astro";
 
 // Build-time year. The page is prerendered, so this is the year of the last
 // deploy rather than the reader's — the script at the bottom re-runs the same
@@ -82,82 +98,59 @@ const tickPercents = [
 ].sort((a, b) => a - b);
 ---
 
-<AccordionSection title="2040 Clean Grid Tracker">
-  <div data-cg-root class="px-3.5 md:px-4 pb-4 pt-1 flex flex-col gap-4">
-    <!-- Header. The accordion trigger above carries the short name; this is the
-         full one, plus the sentence that says what the widget is for. -->
-    <div class="flex flex-col gap-1.5">
-      <h2 class="text-sm font-bold text-ink leading-tight">
+<!--
+  Same `<dialog>` treatment CampaignBanner's take-action panel uses, and for the
+  same reasons: the top layer, focus trapping, Esc-to-close and an inert
+  background, none of which is worth reimplementing.
+
+  Centring is spelled out rather than inherited — the UA centres a modal with
+  `margin: auto`, and Tailwind's preflight zeroes margin on every element,
+  dialog included. Height is capped in dvh with the body scrolling inside, so a
+  short or keyboard-shrunk viewport keeps the header and close button reachable.
+  `open:flex`, not `flex`: an author `display:flex` outranks the UA's
+  `dialog:not([open]) { display: none }` and would leave this on screen forever.
+-->
+<dialog
+  id="cg-dialog"
+  aria-labelledby="cg-dialog-title"
+  class="font-sans fixed inset-0 m-auto open:flex h-fit max-h-[92dvh] w-[min(30rem,92vw)] flex-col overflow-hidden rounded-2xl border border-hair bg-panel p-0 text-ink backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+>
+  <div
+    class="band bg-panel shrink-0 flex items-start justify-between gap-3 px-4 py-3.5 border-b border-hair"
+  >
+    <div class="min-w-0">
+      <h2 id="cg-dialog-title" class="text-sm font-bold text-ink leading-tight">
         MN 2040 Clean Grid Tracker
       </h2>
-      <p class="text-[11px] text-ink-3 leading-snug">
+      <p class="mt-1 text-[11px] text-ink-3 leading-snug">
         Minnesota's statutory 100% carbon-free electricity mandate, against the
         real-world load data centers are asking the same grid to carry.
       </p>
     </div>
+    <button
+      id="cg-dialog-close"
+      type="button"
+      aria-label="Close"
+      class="shrink-0 rounded-lg p-1 text-ink-4 hover:text-ink hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+    >
+      <X size={16} />
+    </button>
+  </div>
 
+  <!-- No `data-cg-root` here any more. It scoped this component's own year
+       correction to its own subtree, back when that correction lived in this
+       file; ~/lib/cleanGridClient.ts queries the document instead, precisely so
+       the banner and this record cannot disagree about the countdown. The
+       attribute survived the move as a hook nothing reads. -->
+  <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
     <!--
-      THE METER.
-
-      `role="progressbar"` with an explicit `aria-valuetext`: the bare "55" a
-      screen reader would otherwise announce is the least useful half of this
-      readout — the gap to the mandate is the point. The milestone ticks are
-      `aria-hidden` and their content is carried by the real list underneath,
-      so nothing here is available only as a visual position or a tooltip.
+      The meter is deliberately NOT here any more — it is the banner over the
+      map (CleanGridBar.astro), which is where a reader meets this widget now.
+      Repeating it at the top of its own record would be two renderings of one
+      number a click apart, which is the drift this codebase keeps designing
+      against. What stays is everything the banner has no room to qualify: the
+      two 2030 tracks, the vintage of the 55%, the off-ramp, and the sources.
     -->
-    <div class="flex flex-col gap-2">
-      <div class="flex items-baseline justify-between gap-2">
-        <span class="text-2xl font-bold text-accent tabular-nums leading-none">
-          {currentPct}%
-        </span>
-        <span class="text-[10px] text-ink-4 text-right leading-tight">
-          carbon-free<br />as of {MN_CARBON_FREE_SHARE.dataYear}
-        </span>
-      </div>
-
-      <div
-        class="relative h-3 w-full rounded-full bg-hover border border-hair overflow-hidden"
-        role="progressbar"
-        aria-valuenow={currentPct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuetext={`${currentPct}% carbon-free as of ${MN_CARBON_FREE_SHARE.dataYear} — ${progress.pointsToMandate} percentage points below the 100% mandate due by ${CARBON_FREE_DEADLINE_YEAR}.`}
-      >
-        <div
-          class="absolute inset-y-0 left-0 bg-accent rounded-full"
-          style={`width: ${currentPct}%`}
-        >
-        </div>
-
-        <!--
-          The remaining ground, hatched rather than left empty. An empty track
-          reads as "not filled in yet"; a hatched one reads as work outstanding,
-          which is what 45 points in 14 years is. `currentColor` so it inherits
-          the ink ramp and needs no light/dark twin.
-        -->
-        <div
-          class="absolute inset-y-0 right-0 text-ink-4 opacity-30"
-          style={`width: ${100 - currentPct}%; background-image: repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 5px);`}
-          aria-hidden="true"
-        >
-        </div>
-
-        {
-          tickPercents.map((tick) => (
-            <span
-              class="absolute inset-y-0 w-px bg-ink-3"
-              style={`left: ${tick}%; ${tick === 100 ? "transform: translateX(-1px);" : ""}`}
-              aria-hidden="true"
-            />
-          ))
-        }
-      </div>
-
-      <p class="text-[10px] text-ink-4 leading-snug">
-        Scale is share of electricity that is carbon-free — not time elapsed.
-        Ticks mark each percentage the law requires.
-      </p>
-    </div>
 
     <!--
       The milestones as a list, which is also the accessible rendering of the
@@ -400,55 +393,68 @@ const tickPercents = [
       </span>
     </p>
   </div>
-</AccordionSection>
+</dialog>
 
 <script>
   import { onReady } from "~/lib/domReady";
-  import { cleanGridProgress } from "~/lib/cleanGridProgress";
-  import { CARBON_FREE_DEADLINE_YEAR } from "~/data/mnCleanGridStandard";
+  // The countdown correction lives in ~/lib/cleanGridClient.ts. It rewrites only
+  // the `data-cg` slots the reader's year affects — the markup above stays the
+  // server's, the same way ratepayerWidget.ts hydrates by slot rather than
+  // re-templating — and it is document-wide, so this record and the banner
+  // cannot show two different numbers of years remaining.
+  import {
+    OPEN_CLEAN_GRID_EVENT,
+    syncCleanGridYear,
+  } from "~/lib/cleanGridClient";
 
-  /**
-   * Re-runs the countdown against the reader's clock.
-   *
-   * index.astro is prerendered, so everything above ships stamped with the year
-   * of the last deploy. That is right for the carbon-free share — it is a
-   * measurement of a named year and must not drift — but wrong for "years
-   * remaining" and for which milestone is highlighted as next, both of which
-   * are statements about now. A site that has not been redeployed since
-   * December would otherwise count one year too many, and would keep pointing
-   * at a milestone the state had already reached the deadline for.
-   *
-   * Rewrites only the slots the year affects, for the same reason
-   * ratepayerWidget.ts hydrates by `data-` slot rather than re-templating: the
-   * markup stays the server's, and there is one place where each number is
-   * decided.
-   */
-  function syncCleanGridYear(): void {
-    const root = document.querySelector<HTMLElement>("[data-cg-root]");
-    if (!root) return;
+  let trackerCleanups: (() => void)[] = [];
 
-    const progress = cleanGridProgress(new Date().getFullYear());
+  function initCleanGridDialog(): void {
+    const dialog = document.getElementById(
+      "cg-dialog",
+    ) as HTMLDialogElement | null;
+    if (!dialog) return;
 
-    const yearsLeft = root.querySelector<HTMLElement>('[data-cg="years-left"]');
-    if (yearsLeft) yearsLeft.textContent = String(progress.yearsLeft);
-
-    // Past the deadline the countdown stops being a countdown. Saying "0 to
-    // 2040" would read as a rounding artifact rather than as the mandate having
-    // come due.
-    const note = root.querySelector<HTMLElement>('[data-cg="deadline-note"]');
-    if (note) {
-      note.textContent =
-        progress.yearsLeft > 0 ? `to ${CARBON_FREE_DEADLINE_YEAR}` : "mandate due";
+    while (trackerCleanups.length > 0) {
+      trackerCleanups.pop()?.();
     }
 
-    root
-      .querySelectorAll<HTMLElement>("[data-cg-milestone]")
-      .forEach((row) => {
-        const year = Number(row.dataset.cgMilestone);
-        if (progress.next?.year === year) row.setAttribute("data-next", "");
-        else row.removeAttribute("data-next");
-      });
+    syncCleanGridYear();
+
+    // The banner asks; this answers. One direction, one event — see the note in
+    // ~/lib/cleanGridClient.ts for why the banner cannot open this itself.
+    const onOpen = () => {
+      if (!dialog.open) dialog.showModal();
+    };
+    document.addEventListener(OPEN_CLEAN_GRID_EVENT, onOpen);
+    trackerCleanups.push(() =>
+      document.removeEventListener(OPEN_CLEAN_GRID_EVENT, onOpen),
+    );
+
+    const closeBtn = document.getElementById("cg-dialog-close");
+    const onCloseClick = () => dialog.close();
+    closeBtn?.addEventListener("click", onCloseClick);
+    trackerCleanups.push(() =>
+      closeBtn?.removeEventListener("click", onCloseClick),
+    );
+
+    // Click-outside-to-close. The ::backdrop registers as a click on the dialog
+    // element itself, so compare against the content box — the same test
+    // CampaignBanner's modal uses.
+    const onDialogClick = (event: MouseEvent) => {
+      const box = dialog.getBoundingClientRect();
+      const outside =
+        event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom;
+      if (outside) dialog.close();
+    };
+    dialog.addEventListener("click", onDialogClick);
+    trackerCleanups.push(() =>
+      dialog.removeEventListener("click", onDialogClick),
+    );
   }
 
-  onReady(syncCleanGridYear);
+  onReady(initCleanGridDialog);
 </script>
