@@ -71,46 +71,44 @@ const yearsPhrase =
 ---
 
 <!--
-  `band` for the same reason CampaignBanner opts into it: this sits over the map
-  in the flag's Night Sky Blue in the light theme, and near-black in the dark
-  one, so the two floating surfaces at the top of the screen read as one piece
-  of chrome.
+  A GREEN BANNER, and the one surface on this site that carries no theme tokens
+  at all.
 
-  THE TYPOGRAPHY IS THE MASTHEAD'S, deliberately and at its scale. FilterHeader
-  sets "DATA CENTER WATCH" as `text-sm font-semibold tracking-[0.25em] uppercase`
-  over "MINNESOTA" at `text-4xl font-black tracking-tight uppercase`, and the
-  urgency in that pairing is the size jump between the two lines, not either one
-  on its own. A 9px eyebrow over a 20px figure — which is what this was — reads
-  as a status chip. Matched to the masthead it reads as a headline, which is
-  what a statutory deadline the whole map argues against should be.
+  It does not opt into `.band` the way CampaignBanner does, and it has no `dark:`
+  twin. Both are the same decision: this is brand identity, so it is fixed in
+  both themes, the way `.maplibregl-popup-content` is deliberately white in both
+  (see global.css) and the way billStageMeta.ts pins its stage hexes. A green
+  that became a different green at night would not be mn.gov's green.
 
-  THE GREEN IS mn.gov's OWN, #78be21, verified in the portal's core.css where it
-  appears fifteen times. It is used there exactly as it is used here — as type
-  on the navy, not as a fill:
+  THE GREEN IS mn.gov's OWN, #78be21, verified against the portal's core.css
+  where it appears fifteen times.
 
-    button.search-toggle          { color: #78be21; background: 0 }
-    #jumbo-search-form button     { background: rgba(0,56,101,0.8); color: #78be21 }
-    .button-brand-secondary:hover { background: #86d425 }
+  THE TYPE IS NAVY, AND THAT IS ALSO mn.gov's. White on this green measures
+  2.29:1 — it fails AA for normal text (4.5:1) and fails even the large-text
+  floor (3:1), so at the 10px sourcing line below it would be barely readable.
+  The portal ships both treatments and only one of them is safe:
 
-  so #86d425 is the portal's own hover for it and is what this uses too.
+    .btn-success                  { background:#78be21; color:white }   2.29:1
+    .button-brand-secondary       { background:#78be21; color:#003865 } 5.24:1
+    .main-landing-content.branded-green { background-color:#78be21; color:#222 }
 
-  Written as literal arbitrary values rather than as a theme token, which is the
-  rule global.css states: a colour that encodes identity rather than chrome must
-  stay stable across themes, so it does not get a `--color-*` token that `.dark`
-  could re-point. Same treatment billStageMeta.ts gives its stage hexes, and for
-  the same reason — Tailwind only emits classes it can find as literal text.
+  This follows `.button-brand-secondary`, with the flag's Night Sky Blue in
+  place of the portal's older navy — which is both our own masthead colour and
+  slightly the better contrast of the two.
 
-  MEASURED on both surfaces this band resolves to, since the light and dark
-  themes put it on different grounds:
+  MEASURED, and the reason every line here is solid rather than a softened
+  navy: the obvious way to get hierarchy on a coloured panel is to drop the
+  secondary text to 75% opacity, and composited over this green that lands at
+  3.91:1 — under AA for the eyebrow. So hierarchy is carried entirely by size
+  and weight, and every ink value is the full navy.
 
-    #78be21 on #002d5d (light band, the flag's Night Sky Blue)  5.99:1
-    #78be21 on #09090b (dark band)                              8.71:1
-    #86d425 on #002d5d (hover)                                  7.47:1
-    #86d425 on #09090b (hover)                                 10.85:1
+    #002d5d on #78be21                       5.99:1   AA at any size
+    #002d5d on #86d425 (hover, the portal's) 7.47:1
 
-  All clear of 4.5:1 for text at any size. For reference the portal's own navy
-  is #003865, where this green measures 5.24:1 — the flag blue we use is very
-  slightly kinder to it.
+  Solid, not `/95` like the panels around it. Their translucency is frosted
+  chrome over the map; here it would shift the background under the type by
+  however light or dark the basemap happens to be at that spot, which is exactly
+  the variable a measured contrast ratio cannot have.
 
   `hidden md:block`: see the note on desktop-only above.
 -->
@@ -118,19 +116,19 @@ const yearsPhrase =
   id="cg-bar"
   type="button"
   aria-label="Minnesota 2040 clean grid mandate — open the full tracker"
-  class="band group hidden md:block w-full text-left rounded-xl bg-panel/95 backdrop-blur-md border border-hair shadow-2xl shadow-(color:--shadow-panel) px-3.5 py-2 pointer-events-auto font-sans hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+  class="group hidden md:block w-full text-left rounded-xl bg-[#78be21] border border-[#6aa81d] shadow-2xl shadow-(color:--shadow-panel) px-3.5 py-2.5 pointer-events-auto font-sans hover:bg-[#86d425] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#002d5d]/60"
 >
   <!-- The eyebrow, at the masthead's own size and tracking. Not truncated: at
        the 13rem clamp floor it wraps to two lines, which is legible, where
        clipping "MN 2040 CLEAN GR…" is not. -->
   <span class="flex items-start gap-2">
     <span
-      class="text-xs xl:text-sm font-semibold uppercase tracking-[0.25em] leading-none text-[#78be21]"
+      class="text-xs xl:text-sm font-semibold uppercase tracking-[0.25em] leading-none text-[#002d5d]"
       >MN 2040 Clean Grid</span
     >
     <ChevronRight
       size={16}
-      class="ml-auto shrink-0 -mt-0.5 text-[#78be21] opacity-70 group-hover:opacity-100 transition-opacity"
+      class="ml-auto shrink-0 -mt-0.5 text-[#002d5d] transition-transform group-hover:translate-x-0.5"
     />
   </span>
 
@@ -150,17 +148,18 @@ const yearsPhrase =
     facts. One step down through that band keeps it a headline without letting
     it become a panel.
   -->
-  <span class="mt-1.5 block text-2xl xl:text-3xl font-black uppercase tracking-tight leading-none text-[#78be21]">
+  <span class="mt-1.5 block text-2xl xl:text-3xl font-black uppercase tracking-tight leading-none text-[#002d5d]">
     <span class="tabular-nums">{sharePct}%</span> carbon-free
   </span>
 
   <!--
-    The countdown as its own line, in the ink rather than the green, so the two
-    facts don't merge into one green block. `nowrap` because "14 yrs to" / "2040"
-    is not a break worth allowing at any width.
+    The countdown as its own line, separated from the share by a rule rather
+    than by a lighter ink — see the note above on why nothing here is softened.
+    `nowrap` because "14 yrs to" / "2040" is not a break worth allowing at any
+    width.
   -->
   <span
-    class="mt-2 block text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-none text-ink whitespace-nowrap"
+    class="mt-2 block border-t border-[#002d5d]/25 pt-2 text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-none text-[#002d5d] whitespace-nowrap"
     data-cg="years-phrase">{yearsPhrase}</span
   >
 
@@ -169,8 +168,12 @@ const yearsPhrase =
     trailing it, because a reader who takes only the first half of this line has
     to come away with a hypothetical rather than a claim about today. See the
     header note.
+
+    Full navy at 10px, not a softened one: this is the smallest type on the
+    banner and the line most in need of the full ratio, which is the opposite
+    of how a secondary line is usually treated.
   -->
-  <span class="mt-2 block text-[10px] leading-snug text-ink-3">
+  <span class="mt-1.5 block text-[10px] font-medium leading-snug text-[#002d5d]">
     If all are built, the {pressure.totalGW.toFixed(2)} GW tracked here adds load
     equal to {drawPct} of MN retail electricity sales.
   </span>
