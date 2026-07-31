@@ -17,6 +17,7 @@ import FilterStatus from "~/components/filter/FilterStatus.astro";
 import FilterProject from "~/components/filter/FilterProject.astro";
 import FilterLegal from "~/components/filter/FilterLegal.astro";
 import FilterSize from "~/components/filter/FilterSize.astro";
+import CleanGridTracker from "~/components/grid/CleanGridTracker.astro";
 import { SlidersHorizontal } from "lucide-astro";
 
 // Takes no props: it read the whole dataset from `clientProjects` even when it
@@ -106,6 +107,13 @@ const totalCount = clientProjects.length;
     id="mf-content"
     class="flex flex-col min-h-0 flex-1 overflow-y-auto hide-scrollbar"
   >
+    <!-- Statewide context before the per-site filters: the header above reports
+         how many gigawatts are being proposed, and this reports the carbon-free
+         deadline they're being proposed against. It ships closed like every
+         other section, so leading with it costs one row rather than displacing
+         the status filter. -->
+    <CleanGridTracker />
+
     <FilterStatus countsByStatus={countsByStatus} />
 
     <FilterSize countsByTier={countsByTier} />
