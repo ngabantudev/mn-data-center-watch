@@ -20,7 +20,16 @@ export interface NewsItem {
  */
 export type NewsResult =
   | { ok: true; newsItems: NewsItem[]; truncated: boolean; partial: boolean }
-  | { ok: false; reason: string };
+  | {
+      ok: false;
+      reason: string;
+      /**
+       * Whether trying the identical request again could plausibly answer
+       * differently. See `fetchOneQuery` — this is what stops a refusal from
+       * being paid for twice.
+       */
+      retryable: boolean;
+    };
 
 /**
  * The flattened shape the UI consumes, and the JSON body of /api/news.
@@ -63,7 +72,7 @@ export interface NewsPayload {
 const GOOGLE_RESULT_CEILING = 100;
 
 /**
- * Wall-clock budget for the Google News RSS call.
+ * Wall-clock budget for one query — *including* its retry, not per attempt.
  *
  * Was 2000ms, which failed roughly one request in three from a Worker —
  * measured across all four windows on a live deployment. Google itself answers
@@ -71,8 +80,25 @@ const GOOGLE_RESULT_CEILING = 100;
  * too tight to absorb a cold isolate and a TLS handshake on top. There is no
  * cost to waiting longer on the rare slow call: the result is cached, so the
  * next visitor doesn't wait at all.
+ *
+ * "Including its retry" is the part that was wrong until now. Each attempt got
+ * its own 8s, so a window where Google was simply not answering cost 16s before
+ * anyone was told — measured at 13-16s per request against the live deployment
+ * while Google was 503ing the Worker's egress. The budget is the promise to the
+ * caller, so the retry has to spend what's left of it rather than opening a
+ * second one.
  */
-const FETCH_TIMEOUT_MS = 8000;
+const QUERY_BUDGET_MS = 8000;
+
+/**
+ * Least time worth starting a second attempt with.
+ *
+ * Under this, a retry can only turn one timeout into two and report the later
+ * one. The retry exists for connections that drop in milliseconds, and those
+ * leave nearly the whole budget behind — so the cases it was written for all
+ * clear this comfortably, and the case it was accidentally doubling does not.
+ */
+const MIN_RETRY_BUDGET_MS = 1500;
 
 /**
  * Newest first. Written out twice before — here and again in the news rail's
@@ -540,6 +566,7 @@ export function collapseDuplicates(items: NewsItem[]): NewsItem[] {
  */
 async function attemptNews(
   googleNewsUrl: string,
+  timeoutMs: number,
 ): Promise<NewsResult> {
   try {
     // Force an early escape rather than hanging a request on a slow upstream.
@@ -550,7 +577,7 @@ async function attemptNews(
     // the budgets stay separate constants — they're the same 8s for unrelated
     // reasons, and tuning one shouldn't move the other.
     const response = await fetch(googleNewsUrl, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
@@ -560,7 +587,18 @@ async function attemptNews(
       // Carry the status. "Feed unavailable" and "Google answered 429 to this
       // datacenter IP" call for completely different fixes, and the old code
       // made them indistinguishable from outside.
-      return { ok: false, reason: `Google News returned ${response.status}.` };
+      //
+      // Not retryable. A status is Google having answered — it read the
+      // request and refused it — and an immediate identical request gets the
+      // identical refusal. Confirmed against the live deployment during a 503:
+      // both attempts returned 503, so the second only ever added a round trip
+      // to a request that was already going to fail. Recovery is the cache's
+      // backoff to schedule, not this function's to keep guessing at.
+      return {
+        ok: false,
+        reason: `Google News returned ${response.status}.`,
+        retryable: false,
+      };
     }
 
     const xmlText = await response.text();
@@ -648,17 +686,25 @@ async function attemptNews(
     // `AbortController.abort()` (what this used to use) gives `AbortError`.
     const name = (error as Error | undefined)?.name;
     const timedOut = name === "TimeoutError" || name === "AbortError";
+
+    // Both kinds are worth another go — the retry below is the fix for a
+    // measured flake where the first connection dropped and an immediate repeat
+    // succeeded. A timeout says so too, but having spent the budget saying it,
+    // it will be refused a retry for want of time rather than for want of
+    // cause. That split is why the decision lives in `fetchOneQuery` and not
+    // in this flag.
     return {
       ok: false,
       reason: timedOut
-        ? `No response from Google News within ${FETCH_TIMEOUT_MS / 1000}s.`
+        ? `No response from Google News within ${Math.round(timeoutMs / 1000)}s.`
         : "Couldn't reach Google News.",
+      retryable: true,
     };
   }
 }
 
 /**
- * Fetch one window, retrying once.
+ * Fetch one window, retrying once — but only when a retry could still answer.
  *
  * The retry is not belt-and-braces, it's the fix for a measured failure: on a
  * live deployment the *first* call for a given window intermittently failed
@@ -666,19 +712,35 @@ async function attemptNews(
  * what's flaky. Unlike Open States, Google News RSS enforces no per-minute
  * quota here, so an immediate second attempt is free and almost always works.
  *
- * Two attempts, not more. Past that we'd be adding latency to a request that
- * has a cached fallback behind it anyway.
+ * What that reasoning missed is that it only holds for a connection that never
+ * got an answer. Two other cases were being retried on the same terms and paid
+ * for it twice:
+ *
+ *   a status — Google answered, and answered no. The repeat is refused
+ *   identically, so it buys a round trip and nothing else.
+ *
+ *   a timeout — plausibly transient, but the first attempt has already spent
+ *   the whole budget establishing that, and a second full budget on top is how
+ *   one unanswered window came to cost 16 seconds of a reader's time.
+ *
+ * So both attempts now draw on one budget, and the retry has to be affordable
+ * out of what's left. A dropped connection fails in milliseconds and leaves
+ * nearly all of it, which is exactly the case the retry was written for.
  */
 async function fetchOneQuery(rawQuery: string): Promise<NewsResult> {
   const query = encodeURIComponent(rawQuery);
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
-  const first = await attemptNews(googleNewsUrl);
-  if (first.ok) return first;
+  const startedAt = Date.now();
+  const first = await attemptNews(googleNewsUrl, QUERY_BUDGET_MS);
+  if (first.ok || !first.retryable) return first;
+
+  const remaining = QUERY_BUDGET_MS - (Date.now() - startedAt);
+  if (remaining < MIN_RETRY_BUDGET_MS) return first;
 
   // Whatever the second attempt says stands: on success it's the data, and on
   // failure it's the more recent truth about why.
-  return attemptNews(googleNewsUrl);
+  return attemptNews(googleNewsUrl, remaining);
 }
 
 export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
@@ -699,7 +761,13 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
   // search we added for extra reach happened to drop its connection.
   if (succeeded.length === 0) {
     const firstFailure = results.find((r) => !r.ok);
-    return firstFailure ?? { ok: false, reason: "Couldn't reach Google News." };
+    return (
+      firstFailure ?? {
+        ok: false,
+        reason: "Couldn't reach Google News.",
+        retryable: true,
+      }
+    );
   }
 
   // The two searches overlap heavily by design — anything naming both a county

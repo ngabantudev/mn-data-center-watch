@@ -242,6 +242,9 @@ const RANGE_OPTIONS = [
   let currentDays = 7;
   let desktopMql: MediaQueryList | null = null;
 
+  /** Ceiling on one /api/news call — see the note at the fetch itself. */
+  const NEWS_FETCH_TIMEOUT_MS = 12_000;
+
   // Every article ever fetched this session, keyed by normalized
   // title+source (see dedupeKey below) — not by url. Google News RSS
   // doesn't return consistent results across *differently scoped* queries
@@ -417,7 +420,17 @@ const RANGE_OPTIONS = [
     if (!opts.silent) buttons.forEach((btn) => (btn.disabled = true));
 
     try {
-      const res = await fetch(`/api/news?days=${days}`);
+      // Bounded, because the failure this guards against isn't a slow answer —
+      // it's no answer. Every exit from this function that re-enables the range
+      // buttons is in the `finally`, so a fetch that never settles leaves the
+      // controls disabled and the panel reading "Loading…" for as long as the
+      // tab is open. The route's own upstream budget is 8s per query (see
+      // QUERY_BUDGET_MS in ~/lib/newsFeed.ts) and its queries run in parallel,
+      // so this sits above a legitimately slow-but-working refresh rather than
+      // cutting one off.
+      const res = await fetch(`/api/news?days=${days}`, {
+        signal: AbortSignal.timeout(NEWS_FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) throw new Error("Request failed");
       const data = (await res.json()) as NewsPayload;
       if (data.errorMessage) {

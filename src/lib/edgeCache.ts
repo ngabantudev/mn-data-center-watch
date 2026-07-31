@@ -48,7 +48,18 @@ export interface CacheResult<T> {
 }
 
 interface Envelope<T> {
-  value: T;
+  /**
+   * The cached value, or null for a *negative* entry — a refresh that failed
+   * with no last-good copy to fall back on.
+   *
+   * Negative entries exist to carry `retryAfter` through the shared layers.
+   * Before them the cold-failure backoff was a module-level Map, which is
+   * per-isolate: a colo spinning up a fresh isolate had no memory that the
+   * upstream was down, so it went and found out for itself, at whatever the
+   * upstream's timeout happened to be. Measured against the live deployment
+   * during a Google News outage, every single request paid that in full.
+   */
+  value: T | null;
   storedAt: string;
   /** Epoch ms after which we should try to refresh. */
   freshUntil: number;
@@ -83,14 +94,6 @@ const KV_BINDING = "LEGISLATION_CACHE";
 
 const memory = new Map<string, Envelope<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
-
-/**
- * Epoch ms of the next permitted attempt per key, for the case where a refresh
- * failed and there is no cached value to hang a `retryAfter` on. Memory-only
- * and per-isolate on purpose: it throttles retries, it isn't data, and losing
- * it on eviction costs one extra attempt.
- */
-const coldRetryAfter = new Map<string, number>();
 
 /**
  * Default wait after a failed refresh before trying again, matched to Open
@@ -211,11 +214,17 @@ async function write<T>(
  * `freshSeconds` is how long a value is served without contacting the API.
  * `keepSeconds` is how long it's retained as a stale fallback — deliberately
  * much longer, because a week-old bill list with a visible date beats nothing.
+ *
+ * `freshSeconds` may be a function of the value just built, for upstreams that
+ * can succeed *partially*. A degraded answer is still worth serving and still
+ * worth caching — but caching it for as long as a complete one lets one bad
+ * minute define the next several hours, and the caller is the only layer that
+ * can tell the two apart.
  */
 export async function withCache<T>(
   key: string,
   opts: {
-    freshSeconds: number;
+    freshSeconds: number | ((value: T) => number);
     keepSeconds: number;
     /** Wait before retrying after a failed refresh. Defaults to one minute;
      *  set it low for upstreams that fail transiently rather than by quota. */
@@ -230,19 +239,23 @@ export async function withCache<T>(
 
   const now = Date.now();
   const cached = await read<T>(key);
+  // A negative entry is present-but-empty: it carries a backoff and no data,
+  // so every "do we have something to serve" test below has to ask about the
+  // value rather than about the entry.
+  const lastGood = cached && cached.value !== null ? (cached as Envelope<T> & { value: T }) : null;
 
-  if (cached && now < cached.freshUntil) {
-    return { value: cached.value, storedAt: cached.storedAt, stale: false };
+  if (lastGood && now < lastGood.freshUntil) {
+    return { value: lastGood.value, storedAt: lastGood.storedAt, stale: false };
   }
 
   // A recent attempt already failed. Serve what we have and don't touch the
   // API — during an outage this is the difference between one probe a minute
   // and four calls per visitor.
   if (cached?.retryAfter && now < cached.retryAfter) {
-    return { value: cached.value, storedAt: cached.storedAt, stale: true };
+    return lastGood
+      ? { value: lastGood.value, storedAt: lastGood.storedAt, stale: true }
+      : null;
   }
-  const coldUntil = coldRetryAfter.get(key);
-  if (!cached && coldUntil !== undefined && now < coldUntil) return null;
 
   // Single-flight. Without this, N simultaneous cold requests each fire their
   // own page walk and collectively trip the per-minute limit — the exact
@@ -258,8 +271,8 @@ export async function withCache<T>(
         stale: false,
       };
     }
-    return cached
-      ? { value: cached.value, storedAt: cached.storedAt, stale: true }
+    return lastGood
+      ? { value: lastGood.value, storedAt: lastGood.storedAt, stale: true }
       : null;
   }
 
@@ -280,11 +293,14 @@ export async function withCache<T>(
   }
 
   if (fresh !== null) {
-    coldRetryAfter.delete(key);
     const storedAt = new Date(now).toISOString();
+    const freshSeconds =
+      typeof opts.freshSeconds === "function"
+        ? opts.freshSeconds(fresh)
+        : opts.freshSeconds;
     await write(
       key,
-      { value: fresh, storedAt, freshUntil: now + opts.freshSeconds * 1000 },
+      { value: fresh, storedAt, freshUntil: now + freshSeconds * 1000 },
       opts.keepSeconds,
     );
     return { value: fresh, storedAt, stale: false };
@@ -294,15 +310,28 @@ export async function withCache<T>(
   // the age we show the reader stays honest — and only push out the next
   // attempt. `freshUntil` deliberately stays in the past: this is a cooldown,
   // not a promotion of stale data back to fresh.
-  if (cached) {
+  if (lastGood) {
     await write(
       key,
-      { ...cached, retryAfter: now + backoffMs },
+      { ...lastGood, retryAfter: now + backoffMs },
       opts.keepSeconds,
     );
-    return { value: cached.value, storedAt: cached.storedAt, stale: true };
+    return { value: lastGood.value, storedAt: lastGood.storedAt, stale: true };
   }
 
-  coldRetryAfter.set(key, now + backoffMs);
+  // Nothing to fall back on, so record the failure itself. This is what every
+  // other isolate — and every other colo, once a KV binding exists — reads to
+  // learn that the upstream is down without asking it again.
+  //
+  // Held only for the backoff, not for `keepSeconds`: it is a cooldown, and a
+  // week-long one would keep answering "unavailable" long after the upstream
+  // came back. `freshUntil: now` keeps it permanently stale by construction, so
+  // the single path that could mistake it for servable data never sees it as
+  // fresh even if the TTL is ignored by a layer.
+  await write(
+    key,
+    { value: null, storedAt: new Date(now).toISOString(), freshUntil: now, retryAfter: now + backoffMs },
+    Math.max(Math.ceil(backoffMs / 1000), 1),
+  );
   return null;
 }
