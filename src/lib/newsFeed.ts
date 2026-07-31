@@ -60,6 +60,25 @@ export interface NewsPayload {
    * segments looks exactly like a year in which little happened.
    */
   partial: boolean;
+  /**
+   * True when the live refresh failed and these items are the last good copy.
+   *
+   * The route has always known this — it sets an `X-News-Source` header for
+   * debugging — but the panel never did, so during an outage a reader saw
+   * headlines fetched hours ago with nothing to distinguish them from live
+   * ones. A civic feed that serves yesterday as today is making a claim about
+   * the world it can't support.
+   */
+  stale: boolean;
+  /**
+   * When these items were fetched, ISO. Null when there is nothing to date —
+   * an outage with no cached copy behind it.
+   *
+   * Paired with `stale` rather than folded into it: "these are cached" and
+   * "cached *when*" are separate facts, and the second is what decides whether
+   * a reader should trust the list or go and look elsewhere.
+   */
+  storedAt: string | null;
 }
 
 /**
@@ -126,6 +145,36 @@ export function formatNewsDate(published: string): string {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+/**
+ * How long ago a cached copy was fetched, for the degraded banner.
+ *
+ * Coarse on purpose. The number exists to answer "should I trust this list",
+ * and "saved 3 hours ago" answers that where "saved 2h 47m ago" only looks
+ * like it does — the underlying `storedAt` is the moment a cache entry was
+ * written, not the moment the news happened, and precision would suggest we
+ * know more about the gap than we do.
+ *
+ * Returns null for anything unparseable rather than a fallback string, so the
+ * caller drops the phrase instead of rendering "saved NaN ago".
+ */
+export function formatCacheAge(storedAt: string | null, now: number = Date.now()): string | null {
+  if (!storedAt) return null;
+  const then = new Date(storedAt).getTime();
+  if (!Number.isFinite(then)) return null;
+
+  const minutes = Math.floor((now - then) / 60_000);
+  // Clock skew between the edge that wrote the entry and the reader's own
+  // machine can make a fresh copy look like it arrives from the future.
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 // --- Tune these lists to control precision without touching the fetch/parse logic ---
@@ -819,11 +868,19 @@ export async function fetchLocalNews(
         errorMessage: null,
         truncated: result.truncated,
         partial: result.partial,
+        // Not stale: this ran moments ago, at build time. It becomes stale in
+        // the only sense the panel cares about when the client's own refresh
+        // fails and falls back to it — which is the client's fact to record,
+        // not this snapshot's, so it is stamped rather than pre-judged.
+        stale: false,
+        storedAt: new Date().toISOString(),
       }
     : {
         newsItems: [],
         errorMessage: result.reason,
         truncated: false,
         partial: false,
+        stale: false,
+        storedAt: null,
       };
 }

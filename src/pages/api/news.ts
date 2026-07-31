@@ -54,12 +54,17 @@ interface CachedNews {
  * every last-good copy at exactly the moment Google is refusing us, which is
  * when those copies are the only thing the panel has to show.
  */
-function toPayload(cached: CachedNews): NewsPayload {
+function toPayload(
+  cached: CachedNews,
+  meta: { stale: boolean; storedAt: string },
+): NewsPayload {
   return {
     newsItems: cached.items ?? [],
     errorMessage: null,
     truncated: cached.truncated ?? false,
     partial: cached.partial ?? false,
+    stale: meta.stale,
+    storedAt: meta.storedAt,
   };
 }
 
@@ -177,7 +182,7 @@ export const GET: APIRoute = async ({ url }) => {
   );
 
   const payload: NewsPayload = result
-    ? toPayload(result.value)
+    ? toPayload(result.value, { stale: result.stale, storedAt: result.storedAt })
     : {
         newsItems: [],
         // `failure` is null when the backoff short-circuited before any fetch,
@@ -185,6 +190,8 @@ export const GET: APIRoute = async ({ url }) => {
         errorMessage: failure ?? "News feed temporarily unavailable.",
         truncated: false,
         partial: false,
+        stale: false,
+        storedAt: null,
       };
 
   // Client max-age stays short so a reader with a tab open picks up new

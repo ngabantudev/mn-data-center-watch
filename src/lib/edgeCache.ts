@@ -173,10 +173,23 @@ async function read<T>(key: string): Promise<Envelope<T> | null> {
   return null;
 }
 
+/**
+ * `durable: false` keeps an entry out of KV, writing it only to the layers that
+ * cost nothing — module memory and the colo's Cache API.
+ *
+ * For cooldown markers, which are not data. KV's free tier allows 1,000 writes
+ * a day; a sustained upstream outage at a 60s backoff across the news route's
+ * four windows would spend 5,760 of them on entries whose whole content is
+ * "don't ask again yet". That would exhaust the quota that the *real* last-good
+ * copies depend on — so the failure state would evict the thing it exists to
+ * protect. Cooldowns are cheap to lose and cheap to recreate: the worst case
+ * for an isolate that never sees one is a single extra upstream attempt.
+ */
 async function write<T>(
   key: string,
   envelope: Envelope<T>,
   keepSeconds: number,
+  opts: { durable?: boolean } = {},
 ): Promise<void> {
   memory.set(key, envelope);
   const body = JSON.stringify(envelope);
@@ -197,7 +210,7 @@ async function write<T>(
       .catch(() => {});
   }
 
-  const store = kv();
+  const store = opts.durable === false ? null : kv();
   if (store) {
     await store.put(key, body, { expirationTtl: keepSeconds }).catch(() => {});
   }
@@ -311,10 +324,18 @@ export async function withCache<T>(
   // attempt. `freshUntil` deliberately stays in the past: this is a cooldown,
   // not a promotion of stale data back to fresh.
   if (lastGood) {
+    // Also non-durable, for a second reason on top of the write quota: the
+    // value is unchanged, so a KV write here would re-send the identical
+    // payload purely to stamp a new cooldown — and in doing so would push the
+    // entry's expiry back by another `keepSeconds`. Repeated failures would
+    // then keep renewing the fallback indefinitely, so a copy could stay
+    // "kept for a week" for a month. Leaving KV alone means it expires a week
+    // after the fetch that produced it, which is what keepSeconds means.
     await write(
       key,
       { ...lastGood, retryAfter: now + backoffMs },
       opts.keepSeconds,
+      { durable: false },
     );
     return { value: lastGood.value, storedAt: lastGood.storedAt, stale: true };
   }
@@ -332,6 +353,7 @@ export async function withCache<T>(
     key,
     { value: null, storedAt: new Date(now).toISOString(), freshUntil: now, retryAfter: now + backoffMs },
     Math.max(Math.ceil(backoffMs / 1000), 1),
+    { durable: false },
   );
   return null;
 }
