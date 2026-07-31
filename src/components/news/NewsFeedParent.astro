@@ -191,14 +191,31 @@ const RANGE_OPTIONS = [
           for anyone without JS — which is why it carries no Retry button, that
           being the one part of the client state that can't work here.
         */
-        <div class="flex flex-col items-center text-center gap-2 py-8 px-2">
-          <span class="w-9 h-9 rounded-full bg-hover flex items-center justify-center">
-            <Newspaper size={16} class="text-ink-4" aria-hidden="true" />
-          </span>
-          <p class="text-xs font-semibold text-ink-2">{OUTAGE_TITLE}</p>
-          <p class="text-[10px] text-ink-4 leading-snug max-w-60">
-            {OUTAGE_BODY}
-          </p>
+        <div class="flex flex-col gap-3">
+          <div class="stat-well rounded-lg p-3 flex items-start gap-2.5" role="status">
+            <span class="w-7 h-7 rounded-full bg-hover flex items-center justify-center shrink-0">
+              <CloudOff size={14} class="text-ink-3" aria-hidden="true" />
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-[11px] font-semibold text-ink-2 leading-snug">
+                {OUTAGE_TITLE}
+              </p>
+              <p class="mt-1 text-[10px] text-ink-4 leading-snug">{OUTAGE_BODY}</p>
+            </div>
+          </div>
+          {/* Same static ghosts as the client template, so the two paths render
+              one state. No Retry here — that is the one part of the client
+              state that cannot work without JS. */}
+          <div class="space-y-4 opacity-45" aria-hidden="true">
+            {[0, 1, 2, 3].map(() => (
+              <div class="border-b border-hair pb-3.5 last:border-0 last:pb-0">
+                <div class="h-2 w-20 rounded bg-hover mb-2" />
+                <div class="h-2.5 w-full rounded bg-hover mb-1.5" />
+                <div class="h-2.5 w-4/5 rounded bg-hover mb-2.5" />
+                <div class="h-2 w-16 rounded bg-hover" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : newsItems.length === 0 ? (
         <p class="text-ink-4 text-xs font-medium px-1">{EMPTY_NOTICE}</p>
@@ -303,41 +320,86 @@ const RANGE_OPTIONS = [
     <p class="text-ink-4 text-xs font-medium px-1">{EMPTY_NOTICE}</p>
   </template>
 
+  <!--
+    THE OUTAGE STATE, AS A SKELETON.
+
+    It was a centred icon over two lines of text in an otherwise empty rail,
+    which is the layout every "something went wrong" page uses and reads,
+    correctly, as a dead end. This keeps the panel's own rhythm instead: the
+    same four ghost article rows the loading state uses, so the rail still looks
+    like a rail, with the explanation sitting on top of them rather than
+    replacing everything.
+
+    THE ONE THING THAT MUST NOT BE COPIED FROM THE LOADING SKELETON IS THE
+    PULSE. `nf-tpl-skeleton` carries `motion-safe:animate-pulse`, and that
+    animation is the whole signal that something is on its way. These rows are
+    deliberately static, because nothing is on its way — the fetch has already
+    failed and the only thing that will change it is the Retry below. A pulsing
+    outage would be a spinner that never resolves, which is the same class of
+    lie as the empty state claiming a quiet week.
+
+    The ghosts are `aria-hidden`; the message above them is a `role="status"`,
+    so a screen reader gets the sentence and not four empty boxes.
+  -->
   <template id="nf-tpl-outage">
-    <div class="flex flex-col items-center text-center gap-2.5 py-10 px-2">
-      <span
-        class="w-9 h-9 rounded-full bg-hover flex items-center justify-center"
-      >
-        <Newspaper size={16} class="text-ink-4" aria-hidden="true" />
-      </span>
-      <p class="text-xs font-semibold text-ink-2">{OUTAGE_TITLE}</p>
-      <p class="text-[10px] text-ink-4 leading-snug max-w-60">{OUTAGE_BODY}</p>
-      <button
-        type="button"
-        data-nf-retry
-        class="mt-0.5 inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border border-hair text-ink-3 hover:text-ink hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-      >
-        <RefreshCw size={10} aria-hidden="true" />
-        Try again
-      </button>
-      <!--
-        The status code, kept and demoted. Someone debugging this genuinely
-        wants "503" and a member of the public genuinely does not, and a
-        disclosure is the one control that serves both without a second
-        surface.
-      -->
-      <details class="mt-1 w-full max-w-60">
-        <summary
-          class="text-[9px] uppercase tracking-wider text-ink-4 hover:text-ink-3 cursor-pointer list-none focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+    <div class="flex flex-col gap-3">
+      <div class="stat-well rounded-lg p-3 flex items-start gap-2.5" role="status">
+        <span
+          class="w-7 h-7 rounded-full bg-hover flex items-center justify-center shrink-0"
         >
-          Technical detail
-        </summary>
-        <p
-          data-nf-detail
-          class="text-[9px] text-ink-4 leading-snug pt-1.5 wrap-break-word"
-        >
-        </p>
-      </details>
+          <CloudOff size={14} class="text-ink-3" aria-hidden="true" />
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-[11px] font-semibold text-ink-2 leading-snug">
+            {OUTAGE_TITLE}
+          </p>
+          <p class="mt-1 text-[10px] text-ink-4 leading-snug">{OUTAGE_BODY}</p>
+
+          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <button
+              type="button"
+              data-nf-retry
+              class="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border border-hair text-ink-3 hover:text-ink hover:bg-hover transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+            >
+              <RefreshCw size={10} aria-hidden="true" />
+              Try again
+            </button>
+
+            <!--
+              The status code, kept and demoted. Someone debugging this
+              genuinely wants "503" and a member of the public genuinely does
+              not, and a disclosure is the one control that serves both without
+              a second surface.
+            -->
+            <details class="min-w-0">
+              <summary
+                class="text-[9px] uppercase tracking-wider text-ink-4 hover:text-ink-3 cursor-pointer list-none focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded"
+              >
+                Technical detail
+              </summary>
+              <p
+                data-nf-detail
+                class="text-[9px] text-ink-4 leading-snug pt-1.5 wrap-break-word"
+              >
+              </p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- Static, not pulsing. See the note above — this is the whole point. -->
+      <div class="space-y-4 opacity-45" aria-hidden="true">
+        {
+          [0, 1, 2, 3].map(() => (
+            <div class="border-b border-hair pb-3.5 last:border-0 last:pb-0">
+              <div class="h-2 w-20 rounded bg-hover mb-2" />
+              <div class="h-2.5 w-full rounded bg-hover mb-1.5" />
+              <div class="h-2.5 w-4/5 rounded bg-hover mb-2.5" />
+              <div class="h-2 w-16 rounded bg-hover" />
+            </div>
+          ))
+        }
+      </div>
     </div>
   </template>
 
@@ -719,34 +781,44 @@ const RANGE_OPTIONS = [
         else if (data.partial) windowNotice.set(days, "partial");
         else windowNotice.delete(days);
       }
-      // Best-effort: if we still have relevant cached items (from a prior
-      // successful fetch of a different window) show those rather than
-      // blanking the panel over one failed range's error.
+      // One call, and `lastFetchError` straight through — no fallback sentence
+      // behind it, and no branch on whether the pool happens to hold anything.
       //
-      // `lastFetchError` straight through, with no fallback sentence behind it.
-      // It is null exactly when the fetch worked, and a window that answered
-      // with nothing is a quiet week rather than an outage — which is the one
-      // distinction the ok/failed split in ~/lib/newsFeed.ts exists to keep.
-      // Substituting a stand-in string here made every genuinely empty range
-      // render the outage state, telling the reader Google wasn't answering
-      // when it had answered and said there was nothing. 24H hit this most,
-      // being the window most likely to be legitimately empty — and it left
-      // `nf-tpl-empty` unreachable, so the quiet-week state never rendered at
-      // all.
-      if (articleCache.size > 0) {
-        renderNews(itemsWithinWindow(days), null);
-      } else {
-        renderNews([], lastFetchError);
-      }
+      // Both halves of that matter, and each fixes a way this panel used to lie
+      // about which of three situations the reader is in.
+      //
+      // NO FALLBACK SENTENCE. `lastFetchError` is null exactly when the fetch
+      // worked, and `renderNews` picks between the outage and the quiet-week
+      // template on that argument alone. Substituting a stand-in string made
+      // every genuinely empty range render as an outage — telling the reader
+      // Google wasn't answering when it had answered and said there was
+      // nothing. 24H hit that most, being the window most often legitimately
+      // empty, and it left `nf-tpl-empty` unreachable.
+      //
+      // NO `articleCache.size` BRANCH. Passing `null` whenever the pool held
+      // anything discarded the error even when this window's slice of that pool
+      // came back empty — and the pool is a *session* accumulator while
+      // `itemsWithinWindow` is a cutoff against the clock, so those two come
+      // apart routinely. The case is not hypothetical: with Google refusing
+      // this Worker's egress (a sustained 503 — see FAILURE_BACKOFF_SECONDS in
+      // ~/pages/api/news.ts), the only content in the pool is the build-time
+      // snapshot, and the moment that snapshot ages past the selected window
+      // the panel rendered "No new local updates found." in the middle of a
+      // total outage. Same lie as above, running the other way.
+      //
+      // `itemsWithinWindow` returns [] for an empty pool by construction, so
+      // the guard was only ever choosing which argument to pass, never whether
+      // to render. Let `renderNews` decide: it shows the list when there is
+      // one — under the stale banner if `degraded` — and otherwise picks its
+      // template from whether the fetch actually failed.
+      renderNews(itemsWithinWindow(days), lastFetchError);
     } catch {
-      // Reached by the abort above as well as by a network failure, so the
-      // pool is just as much the right answer here as in the branch above.
+      // Reached by the abort above as well as by a network failure. The pool is
+      // still the right thing to show if it has anything for this window; if it
+      // does not, this is an outage and has to say so rather than falling
+      // through to the quiet-week copy.
       degraded = true;
-      if (articleCache.size > 0) {
-        renderNews(itemsWithinWindow(days), null);
-      } else {
-        renderNews([], "Couldn't load news for that range.");
-      }
+      renderNews(itemsWithinWindow(days), "Couldn't load news for that range.");
     } finally {
       buttons.forEach((btn) => (btn.disabled = false));
       if (status && !opts.silent) status.textContent = "";
