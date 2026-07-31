@@ -103,6 +103,25 @@ const METRO_COUNTY_TERMS = [
 ];
 
 /**
+ * Counties outside the seven that carry real data center proceedings anyway.
+ *
+ * Sherburne is where Becker and Elk River are, and the name is Minnesota's
+ * alone — a 365-day check returned 13 data center stories under it and every
+ * one was this state's.
+ *
+ * Wright County is the conspicuous omission, and it is a close call rather than
+ * an obvious one: 21 stories over the same year, roughly four in five of them
+ * Minnesota's, since the Monticello proposals and the county's emergency
+ * moratorium are among the largest data center fights in the state right now.
+ * The remainder are Wright County, Iowa, which is running its own data center
+ * moratorium under a phrase we cannot tell apart. Admitting one in five Iowa
+ * stories to catch Minnesota ones we already reach through Monticello, Otsego,
+ * Albertville and St. Michael below — and through the local outlets covering
+ * them — is a bad trade, so the towns carry it.
+ */
+const EXURBAN_COUNTY_TERMS = ["sherburne county"];
+
+/**
  * Minnesota news outlets, matched against an item's `<source>`.
  *
  * The place-name list below can only see the headline and Google's one-line
@@ -130,7 +149,16 @@ const MINNESOTA_SOURCE_TERMS = [
   "bring me the news",
   "5 eyewitness news", // KSTP
   "kare11",
+  "kare 11",
   "wcco",
+  "fox 9",
+  // Small-market stations doing the closest reporting on the exurban fights —
+  // KRWC is Buffalo, KYMN is Northfield, KEYC is Mankato. These are how a
+  // Wright County story reaches us now that the county name doesn't.
+  "krwc",
+  "kymn",
+  "keyc",
+  "patriot news mn",
   "mpr news",
   "minnesota public radio",
   "sahan journal",
@@ -144,6 +172,38 @@ const MINNESOTA_SOURCE_TERMS = [
   "minnesota women's press",
 ];
 
+/**
+ * The check that keeps the outlet signal honest.
+ *
+ * Trusting the source alone let Pioneer Press wire copy through — "Virginia
+ * study on groundwater, data centers calls for tighter water regulations" and
+ * "New York won't build big data centers for a year" both landed in the feed.
+ * A Minnesota paper reprinting somebody else's data center news is not
+ * Minnesota data center news, and putting it on this map misrepresents it.
+ *
+ * Applied only to items that matched on the outlet and named no Minnesota place
+ * at all, so it can never override a headline that says Minneapolis or Anoka
+ * County outright. That narrow application is what makes it safe to be blunt
+ * about it: a story that names another state and nowhere here is the ambiguous
+ * case, and dropping it is the better error.
+ */
+const OTHER_STATE_PATTERN = new RegExp(
+  `\\b(${[
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana", "maine",
+    "maryland", "massachusetts", "michigan", "mississippi", "missouri",
+    "montana", "nebraska", "nevada", "new hampshire", "new jersey",
+    // The Dakotas appear in their welded form because the haystack is
+    // normalised before any of this runs — see the `north_dakota` replacement
+    // where it's built.
+    "new mexico", "new york", "north carolina", "north_dakota_state", "ohio",
+    "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina",
+    "south_dakota_state", "tennessee", "texas", "utah", "vermont", "virginia",
+    "west virginia", "wisconsin", "wyoming",
+  ].join("|")})\\b`,
+);
+
 // Must match at least one of these — establishes Minnesota relevance without
 // depending on the literal word "Minnesota" appearing in the article.
 const MINNESOTA_TERMS = [
@@ -151,6 +211,7 @@ const MINNESOTA_TERMS = [
   " mn ",
   "twin cities",
   ...METRO_COUNTY_TERMS,
+  ...EXURBAN_COUNTY_TERMS,
   // Largest MN cities by population
   "minneapolis",
   "st. paul",
@@ -211,26 +272,44 @@ const MINNESOTA_TERMS = [
 ];
 
 /**
- * The geography half of the Google News query.
+ * The geography half of the query, as two separate searches rather than one.
  *
- * Was the bare word `Minnesota`, which gated everything on Google having
- * indexed that literal token — a story headlined "Anoka County board delays
- * data center vote" is Minnesota news whether or not the word appears. Google
- * News RSS honours `OR` inside parentheses; this was checked against the live
- * feed rather than taken from the docs, which don't specify it.
+ * The county names have to be asked for somehow: gating on the bare token
+ * `Minnesota`, as this did, means a story headlined "Anoka County board delays
+ * data center vote" never comes back at all. Google News RSS does honour `OR`
+ * inside parentheses — checked against the live feed, since the docs don't
+ * specify it — so folding the counties into one widened query is the obvious
+ * move, and it's wrong.
  *
- * Only the county names that survive the ambiguity test in METRO_COUNTY_TERMS
- * are here. Widening the upstream query is not free: the feed caps out around
- * 100 items, so admitting `"Washington County"` would spend that budget on
- * Oregon and crowd out the Minnesota coverage this exists to find.
+ * It's wrong because the response is capped: measured at ~60 items for a 30-day
+ * window and 100 for a year, whatever the query. Terms compete for one fixed
+ * budget, so widening trades coverage rather than adding it. That isn't a
+ * theory — with the counties folded in, "Google behind plans for Duluth area
+ * data center" dropped out of every one of three samples, while the plain
+ * Minnesota query returned it in all three. Displacing Duluth to reach Anoka is
+ * not a trade worth making when both are cheap.
+ *
+ * Two queries get two budgets. The cost is one extra upstream call per window
+ * per freshness period — 15 minutes at the tightest — which the cache in
+ * ~/pages/api/news.ts absorbs entirely.
  */
-const GEOGRAPHY_QUERY = [
+const GEOGRAPHY_QUERIES = [
+  // Byte-identical to the query this file has always sent, parentheses and all
+  // — which is to say, none. That is not fussiness: the first attempt at this
+  // widened it only as far as `(Minnesota OR "Twin Cities")`, and "Eagan facing
+  // lawsuit over data center moratorium" then vanished from all three samples
+  // when it had been present in all three before. Merely grouping the term
+  // reorders what Google fits into the cap. Leaving this string untouched is
+  // what makes the second search additive by construction rather than by
+  // measurement.
   "Minnesota",
-  '"Twin Cities"',
-  ...METRO_COUNTY_TERMS.map(
-    (county) => `"${county.replace(/\b\w/g, (c) => c.toUpperCase())}"`,
-  ),
-].join(" OR ");
+  `(${[
+    '"Twin Cities"',
+    ...[...METRO_COUNTY_TERMS, ...EXURBAN_COUNTY_TERMS].map(
+      (county) => `"${county.replace(/\b\w/g, (c) => c.toUpperCase())}"`,
+    ),
+  ].join(" OR ")})`,
+];
 
 function buildDateQuery(windowDays: number): string {
   // when: is documented and reliable up to 1y; anything longer uses
@@ -303,7 +382,21 @@ async function attemptNews(
         fullTitle = fullTitle.split(` - ${source}`)[0];
       }
 
-      const haystack = ` ${fullTitle} ${description} `.toLowerCase();
+      // The Dakotas are rewritten before matching, because "North Dakota county
+      // commissioner" literally contains the substring "dakota county" and so
+      // introduced both Dakotas to a Minnesota feed the moment the county list
+      // arrived — a Fargo Forum piece on a commissioner resigning over a data
+      // center debate, and another on a western North Dakota county, both
+      // caught this way.
+      //
+      // The sentinel has to end in something other than "dakota": joining the
+      // words to "north_dakota" leaves "north_dakota county", which still
+      // contains "dakota county" one character in. Appending `_state` is what
+      // actually breaks the adjacency. `\b` keeps a bare "Dakota County" —
+      // Minnesota's — untouched.
+      const haystack = ` ${fullTitle} ${description} `
+        .toLowerCase()
+        .replace(/\b(north|south) dakota\b/g, "$1_dakota_state");
 
       return {
         title: fullTitle,
@@ -321,10 +414,14 @@ async function attemptNews(
         // the outlet being a Minnesota one. The source is checked separately
         // from the haystack rather than folded into it, so that an outlet name
         // can never stand in for the data center half of the test.
+        const namesPlace = MINNESOTA_TERMS.some((t) => item.haystack.includes(t));
         const sourceName = item.source.toLowerCase();
+        const isLocalOutlet = MINNESOTA_SOURCE_TERMS.some((t) =>
+          sourceName.includes(t),
+        );
         const hasMinnesota =
-          MINNESOTA_TERMS.some((t) => item.haystack.includes(t)) ||
-          MINNESOTA_SOURCE_TERMS.some((t) => sourceName.includes(t));
+          namesPlace ||
+          (isLocalOutlet && !OTHER_STATE_PATTERN.test(item.haystack));
         return hasDataCenter && hasMinnesota;
       })
       .sort(byPublishedDesc)
@@ -363,8 +460,7 @@ async function attemptNews(
  * Two attempts, not more. Past that we'd be adding latency to a request that
  * has a cached fallback behind it anyway.
  */
-export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
-  const rawQuery = `"data center" (${GEOGRAPHY_QUERY}) ${buildDateQuery(windowDays)}`;
+async function fetchOneQuery(rawQuery: string): Promise<NewsResult> {
   const query = encodeURIComponent(rawQuery);
   const googleNewsUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
@@ -374,6 +470,44 @@ export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
   // Whatever the second attempt says stands: on success it's the data, and on
   // failure it's the more recent truth about why.
   return attemptNews(googleNewsUrl);
+}
+
+export async function fetchNews(windowDays: number = 7): Promise<NewsResult> {
+  const dateQuery = buildDateQuery(windowDays);
+  const results = await Promise.all(
+    GEOGRAPHY_QUERIES.map((geography) =>
+      fetchOneQuery(`"data center" ${geography} ${dateQuery}`),
+    ),
+  );
+
+  const succeeded = results.filter((r) => r.ok);
+
+  // Only a total failure is a failure. One query answering is partial coverage,
+  // which is worth serving and worth preferring over the cache's last-good
+  // copy — the alternative is discarding live headlines because a second
+  // search we added for extra reach happened to drop its connection.
+  if (succeeded.length === 0) {
+    const firstFailure = results.find((r) => !r.ok);
+    return firstFailure ?? { ok: false, reason: "Couldn't reach Google News." };
+  }
+
+  // The two searches overlap heavily by design — anything naming both a county
+  // and the state matches both — so identity is the article URL, which Google
+  // keeps stable per item. Titles are the fallback for the same story arriving
+  // under two links, and are compared whole: near-identical headlines here are
+  // usually genuinely separate items, three different Elk River council votes
+  // being the case that made that clear.
+  const seen = new Set<string>();
+  const merged: NewsItem[] = [];
+  for (const item of succeeded.flatMap((r) => r.newsItems)) {
+    const key = item.url !== "#" ? item.url : `title:${item.title.trim()}`;
+    if (seen.has(key) || seen.has(`title:${item.title.trim()}`)) continue;
+    seen.add(key);
+    seen.add(`title:${item.title.trim()}`);
+    merged.push(item);
+  }
+
+  return { ok: true, newsItems: merged.sort(byPublishedDesc) };
 }
 
 /**
