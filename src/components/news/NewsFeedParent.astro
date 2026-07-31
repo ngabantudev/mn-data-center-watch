@@ -719,34 +719,44 @@ const RANGE_OPTIONS = [
         else if (data.partial) windowNotice.set(days, "partial");
         else windowNotice.delete(days);
       }
-      // Best-effort: if we still have relevant cached items (from a prior
-      // successful fetch of a different window) show those rather than
-      // blanking the panel over one failed range's error.
+      // One call, and `lastFetchError` straight through — no fallback sentence
+      // behind it, and no branch on whether the pool happens to hold anything.
       //
-      // `lastFetchError` straight through, with no fallback sentence behind it.
-      // It is null exactly when the fetch worked, and a window that answered
-      // with nothing is a quiet week rather than an outage — which is the one
-      // distinction the ok/failed split in ~/lib/newsFeed.ts exists to keep.
-      // Substituting a stand-in string here made every genuinely empty range
-      // render the outage state, telling the reader Google wasn't answering
-      // when it had answered and said there was nothing. 24H hit this most,
-      // being the window most likely to be legitimately empty — and it left
-      // `nf-tpl-empty` unreachable, so the quiet-week state never rendered at
-      // all.
-      if (articleCache.size > 0) {
-        renderNews(itemsWithinWindow(days), null);
-      } else {
-        renderNews([], lastFetchError);
-      }
+      // Both halves of that matter, and each fixes a way this panel used to lie
+      // about which of three situations the reader is in.
+      //
+      // NO FALLBACK SENTENCE. `lastFetchError` is null exactly when the fetch
+      // worked, and `renderNews` picks between the outage and the quiet-week
+      // template on that argument alone. Substituting a stand-in string made
+      // every genuinely empty range render as an outage — telling the reader
+      // Google wasn't answering when it had answered and said there was
+      // nothing. 24H hit that most, being the window most often legitimately
+      // empty, and it left `nf-tpl-empty` unreachable.
+      //
+      // NO `articleCache.size` BRANCH. Passing `null` whenever the pool held
+      // anything discarded the error even when this window's slice of that pool
+      // came back empty — and the pool is a *session* accumulator while
+      // `itemsWithinWindow` is a cutoff against the clock, so those two come
+      // apart routinely. The case is not hypothetical: with Google refusing
+      // this Worker's egress (a sustained 503 — see FAILURE_BACKOFF_SECONDS in
+      // ~/pages/api/news.ts), the only content in the pool is the build-time
+      // snapshot, and the moment that snapshot ages past the selected window
+      // the panel rendered "No new local updates found." in the middle of a
+      // total outage. Same lie as above, running the other way.
+      //
+      // `itemsWithinWindow` returns [] for an empty pool by construction, so
+      // the guard was only ever choosing which argument to pass, never whether
+      // to render. Let `renderNews` decide: it shows the list when there is
+      // one — under the stale banner if `degraded` — and otherwise picks its
+      // template from whether the fetch actually failed.
+      renderNews(itemsWithinWindow(days), lastFetchError);
     } catch {
-      // Reached by the abort above as well as by a network failure, so the
-      // pool is just as much the right answer here as in the branch above.
+      // Reached by the abort above as well as by a network failure. The pool is
+      // still the right thing to show if it has anything for this window; if it
+      // does not, this is an outage and has to say so rather than falling
+      // through to the quiet-week copy.
       degraded = true;
-      if (articleCache.size > 0) {
-        renderNews(itemsWithinWindow(days), null);
-      } else {
-        renderNews([], "Couldn't load news for that range.");
-      }
+      renderNews(itemsWithinWindow(days), "Couldn't load news for that range.");
     } finally {
       buttons.forEach((btn) => (btn.disabled = false));
       if (status && !opts.silent) status.textContent = "";
