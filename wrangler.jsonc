@@ -10,28 +10,43 @@
 		"directory": "./dist",
 		"binding": "ASSETS"
 	},
-	// OPTIONAL cache upgrade for the legislative tracker.
+	// The cross-colo cache layer, shared by the legislative tracker and the news
+	// route via ~/lib/edgeCache.ts.
 	//
-	// ~/lib/edgeCache.ts looks for a `LEGISLATION_CACHE` KV binding and uses it
-	// when present, falling back to isolate memory plus the Cache API when it
-	// isn't. Nothing needs this to work — it ships without a binding on purpose.
+	// It stayed optional for a long time and no longer is, because an outage
+	// proved what the other layers can't do. Module memory dies with the
+	// isolate; the Cache API is per-colo *and* evictable under memory pressure —
+	// production's last-good news copy was serving real headlines one hour and
+	// had been evicted the next, while Google was refusing our egress. With
+	// nothing durable behind it the panel had nothing to fall back to. KV is the
+	// only layer that survives both an isolate restart and a colo it has never
+	// been seen in.
 	//
-	// What KV adds: the memory layer dies with the isolate, and the Cache API —
-	// which does work here, verified by a cached payload surviving a version
-	// upload — is still per-colo. So a visitor hitting a colo that hasn't seen
-	// this data yet triggers a fresh refresh. That's fine at 4 requests against
-	// a 10/min ceiling, and stops being fine once traffic arrives from many
-	// regions at once. KV is the only layer shared between colos.
+	// This does NOT speed up a warm request. `read()` checks memory, then the
+	// Cache API, then this — so a hit above never reaches it, and a true miss
+	// now pays a KV read (tens of ms) before going upstream. What it buys is the
+	// cold case: a colo that has never served this key answers from KV instead
+	// of from Google, which is ~1s normally and up to the full 8s query budget
+	// when Google is refusing us.
 	//
-	// To enable:
-	//   wrangler kv namespace create LEGISLATION_CACHE
-	// then uncomment below with the returned id. (The `SESSION` namespace this
-	// project already has is Astro's, created by the Cloudflare adapter for
-	// sessions — don't reuse it for this.)
+	// WRITE BUDGET — read before adding a caller. KV's free tier allows 1,000
+	// writes/day. The routes together write at most 176: one per key per
+	// freshness period (news 15m/30m/1h/6h, legislation 6h). That headroom only
+	// exists because cooldown markers are explicitly kept out of KV — see the
+	// `durable` option in edgeCache.ts. Writing those here would cost 5,760/day
+	// during a sustained outage and exhaust the quota the real copies need.
 	//
-	// "kv_namespaces": [
-	// 	{ "binding": "LEGISLATION_CACHE", "id": "<id from the command above>" }
-	// ],
+	// Reads are bounded by traffic against a 100,000/day allowance and only
+	// occur on a memory + Cache API miss. Every KV call in edgeCache.ts is
+	// wrapped in `.catch(() => {})`, so if a limit is ever reached the layer
+	// simply drops out and the cache degrades to what it was before this
+	// binding existed.
+	//
+	// (The `SESSION` namespace this project already has is Astro's, created by
+	// the Cloudflare adapter for sessions — don't reuse it for this.)
+	"kv_namespaces": [
+		{ "binding": "LEGISLATION_CACHE", "id": "484d2a31d0f24f99aed7ab9ea061616a" }
+	],
 	// OFF, deliberately — this is the no-PII posture applied to our own logs.
 	//
 	// Worker request logs carry client IP addresses. An IP is personal data in
