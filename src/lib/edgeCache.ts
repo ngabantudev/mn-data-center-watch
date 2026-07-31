@@ -26,11 +26,18 @@
 //      caches.default put/match is not the same mechanism as automatic response
 //      caching. Confirmed by a cached payload outliving a version upload, which
 //      necessarily replaces the isolate;
-//   4. KV, if and only if a binding is present — the only layer shared between
-//      colos, so the only one that helps when traffic arrives from several
-//      regions at once. Optional by design: no binding means no setup, and
-//      adding one later upgrades the cache with no change to this file or its
-//      callers.
+//   4. KV — the only layer shared between colos, and the only one that
+//      survives both an isolate restart and eviction. It went unbound for a
+//      long time on the grounds that the layers above were enough; an outage
+//      disproved that, with the Cache API dropping a last-good news copy under
+//      memory pressure while the upstream was refusing us, leaving nothing to
+//      fall back to. Still read through a structural check rather than a
+//      generated type, so this file compiles and runs correctly whether or not
+//      the binding is configured.
+//
+// Layer 4 is checked last and is the slowest, which is the right order but
+// worth stating plainly: KV speeds up nothing that memory or the Cache API
+// already holds. What it changes is the cold case and the outage case.
 //
 // And the property that matters most on a civic site: a refresh that fails
 // serves the last good copy, labelled with when it was fetched, rather than an
@@ -89,7 +96,8 @@ interface KvLike {
   ): Promise<void>;
 }
 
-/** Binding name to look for. Absent is the expected case, not an error. */
+/** Binding name to look for. Configured in wrangler.jsonc; absence is handled
+ *  rather than assumed, so a checkout without it still runs. */
 const KV_BINDING = "LEGISLATION_CACHE";
 
 const memory = new Map<string, Envelope<unknown>>();
@@ -100,12 +108,16 @@ const inflight = new Map<string, Promise<unknown>>();
  * States' one-minute rate-limit window: retrying inside it only collects
  * another 429.
  *
- * Callers override it, because the right value depends entirely on *why* the
- * upstream failed. A rate-limited API needs the full window. An upstream that
- * simply dropped one connection — Google News RSS does this — should be retried
- * in seconds, since backing off for a minute there converts one transient blip
- * into a minute of empty UI. Getting this wrong is invisible until you watch a
- * cold cache in production, which is exactly how it was found.
+ * Callers override it, because the right value depends on *why* the upstream
+ * failed and on what has already been tried before reaching this layer.
+ *
+ * This used to argue that Google News should override it down to seconds,
+ * since its failures are dropped connections and a long backoff would turn one
+ * blip into a minute of empty UI. That reasoning no longer applies to this
+ * layer: the blip case is now handled inside `fetchOneQuery`, which retries a
+ * dropped connection within a single request. A failure that reaches here has
+ * already survived that retry, which makes it an outage rather than a blip —
+ * and the news route now overrides *up* to a minute for exactly that reason.
  */
 const DEFAULT_FAILURE_BACKOFF_MS = 60_000;
 
