@@ -36,6 +36,16 @@
 	// `durable` option in edgeCache.ts. Writing those here would cost 5,760/day
 	// during a sustained outage and exhaust the quota the real copies need.
 	//
+	// SECOND WRITER, added deliberately: `.github/workflows/refresh-news.yml`
+	// writes four `news:mirror:v1:*` keys every 30 minutes — 192/day — because
+	// Google answers a GitHub runner and refuses this Worker's egress. See
+	// ~/lib/newsMirror.ts for the measurements. Running total is therefore ~368
+	// of the 1,000, and the schedule is the dial: halving the interval doubles
+	// that half of it. Those keys are namespaced away from the cache's own
+	// `news:v3:*` on purpose — CI is an upstream the route reads, not a cache
+	// layer racing the one in edgeCache.ts, which would lose anyway because KV
+	// is the last layer `read()` consults.
+	//
 	// Reads are bounded by traffic against a 100,000/day allowance and only
 	// occur on a memory + Cache API miss. Every KV call in edgeCache.ts is
 	// wrapped in `.catch(() => {})`, so if a limit is ever reached the layer

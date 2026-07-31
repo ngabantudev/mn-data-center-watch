@@ -1,0 +1,136 @@
+# .github/workflows/refresh-news.yml
+#
+# Fetches the news windows from a GitHub runner and writes them into KV for the
+# Worker to serve. See ~/lib/newsMirror.ts for the measurements behind this; the
+# short version is that Google answers a runner with 200 and answers this
+# project's Worker with 503, and no change to the Worker fixes that.
+#
+# THERE WAS A `refresh-news.yml` HERE BEFORE, AND DELETING IT WAS CORRECT AT THE
+# TIME. The note in pr-preview.yml records it: an old workflow rebuilt the whole
+# site every six hours purely to refresh headlines, and it went away when
+# /api/news started fetching live per request. That premise has since been
+# falsified in production — the route fetches live and Google refuses it — so
+# this comes back. It is a much smaller thing than its predecessor: it rebuilds
+# nothing and deploys nothing, it only writes four keys.
+#
+# WHAT IT CANNOT DO, which is the safety story:
+#
+#   - It never runs `wrangler deploy` or `versions deploy`. It cannot change
+#     what code production is running.
+#   - It writes four fixed keys, all `news:mirror:v1:*`. It does not touch the
+#     `news:v3:*` or `legislation:*` entries the cache owns.
+#   - Every key it writes carries a TTL (NEWS_MIRROR_TTL_SECONDS, two hours), so
+#     if this workflow is disabled or its credentials are revoked, the mirrors
+#     expire on their own and the route falls back to trying Google live and
+#     telling the reader when that fails. Nothing has to be cleaned up by hand.
+#
+# REQUIRED SECRETS — the same two the deploy uses, but note the scope:
+#
+#   CLOUDFLARE_API_TOKEN   must include **Workers KV Storage: Edit** on top of
+#                          whatever the deploy already needs. A deploy-only
+#                          token will authenticate and then fail the write.
+#   CLOUDFLARE_ACCOUNT_ID
+#
+# KV WRITE BUDGET — read wrangler.jsonc before changing the schedule. The free
+# tier allows 1,000 writes/day. Four windows every 30 minutes is 192, on top of
+# at most ~176 from the routes themselves.
+
+name: Refresh news mirror
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub runs scheduled workflows late under load,
+    # routinely by ten minutes or more, which is why the mirror TTL is two hours
+    # rather than something tight against this interval.
+    - cron: "*/30 * * * *"
+  # Lets you populate the mirror immediately after merging, or re-run after
+  # fixing the token, without waiting for the next tick.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Runs queue rather than cancel. A cancelled run mid-upload could leave three of
+# four windows written, and the next tick is only 30 minutes out anyway.
+concurrency:
+  group: refresh-news
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Matches the `engines.node` floor in package.json.
+          node-version: "22.12"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Google is the thing being routed around, so a failure here is expected
+      # to be occasional. The script exits non-zero only when *every* window
+      # failed — one bad window keeps its previous mirror until the next tick.
+      - name: Fetch news windows
+        run: npx tsx scripts/refresh-news.ts
+
+      - name: Upload to KV
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          # Fail with the actual problem rather than a wrangler auth error that
+          # reads like broken config. Same guard as deploy.yml.
+          missing=""
+          [ -z "${CLOUDFLARE_API_TOKEN:-}" ]  && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — add them under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          # `--ttl`, not `--expiration-ttl` — wrangler v4 names it the former, and the
+          # latter is silently rejected as an unknown flag.
+          #
+          # `--path`, not a positional value: the 1Y window is ~170 KB of JSON,
+          # which is well past what belongs on a command line.
+          #
+          # `--remote` because wrangler v4's kv commands default to the local
+          # simulator, and a local write here would report success and change
+          # nothing in production.
+          #
+          # TTL must match NEWS_MIRROR_TTL_SECONDS in ~/lib/newsMirror.ts. It is
+          # the whole staleness policy — see that file.
+          for file in .news-mirror/*.json; do
+            window="$(basename "$file" .json)"
+            key="news:mirror:v1:${window}"
+            echo "→ $key ($(wc -c < "$file" | tr -d ' ') bytes)"
+            npx wrangler kv key put "$key" \
+              --binding LEGISLATION_CACHE \
+              --path "$file" \
+              --ttl 7200 \
+              --remote
+          done
+
+      - name: Confirm the route is serving the mirror
+        run: |
+          set -euo pipefail
+          # `X-News-Source: mirror` is set by /api/news when the window was
+          # answered from KV rather than from a live fetch. Not a hard failure:
+          # the Worker caches for up to 6h per window, so a run can legitimately
+          # land while a previous copy is still fresh and never touch KV.
+          source="$(curl -sS -D- -o /dev/null \
+            'https://mn-data-center-watch.resistance.workers.dev/api/news?days=7' \
+            | grep -i '^x-news-source' | tr -d '\r' | awk '{print $2}')"
+          echo "X-News-Source: ${source:-<none>}"
+          case "$source" in
+            mirror|live) echo "Route is serving real headlines." ;;
+            stale)       echo "::warning::Route served a stale copy; the mirror may not have been picked up yet." ;;
+            *)           echo "::warning::Route reported '${source:-<none>}' — check the mirror upload above." ;;
+          esac
