@@ -210,18 +210,39 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
 /**
  * Public R2 bucket holding the PMTiles archives.
  *
- * PERFORMANCE NOTE, and the one remaining cost that can't be fixed in the
- * client: this bucket serves no `Cache-Control` header, so nothing here is
- * cacheable across page loads and every visit re-downloads the tiles it draws.
- * Within a session the map's own tile cache covers it (which is why layers are
- * hidden rather than torn down — see overlayLayers.ts), but a reload pays full
- * price. Fixing it means serving these through a Worker route that sets
- * `immutable` far-future caching, or an R2 custom domain with a cache rule.
+ * PERFORMANCE NOTE, measured against the live bucket rather than assumed.
  *
- * The other half is upstream of the client entirely: the PAD-US archive is
- * 21 MB, and it was built with `--no-tile-size-limit`, so its z5–z7 tiles are
- * 0.5–1.5 MB each — a second or more of parsing per tile no matter how well
- * this code schedules it. Re-running tippecanoe without that flag is the fix.
+ * WHAT IS TRUE: it serves no `Cache-Control` at all, so nothing here is
+ * cacheable across page loads and a reload re-fetches what it draws. Within a
+ * session MapLibre's own tile cache covers it, which is why layers are hidden
+ * rather than torn down — see overlayLayers.ts.
+ *
+ * WHAT IS NOT TRUE, and used to be implied here: that a visit costs 21 MB.
+ * PMTiles is a range-request format and the client only ever asks for slices —
+ * a header, a directory, and the tiles for the current viewport. A measured
+ * session at statewide zoom with two layers switched on made 13 requests, all
+ * of them `Range`, none of them the whole file. The archive is 20.4 MB; a
+ * session is a tiny fraction of it.
+ *
+ * DO NOT "FIX" THIS WITH A WORKER PROXY, which is what this note used to
+ * suggest. Routing tiles through a Worker to attach cache headers would turn
+ * every one of those range requests into a Worker invocation — on a plan whose
+ * request count is the binding limit long before bandwidth is. It trades a
+ * caching problem for a quota problem, and the quota one is worse.
+ *
+ * The fix is on the bucket, not in this repo: set `Cache-Control` as object
+ * metadata when uploading (`wrangler r2 object put --cache-control`), or put an
+ * R2 custom domain in front with a cache rule. The bucket already sends an
+ * `ETag` and honours `Range`, so revalidation works the moment a freshness
+ * directive exists to trigger it. Prefer a moderate `max-age` over `immutable`:
+ * these filenames are stable across re-uploads, so `immutable` would hide a
+ * re-tiled archive from returning visitors for as long as it was set.
+ *
+ * The other half is upstream of the client entirely: PAD-US was built with
+ * `--no-tile-size-limit`, so its z5–z7 tiles are 0.5–1.5 MB each — a second or
+ * more of parsing per tile no matter how well this code schedules it.
+ * Re-running tippecanoe without that flag is the fix, and it is the single
+ * biggest one available to this layer.
  */
 const TILE_BASE_URL = 'https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev';
 
@@ -253,6 +274,20 @@ export const MAP_LAYER_BY_ID = indexBy(
 
 /** Fired on `document` when a layer's archive can't be read. */
 export const LAYER_UNAVAILABLE_EVENT = 'maplayerunavailable';
+
+/**
+ * Fired on `document` the first time a sidebar section containing layer toggles
+ * is opened.
+ *
+ * It exists so reading the archives can wait for someone to go looking for a
+ * layer. Warming them on page load cost every visitor seven range requests to
+ * the tile bucket — measured — including the large majority who never open the
+ * Climate or Politics sections at all. Deferring it to this event keeps both
+ * things warming bought (a first toggle with nothing to wait for, and a missing
+ * archive disabling its own row before it is clicked) because both happen while
+ * the reader is still looking at the open section.
+ */
+export const LAYER_SECTION_OPEN_EVENT = 'maplayersectionopen';
 
 /**
  * Why a layer isn't available. Two different sentences for the visitor: an

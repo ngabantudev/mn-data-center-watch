@@ -101,7 +101,7 @@ const news = await fetchLocalNews();
   import { getInitialMapStyleId, getMapStyleUrlById } from "~/data/mapStyles";
   import { STATUS_HEX } from "~/data/mapStatusMeta";
   import { LEGAL_STATUS_META } from "~/data/legalStatusMeta";
-  import { MAP_LAYER_META } from "~/data/mapLayers";
+  import { LAYER_SECTION_OPEN_EVENT, MAP_LAYER_META } from "~/data/mapLayers";
   import { onReady } from "~/lib/domReady";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
   import { createOverlayLayers } from "~/lib/overlayLayers";
@@ -724,8 +724,23 @@ const news = await fetchLocalNews();
     map.on("load", () => {
       setTimeout(() => map.resize(), 100);
       addDataLayer();
-      overlays.warmArchives();
+      // NOT warmed here any more. Reading the four archives' metadata cost
+      // every visitor seven range requests to the tile bucket on page load —
+      // measured — and the large majority never open a layer section at all.
+      // The sidebar announces when someone does; see LAYER_SECTION_OPEN_EVENT.
+      // Both things warming buys still land in time, because they happen while
+      // the reader is looking at the section they just opened.
     });
+
+    // Read the archives the first time the reader opens a section that offers
+    // layer toggles. `warmArchives` is idempotent — the reads are memoized per
+    // archive — so a second announcement would be free, but the sidebar latches
+    // it anyway.
+    const handleLayerSectionOpen = () => overlays.warmArchives();
+    document.addEventListener(LAYER_SECTION_OPEN_EVENT, handleLayerSectionOpen);
+    mapCleanups.push(() =>
+      document.removeEventListener(LAYER_SECTION_OPEN_EVENT, handleLayerSectionOpen),
+    );
 
     const handleStyleChange = (event: Event) => {
       const detail = (event as CustomEvent<{ url: string }>).detail;
