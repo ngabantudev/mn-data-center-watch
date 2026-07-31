@@ -22,6 +22,7 @@
 import type { APIRoute } from "astro";
 import { withCache } from "~/lib/edgeCache";
 import { jsonResponse } from "~/lib/jsonResponse";
+import { withResponseCache } from "~/lib/responseCache";
 import { fetchNews, type NewsItem, type NewsPayload } from "~/lib/newsFeed";
 
 export const prerender = false;
@@ -130,7 +131,14 @@ const PARTIAL_FRESH_SECONDS = 300;
  */
 const FAILURE_BACKOFF_SECONDS = 60;
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
+  // Wrapped so a colo answers repeat requests for the same window without
+  // re-running any of this — see ~/lib/responseCache.ts. The freshness is the
+  // `s-maxage` computed at the bottom of this function; there is no second TTL.
+  return withResponseCache(request, () => buildNewsResponse(url));
+};
+
+async function buildNewsResponse(url: URL): Promise<Response> {
   const requested = Number(url.searchParams.get("days"));
   const windowDays = ALLOWED_WINDOWS.includes(requested) ? requested : 7;
   const freshSeconds = FRESH_SECONDS[windowDays] ?? 1800;
@@ -221,4 +229,4 @@ export const GET: APIRoute = async ({ url }) => {
         : "unavailable",
     },
   });
-};
+}
