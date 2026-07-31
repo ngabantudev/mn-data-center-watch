@@ -722,10 +722,21 @@ const RANGE_OPTIONS = [
       // Best-effort: if we still have relevant cached items (from a prior
       // successful fetch of a different window) show those rather than
       // blanking the panel over one failed range's error.
+      //
+      // `lastFetchError` straight through, with no fallback sentence behind it.
+      // It is null exactly when the fetch worked, and a window that answered
+      // with nothing is a quiet week rather than an outage — which is the one
+      // distinction the ok/failed split in ~/lib/newsFeed.ts exists to keep.
+      // Substituting a stand-in string here made every genuinely empty range
+      // render the outage state, telling the reader Google wasn't answering
+      // when it had answered and said there was nothing. 24H hit this most,
+      // being the window most likely to be legitimately empty — and it left
+      // `nf-tpl-empty` unreachable, so the quiet-week state never rendered at
+      // all.
       if (articleCache.size > 0) {
         renderNews(itemsWithinWindow(days), null);
       } else {
-        renderNews([], lastFetchError ?? "No updates found.");
+        renderNews([], lastFetchError);
       }
     } catch {
       // Reached by the abort above as well as by a network failure, so the

@@ -122,7 +122,7 @@ export interface CampaignStance {
  * Keys are matched loosely (case and spacing are normalised), so "HF 4888" and
  * "HF4888" both resolve. An entry for a bill that no longer exists is inert.
  */
-export const CAMPAIGN_STANCES: Record<string, CampaignStance> = {
+const CAMPAIGN_STANCES: Record<string, CampaignStance> = {
   "HF 4888": {
     position: "support",
     demand:

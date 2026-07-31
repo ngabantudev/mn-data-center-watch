@@ -48,7 +48,7 @@ export interface UtilityOwnershipMeta {
   leverage: string;
 }
 
-export const UTILITY_OWNERSHIP_META: UtilityOwnershipMeta[] = [
+const UTILITY_OWNERSHIP_META: UtilityOwnershipMeta[] = [
   {
     ownership: 'cooperative',
     label: 'Member-Owned Co-op',
@@ -104,7 +104,7 @@ export interface UtilityMeta {
   accountsSource?: SourceRef;
 }
 
-export const UTILITY_META: UtilityMeta[] = [
+const UTILITY_META: UtilityMeta[] = [
   {
     id: 'xcel-mn',
     name: 'Xcel Energy (Northern States Power – Minnesota)',
@@ -126,7 +126,7 @@ export const UTILITY_META: UtilityMeta[] = [
   },
 ];
 
-export const UTILITY_BY_ID = indexBy(UTILITY_META, (m) => m.id, (m) => m);
+const UTILITY_BY_ID = indexBy(UTILITY_META, (m) => m.id, (m) => m);
 
 /**
  * Where a reader reports a missing or wrong utility attribution. Pointed at

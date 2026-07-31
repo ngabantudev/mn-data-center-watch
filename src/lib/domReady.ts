@@ -1,10 +1,10 @@
 // src/lib/domReady.ts
 //
-// Seven of this app's eight client islands boot the same way: run init now if
+// Ten of this app's eleven client islands boot the same way: run init now if
 // the document is already parsed, otherwise on DOMContentLoaded, and again on
-// `astro:page-load`. That was eight lines copy-pasted into all seven.
-// (CampaignBanner.astro is the eighth island and doesn't use this — it inits at
-// module scope, guarded on finding its own root.)
+// `astro:page-load`. That was eight lines copy-pasted into all ten.
+// (CampaignBanner.astro is the eleventh island and doesn't use this — it inits
+// at module scope, guarded on finding its own root.)
 //
 // ON `astro:page-load`: this site has one page and no `<ClientRouter />`, so
 // nothing dispatches that event today and the second registration below is

@@ -17,8 +17,8 @@ const SITE_THEMES = [
   Collapsed: a single icon button, stacked directly above MapLibre's
   NavigationControl. Both share the --map-ctrl-edge / --map-controls-bottom
   CSS variables defined in global.css, so they always line up and move
-  together — MapFilterParent.astro raises --map-controls-bottom on mobile to
-  clear its own panel, which shifts this whole stack up in sync.
+  together — MobileToolbar.astro raises --map-controls-bottom to clear its own
+  measured height on a phone, which shifts this whole stack up in sync.
   Expanded: a small popover panel listing each style, opening upward so it
   doesn't run off the bottom of the viewport; picking one dispatches a
   `mapstylechange` CustomEvent on `document` with `{ url, id }` for MapParent.astro
@@ -155,9 +155,19 @@ const SITE_THEMES = [
     type SiteTheme,
   } from "~/lib/siteTheme";
 
+  // `onReady` re-runs init after every Astro navigation (see domReady.ts), and
+  // two of the listeners below are on `document`, which outlives one. Dropping
+  // the previous set first is what keeps a second run from stacking duplicates
+  // — every close-on-outside-click would fire once per page view since load.
+  let selectorCleanups: (() => void)[] = [];
+
   function initThemeSelector(): void {
     const root = document.getElementById("map-theme-selector");
     if (!root) return;
+
+    while (selectorCleanups.length > 0) {
+      selectorCleanups.pop()?.();
+    }
 
     const toggle = document.getElementById(
       "mts-toggle",
@@ -233,35 +243,55 @@ const SITE_THEMES = [
       toggle?.setAttribute("aria-expanded", String(open));
     }
 
-    toggle?.addEventListener("click", (e) => {
+    const onToggleClick = (e: Event) => {
       e.stopPropagation();
       setOpen(!open);
-    });
+    };
+    toggle?.addEventListener("click", onToggleClick);
+    selectorCleanups.push(() =>
+      toggle?.removeEventListener("click", onToggleClick),
+    );
 
-    document.addEventListener("click", (e) => {
+    const onDocumentClick = (e: MouseEvent) => {
       if (open && root && !root.contains(e.target as Node)) setOpen(false);
-    });
+    };
+    document.addEventListener("click", onDocumentClick);
+    selectorCleanups.push(() =>
+      document.removeEventListener("click", onDocumentClick),
+    );
 
-    document.addEventListener("keydown", (e) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
-    });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    selectorCleanups.push(() =>
+      document.removeEventListener("keydown", onKeyDown),
+    );
 
     options.forEach((opt) => {
-      opt.addEventListener("click", () => {
+      const onOptionClick = () => {
         const styleId = opt.dataset.styleId;
         if (!styleId) return;
         // Picking a basemap by hand makes it sticky — see storeMapStyleId.
         storeMapStyleId(styleId);
         applyStyle(styleId);
         setOpen(false);
-      });
+      };
+      opt.addEventListener("click", onOptionClick);
+      selectorCleanups.push(() =>
+        opt.removeEventListener("click", onOptionClick),
+      );
     });
 
     themeButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
+      const onThemeClick = () => {
         const theme = btn.dataset.theme;
         if (isSiteTheme(theme)) selectTheme(theme);
-      });
+      };
+      btn.addEventListener("click", onThemeClick);
+      selectorCleanups.push(() =>
+        btn.removeEventListener("click", onThemeClick),
+      );
     });
 
     syncChecks();

@@ -54,7 +54,7 @@ const isKnownStyleId = (value: string): value is string =>
   MAP_STYLE_OPTIONS.some((o) => o.id === value);
 
 /** The user's explicit basemap choice, or null if they haven't made one. */
-export function getStoredMapStyleId(): string | null {
+function getStoredMapStyleId(): string | null {
   const stored = readStored(MAP_STYLE_STORAGE_KEY);
   return stored !== null && isKnownStyleId(stored) ? stored : null;
 }
@@ -74,7 +74,7 @@ export function clearStoredMapStyleId(): void {
 }
 
 /** Basemap for an id we don't recognise: the one the default theme pairs with. */
-export const DEFAULT_MAP_STYLE_ID = THEME_BASEMAP[DEFAULT_SITE_THEME];
+const DEFAULT_MAP_STYLE_ID = THEME_BASEMAP[DEFAULT_SITE_THEME];
 
 export function getMapStyleUrlById(id: string): string {
   const byId = (wanted: string) =>

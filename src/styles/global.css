@@ -315,14 +315,15 @@
 
 /*
   Scrolling panes that shouldn't show a scrollbar chrome — the filters sidebar,
-  the news list, the mobile news carousel, the "largest centers" list.
+  the news list, and the "largest centers" list. (There was a fourth, the phone
+  layout's news carousel; it went with the floating news card that held it.)
 
   Global, not per-component, and that's a fix rather than a preference: this
   lived in a scoped <style> block in two components, so it applied only to the
   elements those two files rendered themselves. FilterProject.astro's list
   carried the class with no rule behind it, and so did every news item the client
   island injects via innerHTML — both showed a scrollbar the design says they
-  shouldn't. One definition covers all four.
+  shouldn't. One definition covers every pane that asks for it.
 */
 .hide-scrollbar {
   -ms-overflow-style: none;
@@ -353,9 +354,14 @@
   an unlayered `display` would silently outrank all of them, which is exactly
   the kind of two-owners bug this refactor exists to remove.
 
-  --mobile-sheet-max-h lets one panel ask for a different height without a
-  second class; the facility panel sets it inline, being a record to read
-  rather than a set of controls to operate.
+  The height is a flat 62dvh for every sheet that docks here, which today is
+  all three of them. There was a --mobile-sheet-max-h override on this line,
+  documented as the way the facility panel asked for a taller box — but that
+  panel is not a `.mobile-sheet` at all (it is opened by a marker rather than a
+  tab, and positions itself), it sets `max-h-[78dvh]` as a utility, and nothing
+  anywhere ever wrote the variable. A hook that reads as used and isn't is
+  worse than no hook: it invites the next panel to set it and get nothing. Add
+  it back at the point something needs it.
 */
 /* `not all and (min-width: 48rem)` is the exact complement of Tailwind's `md:`,
    which matters at fractional viewport widths — see MOBILE_QUERY in
@@ -370,7 +376,7 @@
     width: auto;
     max-width: none;
     margin: 0;
-    max-height: var(--mobile-sheet-max-h, 62dvh);
+    max-height: 62dvh;
     border-radius: 1rem 1rem 0 0;
     border-bottom-width: 0;
     /* Above the scrim (z-50), below the toolbar (z-60) that opened it. */
@@ -394,11 +400,16 @@
 
   --map-controls-bottom is the single source of truth for how far the
   whole stack sits off the bottom edge. It defaults to the same 10px inset
-  MapLibre uses natively. On mobile, MapFilterParent.astro raises it dynamically
-  (via inline style on :root) to whatever clears its own current rendered
-  height, since that panel's height changes as it expands/collapses. On
-  desktop it's left at the default, since the filters sidebar lives on the
-  left and never competes for this corner.
+  MapLibre uses natively. On a phone MobileToolbar.astro raises it (via inline
+  style on :root) to clear the toolbar's own measured height, which is not a
+  constant — the ticker row appears only once there is a headline, and the
+  safe-area padding is whatever the device reports. On desktop it is left at
+  the default, since nothing is docked to the bottom edge there.
+
+  MobileToolbar is the sole writer, and that is the whole design: this used to
+  be MapFilterParent.astro tracking its own floating card's height, back when
+  that card sat in this corner. It doesn't any more, and two owners for one
+  variable is the bug the single-sheet layout was written to remove.
 */
 :root {
   --map-ctrl-edge: 10px;

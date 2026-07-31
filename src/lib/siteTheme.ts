@@ -22,7 +22,7 @@ export const DEFAULT_SITE_THEME: SiteTheme = 'light';
  * The light value is the band colour (the flag's Night Sky Blue), not --canvas:
  * what sits under the browser chrome on a phone is a panel header, not the map.
  */
-export const THEME_COLOR: Record<SiteTheme, string> = {
+const THEME_COLOR: Record<SiteTheme, string> = {
   light: '#002d5d',
   dark: '#131314',
 };

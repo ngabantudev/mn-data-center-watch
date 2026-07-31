@@ -40,10 +40,31 @@ const layers = layersInGroup(group);
 // and close enough to the `outlineHex` each layer already draws its own borders
 // with to still read as that layer's colour. Hover deepens a further step, the
 // same direction the ink tokens move on hover in this theme.
-const SWATCHES: Record<
-  string,
-  { icon: typeof Trees; colorClass: string; accentClass: string }
-> = {
+interface LayerSwatch {
+  icon: typeof Trees;
+  colorClass: string;
+  accentClass: string;
+}
+
+/**
+ * What a layer with no entry below gets: the neutral ink the city-boundaries
+ * row uses, and a generic icon.
+ *
+ * There has to be one. mapLayers.ts exists so that adding an overlay is a
+ * single edit to a single registry — and this map, keyed by that registry's
+ * ids with no compiler link back to them, was the one place that quietly
+ * wasn't. A fifth entry in MAP_LAYER_META without a matching swatch here
+ * dereferenced `undefined.icon` and took the whole build down, which is a
+ * hard failure for a purely cosmetic omission. Now the row renders in neutral
+ * and the layer works; add the hue when you know what it should be.
+ */
+const FALLBACK_SWATCH: LayerSwatch = {
+  icon: Landmark,
+  colorClass: "text-ink-2 group-hover:text-ink",
+  accentClass: "accent-neutral-800 dark:accent-neutral-300",
+};
+
+const SWATCHES: Record<string, LayerSwatch> = {
   "protected-lands": {
     icon: Trees,
     colorClass:
@@ -81,7 +102,7 @@ const SWATCHES: Record<
   >
     {
       layers.map((layer) => {
-        const swatch = SWATCHES[layer.id];
+        const swatch = SWATCHES[layer.id] ?? FALLBACK_SWATCH;
         const IconComponent = swatch.icon;
         return (
           <label
@@ -131,13 +152,23 @@ const SWATCHES: Record<
     type LayerUnavailableReason,
   } from "~/data/mapLayers";
 
+  // `onReady` re-runs this after every Astro navigation (see domReady.ts). The
+  // listeners below are on elements rather than on `document`, but the elements
+  // survive a navigation too — so a second run without this would leave each
+  // checkbox dispatching `mapfilterchange` twice per click.
+  let toggleCleanups: (() => void)[] = [];
+
   function setupLayerToggles() {
+    while (toggleCleanups.length > 0) {
+      toggleCleanups.pop()?.();
+    }
+
     const toggles = document.querySelectorAll<HTMLInputElement>(
       ".environmental-layer-toggle",
     );
 
     toggles.forEach((toggle) => {
-      toggle.addEventListener("change", () => {
+      const onChange = () => {
         const apiKey = toggle.dataset.apiKey;
         if (!apiKey) return;
 
@@ -147,7 +178,9 @@ const SWATCHES: Record<
             detail: { [apiKey]: toggle.checked },
           }),
         );
-      });
+      };
+      toggle.addEventListener("change", onChange);
+      toggleCleanups.push(() => toggle.removeEventListener("change", onChange));
     });
   }
 

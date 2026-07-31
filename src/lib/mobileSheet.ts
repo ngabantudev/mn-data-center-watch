@@ -68,7 +68,7 @@ export interface SheetChangeDetail {
  * desktop utilities. `not all and (…)` cannot have a gap, because it is
  * negation. Tailwind's own `max-md:` variant compiles to the same thing.
  */
-export const MOBILE_QUERY = "not all and (min-width: 48rem)";
+const MOBILE_QUERY = "not all and (min-width: 48rem)";
 
 export function isMobile(): boolean {
   return window.matchMedia(MOBILE_QUERY).matches;
