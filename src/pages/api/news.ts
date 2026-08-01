@@ -20,12 +20,36 @@
 // be reached.
 
 import type { APIRoute } from "astro";
-import { withCache } from "~/lib/edgeCache";
+import { kvNamespace, withCache } from "~/lib/edgeCache";
 import { jsonResponse } from "~/lib/jsonResponse";
 import { withResponseCache } from "~/lib/responseCache";
 import { fetchNews, type NewsItem, type NewsPayload } from "~/lib/newsFeed";
+import { newsMirrorKey, parseNewsMirror, type NewsMirror } from "~/lib/newsMirror";
 
 export const prerender = false;
+
+/**
+ * The mirror CI writes for one window, or null if there isn't a usable one.
+ *
+ * Lives here rather than beside the rest of the mirror contract in
+ * ~/lib/newsMirror.ts for one reason: it needs the KV binding, and that module
+ * is imported by `scripts/refresh-news.ts` from plain Node, where anything
+ * reaching `cloudflare:workers` fails to resolve. So the shape, the key and the
+ * validation are shared; the binding stays on this side of the line.
+ *
+ * Null covers every reason equally — no binding, no key, expired, unparseable —
+ * because the caller does the same thing in all of them: fall through to a live
+ * fetch and, failing that, say so.
+ */
+async function readNewsMirror(windowDays: number): Promise<NewsMirror | null> {
+  const store = kvNamespace();
+  if (!store) return null;
+
+  const raw = await store
+    .get(newsMirrorKey(windowDays), "text")
+    .catch(() => null);
+  return raw ? parseNewsMirror(raw) : null;
+}
 
 /** What one window's cache entry holds. The truncation flag is cached with the
  *  items because it describes that same fetch — recomputing it later, or
@@ -35,6 +59,18 @@ interface CachedNews {
   items: NewsItem[];
   truncated: boolean;
   partial: boolean;
+  /**
+   * When these items were fetched from Google, ISO — set only when they came
+   * from the CI mirror rather than from this Worker.
+   *
+   * Optional, and read with a default below rather than behind a key bump, for
+   * the reason the note on `toPayload` gives about `partial`. Its whole job is
+   * honesty about age: `withCache` stamps `storedAt` when *its* build
+   * succeeded, and for a mirror read that is when the Worker read KV, not when
+   * the headlines were fetched. Serving the first as the second would date the
+   * news up to a refresh interval fresher than it is.
+   */
+  fetchedAt?: string;
 }
 
 /**
@@ -65,7 +101,8 @@ function toPayload(
     truncated: cached.truncated ?? false,
     partial: cached.partial ?? false,
     stale: meta.stale,
-    storedAt: meta.storedAt,
+    // CI's fetch time wins when there is one — see `fetchedAt` above.
+    storedAt: cached.fetchedAt ?? meta.storedAt,
   };
 }
 
@@ -172,6 +209,28 @@ async function buildNewsResponse(url: URL): Promise<Response> {
       failureBackoffSeconds: FAILURE_BACKOFF_SECONDS,
     },
     async () => {
+      // THE MIRROR IS TRIED FIRST, and that ordering is the point rather than
+      // an optimisation. Google refuses this Worker's egress outright — see the
+      // measurements in ~/lib/newsMirror.ts — so a live attempt here is not the
+      // fast path, it is an 8-second timeout in front of the answer. Reaching
+      // for KV first costs tens of milliseconds and usually ends the work.
+      //
+      // Falling *through* to the live fetch is what keeps this honest in both
+      // directions: if the refresh workflow stops, its keys expire within two
+      // hours and this route goes straight back to asking Google itself, fails,
+      // and tells the reader — rather than a dead pipeline quietly serving last
+      // week under no banner. And if Google ever starts answering Workers
+      // again, deleting the workflow is the only change needed.
+      const mirrored = await readNewsMirror(windowDays);
+      if (mirrored) {
+        return {
+          items: mirrored.items,
+          truncated: mirrored.truncated,
+          partial: mirrored.partial,
+          fetchedAt: mirrored.fetchedAt,
+        };
+      }
+
       const fetched = await fetchNews(windowDays);
       if (fetched.ok) {
         return {
@@ -222,10 +281,18 @@ async function buildNewsResponse(url: URL): Promise<Response> {
     headers: {
       // Lets us tell "live" from "last known good" when debugging, without
       // changing the payload shape the client already parses.
+      // Derived from the value, not from whether `build()` happened to run on
+      // this request. `fetchedAt` is set only by the mirror branch, so it stays
+      // correct for a cached copy too — an entry that came from KV an hour ago
+      // is still a mirror answer, and a flag set inside the builder would have
+      // reported it as "live" on every request that hit the cache, which is
+      // most of them.
       "X-News-Source": result
         ? result.stale
           ? "stale"
-          : "live"
+          : result.value.fetchedAt
+            ? "mirror"
+            : "live"
         : "unavailable",
     },
   });

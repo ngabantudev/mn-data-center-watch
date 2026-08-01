@@ -43,5 +43,8 @@ public/data/mn-protected-lands.json
 #     !.vscode/extensions.json
 .vscode/
 
+# Scratch output from scripts/refresh-news.ts; uploaded to KV by CI, never committed.
+.news-mirror/
+
 # Scratch from scripts/set-tile-cache-headers.ts; removed on exit, never committed.
 .tile-cache-headers/
