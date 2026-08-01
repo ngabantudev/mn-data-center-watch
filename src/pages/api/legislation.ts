@@ -39,6 +39,7 @@ import {
 } from "~/lib/billClassify";
 import { withCache } from "~/lib/edgeCache";
 import { jsonResponse } from "~/lib/jsonResponse";
+import { withResponseCache } from "~/lib/responseCache";
 import type { LegislationPayload, LiveBill } from "~/lib/legislation";
 import { fetchSessions, openStatesKey, searchBills } from "~/lib/openStates";
 
@@ -128,7 +129,13 @@ async function build(key: string): Promise<CachedLegislation | null> {
   };
 }
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ request }) => {
+  // Colo-level response cache, freshness owned by the `s-maxage` each branch
+  // below sets — see ~/lib/responseCache.ts.
+  return withResponseCache(request, buildLegislationResponse);
+};
+
+async function buildLegislationResponse(): Promise<Response> {
   const key = openStatesKey();
 
   if (!key) {
@@ -162,4 +169,4 @@ export const GET: APIRoute = async () => {
         maxAge: LEGISLATION_MAX_AGE,
         sMaxAge: LEGISLATION_S_MAX_AGE,
       });
-};
+}

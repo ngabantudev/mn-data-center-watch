@@ -169,6 +169,7 @@ const totalCount = clientProjects.length;
   import { countVisible, type FilterCriteria } from "~/lib/projectFilters";
   import { readStoredFlag, writeStoredFlag } from "~/lib/storage";
   import { isMobile, onSheetChange } from "~/lib/mobileSheet";
+  import { LAYER_SECTION_OPEN_EVENT } from "~/data/mapLayers";
 
   const STORAGE_KEY = "mapFiltersCollapsed";
 
@@ -287,6 +288,18 @@ const totalCount = clientProjects.length;
       });
     };
 
+    // Announced once, the first time a section holding layer toggles is
+    // opened. MapParent reads it to start reading the PMTiles archives — see
+    // LAYER_SECTION_OPEN_EVENT. Latched because the reads are memoized anyway
+    // and there is no reason to keep re-announcing.
+    let layerSectionAnnounced = false;
+    const announceLayerSection = (section: Element) => {
+      if (layerSectionAnnounced) return;
+      if (!section.querySelector(".environmental-layer-toggle")) return;
+      layerSectionAnnounced = true;
+      document.dispatchEvent(new CustomEvent(LAYER_SECTION_OPEN_EVENT));
+    };
+
     const openSection = (section: Element) => {
       const trigger = section.querySelector(
         ".mf-accordion-trigger",
@@ -301,6 +314,7 @@ const totalCount = clientProjects.length;
       content.classList.remove("grid-rows-[0fr]");
       content.classList.add("grid-rows-[1fr]");
       trigger.querySelector("svg")?.classList.remove("-rotate-90");
+      announceLayerSection(section);
     };
 
     accordionSections.forEach((section) => {

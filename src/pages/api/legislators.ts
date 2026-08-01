@@ -11,6 +11,7 @@ import {
   MN_STATE_JURISDICTION_ID,
 } from "~/data/legislation";
 import { jsonResponse } from "~/lib/jsonResponse";
+import { withResponseCache } from "~/lib/responseCache";
 import {
   isMailAddress,
   type Chamber,
@@ -81,7 +82,14 @@ function toView(person: OpenStatesPerson): LegislatorView | null {
 const json = (payload: LegislatorsPayload, sMaxAge: number) =>
   jsonResponse(payload, { maxAge: LEGISLATOR_MAX_AGE, sMaxAge });
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
+  // Cached per rounded coordinate, which is what the URL already carries —
+  // districts are large and COORD_PRECISION collapses a whole block onto one
+  // key, so neighbours share a cache entry as well as an upstream call.
+  return withResponseCache(request, () => buildLegislatorsResponse(url));
+};
+
+async function buildLegislatorsResponse(url: URL): Promise<Response> {
   const lat = coerceCoord(url.searchParams.get("lat"));
   const lng = coerceCoord(url.searchParams.get("lng"));
 
@@ -111,4 +119,4 @@ export const GET: APIRoute = async ({ url }) => {
     .sort((a, b) => (a.chamber === b.chamber ? 0 : a.chamber === "upper" ? -1 : 1));
 
   return json({ legislators, source: "live" }, LEGISLATOR_S_MAX_AGE);
-};
+}

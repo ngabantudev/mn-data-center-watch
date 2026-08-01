@@ -42,3 +42,6 @@ public/data/mn-protected-lands.json
 # re-admit just that file:
 #     !.vscode/extensions.json
 .vscode/
+
+# Scratch from scripts/set-tile-cache-headers.ts; removed on exit, never committed.
+.tile-cache-headers/
