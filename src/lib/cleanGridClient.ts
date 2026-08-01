@@ -77,14 +77,16 @@ export function syncCleanGridYear(): void {
     });
 
   // The bar writes the same fact as a phrase rather than as a bare number, so
-  // it reads as a sentence beside the share. Same source, same clock.
+  // it reads as a sentence beside the share. Same source, same clock. States
+  // the goal ("100% carbon-free by 2040") before the countdown — matches the
+  // server-rendered phrase in CleanGridBar.astro's `yearsPhrase`.
   document
     .querySelectorAll<HTMLElement>('[data-cg="years-phrase"]')
     .forEach((el) => {
       el.textContent =
         progress.yearsLeft > 0
-          ? `${progress.yearsLeft} ${progress.yearsLeft === 1 ? 'yr' : 'yrs'} to ${CARBON_FREE_DEADLINE_YEAR}`
-          : `${CARBON_FREE_DEADLINE_YEAR} mandate due`;
+          ? `100% carbon-free by ${CARBON_FREE_DEADLINE_YEAR} — ${progress.yearsLeft} ${progress.yearsLeft === 1 ? 'yr' : 'yrs'} left`
+          : `100% carbon-free by ${CARBON_FREE_DEADLINE_YEAR} — mandate due`;
     });
 
   document
