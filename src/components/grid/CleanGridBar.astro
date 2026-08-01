@@ -179,11 +179,11 @@ const tickPercents = [
     against the panel and 4.32:1 against its own track, both clear of the 3.0:1
     floor for graphics that carry meaning.
 
-    THE PULSE is a pure overlay: a soft white streak sweeping left-to-right
-    every 5s via `background-position`, not `transform`, so its width never has
-    to be computed against the fill/tick markup above it. `mix-blend-overlay`
-    keeps it visible over both the navy fill and the hatched track without
-    covering either in flat white. Disabled under `prefers-reduced-motion`.
+    THE PULSE lives inside the fill span, not the track: it is scoped to
+    exactly `sharePct%` wide via the fill's own `overflow-hidden`, so the
+    streak sweeps across the filled portion only and never bleeds into the
+    hatched remainder. `mix-blend-overlay` keeps it visible against the navy
+    without covering it in flat white. Disabled under `prefers-reduced-motion`.
   -->
   <span
     class="relative mt-2 hidden md:block h-2 w-full overflow-hidden rounded-full bg-[#002d5d]/20"
@@ -194,8 +194,11 @@ const tickPercents = [
     aria-valuetext={`${sharePct}% carbon-free as of ${MN_CARBON_FREE_SHARE.dataYear} — ${progress.pointsToMandate} percentage points below the 100% mandate due by ${CARBON_FREE_DEADLINE_YEAR}.`}
   >
     <span
-      class="absolute inset-y-0 left-0 rounded-full bg-[#002d5d]"
-      style={`width: ${sharePct}%`}></span>
+      class="absolute inset-y-0 left-0 overflow-hidden rounded-full bg-[#002d5d]"
+      style={`width: ${sharePct}%`}
+    >
+      <span class="cg-pulse pointer-events-none absolute inset-0" aria-hidden="true"></span>
+    </span>
 
     <!-- The remaining ground, hatched rather than left empty. An empty track
          reads as "not filled in yet"; a hatched one reads as work outstanding,
@@ -214,8 +217,6 @@ const tickPercents = [
         />
       ))
     }
-
-    <span class="cg-pulse pointer-events-none absolute inset-0" aria-hidden="true"></span>
   </span>
 
   <!--
