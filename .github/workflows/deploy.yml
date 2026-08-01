@@ -28,6 +28,24 @@ on:
 permissions:
   contents: read
 
+env:
+  # The public hostname, attached to this Worker as a Cloudflare custom domain.
+  # This is what the deploy gate checks, and the distinction matters: the
+  # workers.dev host answers even when the custom domain is broken, so a gate
+  # that only tested workers.dev would stay green while the URL people actually
+  # visit was down. That is the one fail-open-on-a-gate combination this repo
+  # otherwise avoids.
+  CANONICAL: https://mndatacenter.org
+  # Kept as a second check rather than dropped: `workers_dev: true` is pinned in
+  # wrangler.jsonc precisely so this host survives, and refresh-news.yml still
+  # curls it. If it ever stops answering, that should fail here rather than in
+  # a news refresh at 3am.
+  FALLBACK_HOST: https://mn-data-center-watch.resistance.workers.dev
+  # One archive, to catch the silent failure in the map path: if the tile host
+  # stops serving, overlays simply do not draw and — with observability off by
+  # design — nothing else would report it.
+  TILE_ARCHIVE: https://tiles.mndatacenter.org/convertedCity_Boundaries_in_Minnesota.pmtiles
+
 # Deploys queue, they do not cancel. `cancel-in-progress: true` would be wrong
 # here: killing a run mid-deploy risks an older push winning the race and
 # quietly reverting production to a previous commit.
@@ -94,8 +112,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Verify production
-        env:
-          URL: ${{ steps.deploy.outputs.url }}
         run: |
           # A deploy that reports success while the site 500s is the worst
           # outcome, so check the page and both live routes and fail the run if
@@ -104,19 +120,31 @@ jobs:
           fail=0
 
           check() {
-            name="$1"; path="$2"
-            code=$(curl -s -o body.json -w '%{http_code}' --max-time 60 "$URL$path")
-            printf '  %-24s %s\n' "$name" "$code"
-            case "$code" in
-              200) ;;
-              *) echo "::error::$name returned $code"; fail=1 ;;
-            esac
+            name="$1"; url="$2"; expect="${3:-200}"
+            code=$(curl -s -o body.json -w '%{http_code}' --max-time 60 "$url")
+            printf '  %-34s %s\n' "$name" "$code"
+            [ "$code" = "$expect" ] || { echo "::error::$name returned $code (wanted $expect)"; fail=1; }
           }
 
-          echo "Checking $URL"
-          check "/"                  "/"
-          check "/api/legislation"   "/api/legislation"
-          check "/api/news?days=7"   "/api/news?days=7"
+          echo "Canonical host — $CANONICAL"
+          check "/"                    "$CANONICAL/"
+          check "/api/legislation"     "$CANONICAL/api/legislation"
+          check "/api/news?days=7"     "$CANONICAL/api/news?days=7"
+
+          echo "Fallback host — $FALLBACK_HOST"
+          check "/ (workers.dev)"      "$FALLBACK_HOST/"
+
+          # A plain GET would pull 200 KB on every deploy. The archives are
+          # range-request format and the client only ever asks for slices, so
+          # ask for one the same way MapLibre would: 206 proves the host serves
+          # AND that Range still works, which is the part PMTiles cannot do
+          # without. A 200 here would mean Range was ignored — broken for the
+          # map even though the file is reachable.
+          echo "Tile archive"
+          tile=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 \
+                   -H 'Range: bytes=0-127' "$TILE_ARCHIVE")
+          printf '  %-34s %s\n' "Range bytes=0-127" "$tile"
+          [ "$tile" = "206" ] || { echo "::error::Tile archive returned $tile (wanted 206)"; fail=1; }
 
           exit $fail
 
@@ -131,7 +159,8 @@ jobs:
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| URL | $URL |"
+            echo "| URL | $CANONICAL |"
+            echo "| Worker host | $URL |"
             echo "| Version | \`${VERSION:-unknown}\` |"
             echo "| Commit | \`${GITHUB_SHA::7}\` |"
             echo "| Result | ${{ job.status }} |"

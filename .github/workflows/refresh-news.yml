@@ -125,8 +125,20 @@ jobs:
           # answered from KV rather than from a live fetch. Not a hard failure:
           # the Worker caches for up to 6h per window, so a run can legitimately
           # land while a previous copy is still fresh and never touch KV.
+          #
+          # The `cb` param is load-bearing, not decoration. ~/lib/responseCache.ts
+          # caches the whole Response per colo with s-maxage=1800, keyed on the
+          # request URL. This step runs about a second after the KV write, so
+          # without a unique key it reads a copy that predates the mirror it just
+          # uploaded and reports `unavailable` on a run that in fact succeeded —
+          # observed on the first live run: X-Response-Cache: hit, Age: 138,
+          # while all four windows had been written correctly.
+          #
+          # Checks the canonical host, not workers.dev: this is the URL people
+          # actually visit, and it is the one whose zone cache makes s-maxage
+          # mean anything.
           source="$(curl -sS -D- -o /dev/null \
-            'https://mn-data-center-watch.resistance.workers.dev/api/news?days=7' \
+            "https://mndatacenter.org/api/news?days=7&cb=${GITHUB_RUN_ID}" \
             | grep -i '^x-news-source' | tr -d '\r' | awk '{print $2}')"
           echo "X-News-Source: ${source:-<none>}"
           case "$source" in
