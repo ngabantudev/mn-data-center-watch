@@ -6,6 +6,22 @@
 	],
 	"name": "mn-data-center-watch",
 	"main": "@astrojs/cloudflare/entrypoints/server",
+	// Pinned true ahead of attaching `mndatacenter.org` to this Worker, not
+	// after. It is already the default, so this changes nothing today — that is
+	// the point. Adding a custom domain is the moment the default stops being
+	// something to rely on, and two things here depend on the workers.dev host
+	// continuing to answer:
+	//
+	//   - `.github/workflows/deploy.yml` greps `wrangler deploy` output for a
+	//     `*.workers.dev` URL and smoke-tests it. No match means it falls back
+	//     to a hardcoded host, and if that host is gone the deploy gate starts
+	//     failing on a Worker that is actually fine.
+	//   - `.github/workflows/refresh-news.yml` curls the same host to confirm
+	//     the news mirror is being served.
+	//
+	// Both keep working while this is true, which is what makes attaching the
+	// apex a reversible change rather than one that takes CI with it.
+	"workers_dev": true,
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS"
