@@ -212,10 +212,11 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
  *
  * PERFORMANCE NOTE, measured against the live bucket rather than assumed.
  *
- * WHAT IS TRUE: it serves no `Cache-Control` at all, so nothing here is
- * cacheable across page loads and a reload re-fetches what it draws. Within a
- * session MapLibre's own tile cache covers it, which is why layers are hidden
- * rather than torn down — see overlayLayers.ts.
+ * WHAT IS TRUE: the archives now carry `public, max-age=86400`, set as object
+ * metadata by scripts/set-tile-cache-headers.ts. A measured reload served 7 of
+ * 8 tile requests from the browser cache. Within a session MapLibre's own tile
+ * cache covers it, which is why layers are hidden rather than torn down — see
+ * overlayLayers.ts.
  *
  * WHAT IS NOT TRUE, and used to be implied here: that a visit costs 21 MB.
  * PMTiles is a range-request format and the client only ever asks for slices —
@@ -230,13 +231,18 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
  * request count is the binding limit long before bandwidth is. It trades a
  * caching problem for a quota problem, and the quota one is worse.
  *
- * The fix is on the bucket, not in this repo: set `Cache-Control` as object
- * metadata when uploading (`wrangler r2 object put --cache-control`), or put an
- * R2 custom domain in front with a cache rule. The bucket already sends an
- * `ETag` and honours `Range`, so revalidation works the moment a freshness
- * directive exists to trigger it. Prefer a moderate `max-age` over `immutable`:
- * these filenames are stable across re-uploads, so `immutable` would hide a
- * re-tiled archive from returning visitors for as long as it was set.
+ * The fix was on the bucket, not in this repo, and it has been applied twice
+ * over: `Cache-Control` as object metadata, and this custom domain. `max-age`
+ * is deliberately moderate rather than `immutable` — these filenames are stable
+ * across re-uploads, so `immutable` would hide a re-tiled archive from
+ * returning visitors for as long as it was set.
+ *
+ * STILL OPEN: the edge itself is not caching. `cf-cache-status` on this host
+ * reads DYNAMIC, because `.pmtiles` is not in Cloudflare's default-cacheable
+ * extension list, so every range request still reaches R2. The `max-age` above
+ * is what browsers honour; a Cache Rule on the zone is what would make the edge
+ * honour it too. That is a dashboard change, not a code change, and until it
+ * exists this host buys HTTP/2 and a stable name rather than fewer origin hits.
  *
  * The other half is upstream of the client entirely: PAD-US was built with
  * `--no-tile-size-limit`, so its z5–z7 tiles are 0.5–1.5 MB each — a second or
@@ -244,7 +250,9 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
  * Re-running tippecanoe without that flag is the fix, and it is the single
  * biggest one available to this layer.
  */
-const TILE_BASE_URL = 'https://pub-9f0c29be0f0040ee8ff0b8e3bad571d5.r2.dev';
+// R2 custom domain on the zone we own, attached 2026-07-31. The bucket's
+// `pub-9f0c29be…r2.dev` host is still enabled, so reverting is this one line.
+const TILE_BASE_URL = 'https://tiles.mndatacenter.org';
 
 /** Absolute URL of a layer's PMTiles archive. */
 export const tileUrlFor = (layer: MapLayerMeta): string =>
