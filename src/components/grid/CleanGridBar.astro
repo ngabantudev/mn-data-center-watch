@@ -12,37 +12,21 @@
 // exactly like it. Present and unreadable.
 //
 // So the rail section is gone and this is what a reader meets instead: the
-// share, the meter, the milestone percentages, the countdown and the buildout
-// conditional, in the masthead's own voice and without a click.
+// share, the meter and the countdown, in the masthead's own voice and without
+// a click.
 //
 // WHAT IT DELIBERATELY DOES NOT CARRY, and where that went.
 //
 // Everything this has no room to qualify: the 55% being generation mix rather
 // than a compliance score, the vintage on Xcel's figure, the § 216B.1691 subd.
-// 2b off-ramp, and the five sources behind the numbers. That is the record, and
-// it is the modal this banner opens — see CleanGridTracker.astro. A banner that
-// renders civic figures and drops their provenance would be worth less than no
-// banner, which is why deleting the rail section did not mean deleting its
-// contents.
-//
-// WHAT IT IS ALLOWED TO SAY, which is the part to be careful about.
-//
-// The buildout figure is a CONDITIONAL and has to read as one at a glance.
-// Most of the capacity on this map is proposed rather than energised, so a flat
-// "data centers use 45% of Minnesota's power" would be false today — and it is
-// the single sentence an opponent would need to discredit everything else here.
-// CleanGridTracker states it as "If every non-rejected site on this map were
-// built and running at 80% utilisation…"; this bar has one line for the same
-// claim, so the "if all are built" clause leads it and is not abbreviated away.
-//
-// It is also a LOAD figure and nothing more. It says how much electricity the
-// buildout wants. It does not say that electricity is fossil-fired — whether
-// new load is served cleanly is precisely what is contested, and asserting the
-// answer in a bar over the map would concede the argument the map exists to
-// have.
+// 2b off-ramp, the milestone breakdown, the buildout-load conditional, and the
+// five sources behind the numbers. That is the record, and it is the modal
+// this banner opens — see CleanGridTracker.astro. A banner that renders civic
+// figures and drops their provenance would be worth less than no banner, which
+// is why deleting the rail section did not mean deleting its contents.
 //
 // ON A PHONE it renders too, and compactly — the eyebrow and the headline only,
-// with the meter, the countdown and the conditional held back to `md:`.
+// with the meter and the countdown held back to `md:`.
 //
 // That is a reversal, and the reason is that the rail section is gone. This was
 // desktop-only while the tracker still lived in the filters rail, because a
@@ -61,28 +45,14 @@ import {
   CARBON_FREE_MILESTONES,
   MN_CARBON_FREE_SHARE,
 } from "~/data/mnCleanGridStandard";
-import {
-  cleanGridProgress,
-  dataCenterLoadPressure,
-} from "~/lib/cleanGridProgress";
+import { cleanGridProgress } from "~/lib/cleanGridProgress";
 
 // Build-time year, corrected on the client by ~/lib/cleanGridClient.ts — see the
 // `data-cg="years-phrase"` slot below. Rendered server-side anyway so the bar
 // is not blank on first paint and is correct with no JS at all.
 const progress = cleanGridProgress(new Date().getFullYear());
-const pressure = dataCenterLoadPressure();
 
 const sharePct = Math.round(MN_CARBON_FREE_SHARE.share * 100);
-
-// Same precision rule the tracker's own readout uses: this figure runs from a
-// fraction of a percent to double digits across plausible datasets, so a fixed
-// precision is wrong at one end or the other.
-const drawPct = (() => {
-  const value = pressure.shareOfStateLoad * 100;
-  if (value >= 10) return `${value.toFixed(0)}%`;
-  if (value >= 1) return `${value.toFixed(1)}%`;
-  return `${value.toFixed(2)}%`;
-})();
 
 const yearsPhrase =
   progress.yearsLeft > 0
@@ -92,8 +62,8 @@ const yearsPhrase =
 // Ticks are drawn for every distinct required percentage, not for every
 // milestone: 2030 contributes two (80 investor-owned, 60 co-op/municipal) and
 // 2040's 100 sits on the track's end cap. Deduped so the two converged tracks
-// in 2035 and 2040 don't stack two lines in one place. Moved here with the
-// meter; see the note on the legend below for why the years travel with it.
+// in 2035 and 2040 don't stack two lines in one place. They stay `aria-hidden`
+// here — the accessible breakdown lives in CleanGridTracker's milestone list.
 const tickPercents = [
   ...new Set(
     CARBON_FREE_MILESTONES.flatMap((m) => [
@@ -103,14 +73,6 @@ const tickPercents = [
   ),
 ].sort((a, b) => a - b);
 
-const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
-
-/** Compact legend under the meter — the ticks' accessible twin. See below. */
-const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
-  m.split
-    ? `${m.year} ${pct(m.publicUtility)}/${pct(m.otherUtility)}`
-    : `${m.year} ${pct(m.publicUtility)}`,
-).join(" · ");
 ---
 
 <!--
@@ -163,7 +125,7 @@ const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
   id="cg-bar"
   type="button"
   aria-label="Minnesota 2040 clean grid mandate — open the full record"
-  class="group block absolute top-2 inset-x-2 z-55 md:static md:inset-auto md:z-auto w-auto md:w-full text-left rounded-xl bg-[#78be21] border border-[#6aa81d] shadow-2xl shadow-(color:--shadow-panel) px-3.5 py-2 md:py-2.5 pointer-events-auto font-sans hover:bg-[#86d425] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#002d5d]/60"
+  class="group block absolute top-2 inset-x-2 z-55 md:static md:inset-auto md:z-auto w-auto md:w-full text-left rounded-xl bg-[#78be21] border border-[#6aa81d] shadow-2xl shadow-(color:--shadow-panel) px-3.5 py-2 pointer-events-auto font-sans hover:bg-[#86d425] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#002d5d]/60"
 >
   <!-- The eyebrow, at the masthead's own size and tracking. Not truncated: at
        the 13rem clamp floor it wraps to two lines, which is legible, where
@@ -195,7 +157,7 @@ const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
     facts. One step down through that band keeps it a headline without letting
     it become a panel.
   -->
-  <span class="mt-1 md:mt-1.5 block text-lg md:text-2xl xl:text-3xl font-black uppercase tracking-tight leading-none text-[#002d5d]">
+  <span class="mt-1 block text-lg md:text-2xl xl:text-3xl font-black uppercase tracking-tight leading-none text-[#002d5d]">
     <span class="tabular-nums">{sharePct}%</span> carbon-free
   </span>
 
@@ -216,9 +178,15 @@ const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
     Navy on the green, like everything else here: the fill measures 5.99:1
     against the panel and 4.32:1 against its own track, both clear of the 3.0:1
     floor for graphics that carry meaning.
+
+    THE PULSE is a pure overlay: a soft white streak sweeping left-to-right
+    every 5s via `background-position`, not `transform`, so its width never has
+    to be computed against the fill/tick markup above it. `mix-blend-overlay`
+    keeps it visible over both the navy fill and the hatched track without
+    covering either in flat white. Disabled under `prefers-reduced-motion`.
   -->
   <span
-    class="relative mt-2.5 hidden md:block h-2.5 w-full overflow-hidden rounded-full bg-[#002d5d]/20"
+    class="relative mt-2 hidden md:block h-2 w-full overflow-hidden rounded-full bg-[#002d5d]/20"
     role="progressbar"
     aria-valuenow={sharePct}
     aria-valuemin={0}
@@ -246,21 +214,8 @@ const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
         />
       ))
     }
-  </span>
 
-  <!--
-    The ticks' accessible twin, and the reason it had to come along.
-
-    In the rail the ticks were `aria-hidden` and their meaning was carried by
-    the full milestone list directly beneath them. That list stays in the
-    record dialog, which is a different view — so without this the ticks would
-    be marks whose meaning lived somewhere the reader isn't. It also happens to
-    be the most useful line on the banner: it is where the statute's 2030 split
-    shows up, and quoting only the 80% track is the commonest error in coverage
-    of this law.
-  -->
-  <span class="mt-1.5 hidden md:block text-[9.5px] font-semibold tabular-nums leading-none text-[#002d5d]">
-    {milestoneLegend}
+    <span class="cg-pulse pointer-events-none absolute inset-0" aria-hidden="true"></span>
   </span>
 
   <!--
@@ -270,25 +225,39 @@ const milestoneLegend = CARBON_FREE_MILESTONES.map((m) =>
     width.
   -->
   <span
-    class="mt-2 hidden md:block border-t border-[#002d5d]/25 pt-2 text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-none text-[#002d5d] whitespace-nowrap"
+    class="mt-1.5 hidden md:block border-t border-[#002d5d]/25 pt-1.5 text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-none text-[#002d5d] whitespace-nowrap"
     data-cg="years-phrase">{yearsPhrase}</span
   >
-
-  <!--
-    The conditional, in full. "If all are built" leads the sentence rather than
-    trailing it, because a reader who takes only the first half of this line has
-    to come away with a hypothetical rather than a claim about today. See the
-    header note.
-
-    Full navy at 10px, not a softened one: this is the smallest type on the
-    banner and the line most in need of the full ratio, which is the opposite
-    of how a secondary line is usually treated.
-  -->
-  <span class="mt-1.5 hidden md:block text-[10px] font-medium leading-snug text-[#002d5d]">
-    If all are built, the {pressure.totalGW.toFixed(2)} GW tracked here adds load
-    equal to {drawPct} of MN retail electricity sales.
-  </span>
 </button>
+
+<style>
+  .cg-pulse {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.7) 8%,
+      transparent 16%
+    );
+    background-size: 250% 100%;
+    mix-blend-mode: overlay;
+    animation: cg-pulse-sweep 5s linear infinite;
+  }
+
+  @keyframes cg-pulse-sweep {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -150% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cg-pulse {
+      animation: none;
+    }
+  }
+</style>
 
 <script>
   import { onReady } from "~/lib/domReady";
