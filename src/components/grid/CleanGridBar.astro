@@ -54,10 +54,14 @@ const progress = cleanGridProgress(new Date().getFullYear());
 
 const sharePct = Math.round(MN_CARBON_FREE_SHARE.share * 100);
 
+// States the goal before the countdown — "14 yrs to 2040" names a date but not
+// what has to happen by it. "carbon-free", not "renewable": that is the
+// statute's own term, and the two are not interchangeable on this site (see
+// CleanGridTracker.astro — nuclear counts toward one and not the other).
 const yearsPhrase =
   progress.yearsLeft > 0
-    ? `${progress.yearsLeft} ${progress.yearsLeft === 1 ? "yr" : "yrs"} to 2040`
-    : "2040 mandate due";
+    ? `100% carbon-free by ${CARBON_FREE_DEADLINE_YEAR} — ${progress.yearsLeft} ${progress.yearsLeft === 1 ? "yr" : "yrs"} left`
+    : `100% carbon-free by ${CARBON_FREE_DEADLINE_YEAR} — mandate due`;
 
 // Ticks are drawn for every distinct required percentage, not for every
 // milestone: 2030 contributes two (80 investor-owned, 60 co-op/municipal) and
@@ -221,11 +225,12 @@ const tickPercents = [
   <!--
     The countdown as its own line, separated from the share by a rule rather
     than by a lighter ink — see the note above on why nothing here is softened.
-    `nowrap` because "14 yrs to" / "2040" is not a break worth allowing at any
-    width.
+    No `nowrap`: "100% carbon-free by 2040 — 14 yrs left" is long enough that
+    forcing it onto one line risks overflow at the narrow end of `md:`, and
+    wrapping to two lines is legible where clipping isn't.
   -->
   <span
-    class="mt-1.5 hidden md:block border-t border-[#002d5d]/25 pt-1.5 text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-none text-[#002d5d] whitespace-nowrap"
+    class="mt-1.5 hidden md:block border-t border-[#002d5d]/25 pt-1.5 text-xs xl:text-sm font-black uppercase tracking-[0.12em] leading-tight text-[#002d5d]"
     data-cg="years-phrase">{yearsPhrase}</span
   >
 </button>
