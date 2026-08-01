@@ -182,8 +182,7 @@ const tickPercents = [
     THE PULSE lives inside the fill span, not the track: it is scoped to
     exactly `sharePct%` wide via the fill's own `overflow-hidden`, so the
     streak sweeps across the filled portion only and never bleeds into the
-    hatched remainder. `mix-blend-overlay` keeps it visible against the navy
-    without covering it in flat white. Disabled under `prefers-reduced-motion`.
+    hatched remainder. Disabled under `prefers-reduced-motion`.
   -->
   <span
     class="relative mt-2 hidden md:block h-2 w-full overflow-hidden rounded-full bg-[#002d5d]/20"
@@ -233,14 +232,21 @@ const tickPercents = [
 
 <style>
   .cg-pulse {
+    /* White-hot core with an electric-blue halo either side — `screen`
+       brightens rather than desaturates, which is what keeps this reading as
+       voltage against the navy fill instead of a plain highlight. */
     background-image: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.7) 8%,
-      transparent 16%
+      rgba(56, 189, 248, 0) 4%,
+      rgba(56, 189, 248, 0.9) 7%,
+      rgba(224, 249, 255, 0.95) 10%,
+      rgba(56, 189, 248, 0.9) 13%,
+      rgba(56, 189, 248, 0) 16%,
+      transparent 100%
     );
     background-size: 250% 100%;
-    mix-blend-mode: overlay;
+    mix-blend-mode: screen;
     animation: cg-pulse-sweep 5s linear infinite;
   }
 
