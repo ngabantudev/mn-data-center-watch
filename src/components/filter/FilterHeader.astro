@@ -53,6 +53,20 @@ const totalCapExBillion = validProjects.reduce((sum, p) => {
   return sum + (match[2] === "billion" ? val : val / 1000);
 }, 0);
 
+// "Minnesota" is itself an anglicization of the Dakota "Mni Sóta Makoce" —
+// roughly "land where the waters reflect the clouds" — the source of the
+// state's name (see Westerman & White, "Mni Sota Makoce: The Land of the
+// Dakota," MNHS Press 2012). Between actual sunrise and sunset the masthead
+// crossfades to the Dakota name; outside those hours it reads "Minnesota".
+// Sunrise/sunset are computed client-side (sunrise equation, good to a
+// minute or two) from a fixed Minnesota reference point rather than a
+// geolocation prompt or weather API call — consistent with "zero
+// third-party assets" and no-tracking. No-JS visitors see English.
+const DAKOTA_PLACE_NAME = "Mni Sóta Makoce";
+const ENGLISH_PLACE_NAME = "Minnesota";
+const MN_REFERENCE_LAT = 44.9537; // State Capitol, Saint Paul
+const MN_REFERENCE_LON = -93.09;
+
 const activeCount = countBy(clientProjects, (p) => p.status).active ?? 0;
 
 const totalPermanentJobs = validProjects.reduce(
@@ -93,10 +107,99 @@ const STATS: Array<{
     <span class="block text-sm font-semibold tracking-[0.25em] text-accent uppercase leading-none mb-2">
       Data Center Watch
     </span>
-    <h1 class="text-4xl font-black tracking-tight text-ink uppercase leading-none">
-      Minnesota
+    <h1
+      id="mf-header-place-name"
+      class="text-4xl font-black tracking-tight text-ink uppercase leading-none transition-opacity duration-700 ease-in-out motion-reduce:transition-none"
+      title={`${DAKOTA_PLACE_NAME} (Dakota): "land where the waters reflect the clouds," the source of the name "Minnesota"`}
+    >
+      {ENGLISH_PLACE_NAME}
     </h1>
   </div>
+
+  <script
+    is:inline
+    define:vars={{ DAKOTA_PLACE_NAME, ENGLISH_PLACE_NAME, MN_REFERENCE_LAT, MN_REFERENCE_LON }}
+  >
+    (function () {
+      try {
+        var el = document.getElementById("mf-header-place-name");
+        if (!el) return;
+
+        // Sunrise equation (en.wikipedia.org/wiki/Sunrise_equation): returns
+        // { sunrise, sunset } as Date objects for the UTC calendar day
+        // containing `date`, at the given latitude/longitude.
+        function sunTimes(date, lat, lon) {
+          var jd = date.getTime() / 86400000 + 2440587.5;
+          var n = Math.floor(jd - 2451545.0 + 0.0008);
+          var Jstar = n - lon / 360;
+          var M = (357.5291 + 0.98560028 * Jstar) % 360;
+          if (M < 0) M += 360;
+          var Mrad = (M * Math.PI) / 180;
+          var C =
+            1.9148 * Math.sin(Mrad) + 0.02 * Math.sin(2 * Mrad) + 0.0003 * Math.sin(3 * Mrad);
+          var lambda = (M + C + 180 + 102.9372) % 360;
+          if (lambda < 0) lambda += 360;
+          var lambdaRad = (lambda * Math.PI) / 180;
+          var Jtransit =
+            2451545.0 + Jstar + 0.0053 * Math.sin(Mrad) - 0.0069 * Math.sin(2 * lambdaRad);
+          var delta = Math.asin(Math.sin(lambdaRad) * Math.sin((23.4397 * Math.PI) / 180));
+          var latRad = (lat * Math.PI) / 180;
+          var cosOmega =
+            (Math.sin((-0.833 * Math.PI) / 180) - Math.sin(latRad) * Math.sin(delta)) /
+            (Math.cos(latRad) * Math.cos(delta));
+          if (cosOmega > 1 || cosOmega < -1) return { sunrise: null, sunset: null };
+          var omega = (Math.acos(cosOmega) * 180) / Math.PI;
+          return {
+            sunrise: new Date((Jtransit - omega / 360 - 2440587.5) * 86400000),
+            sunset: new Date((Jtransit + omega / 360 - 2440587.5) * 86400000),
+          };
+        }
+
+        var DAY_MS = 86400000;
+        var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        function isDaytime(now) {
+          var t = sunTimes(now, MN_REFERENCE_LAT, MN_REFERENCE_LON);
+          if (!t.sunrise || !t.sunset) return true; // polar edge case: not reachable at MN's latitude
+          return now >= t.sunrise && now < t.sunset;
+        }
+
+        function nextBoundary(now) {
+          var t = sunTimes(now, MN_REFERENCE_LAT, MN_REFERENCE_LON);
+          if (t.sunrise && now < t.sunrise) return t.sunrise;
+          if (t.sunset && now < t.sunset) return t.sunset;
+          var tomorrow = sunTimes(new Date(now.getTime() + DAY_MS), MN_REFERENCE_LAT, MN_REFERENCE_LON);
+          return tomorrow.sunrise || new Date(now.getTime() + DAY_MS);
+        }
+
+        function render(day) {
+          el.textContent = day ? DAKOTA_PLACE_NAME : ENGLISH_PLACE_NAME;
+          el.lang = day ? "dak" : "en";
+        }
+
+        function scheduleNext() {
+          var now = new Date();
+          var delay = Math.max(nextBoundary(now).getTime() - now.getTime(), 1000);
+          window.setTimeout(function () {
+            var day = isDaytime(new Date());
+            if (reduceMotion) {
+              render(day);
+            } else {
+              el.style.opacity = "0";
+              window.setTimeout(function () {
+                render(day);
+                el.style.opacity = "1";
+              }, 700);
+            }
+            scheduleNext();
+          }, delay);
+        }
+
+        render(isDaytime(new Date()));
+        scheduleNext();
+      } catch (e) {}
+    })();
+  </script>
 
   <div class="grid grid-cols-2 gap-3 px-4 pb-4">
     {
