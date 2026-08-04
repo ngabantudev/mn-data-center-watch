@@ -1,7 +1,11 @@
 // src/lib/moratoriumLayer.ts
 //
-// The Politics section's second layer: where each town stands on a data center
-// moratorium, as a dot on its city centre.
+// Where each town stands on a data center moratorium, as a dot on its city
+// centre — one half of the Politics section's single "Data Center
+// Moratoriums" toggle. The other half is `CITY_BOUNDARIES_LAYER_ID` itself
+// (~/data/mapLayers.ts), switched on alongside this by MapParent.astro's
+// `handleFilterChange` so the boundary a moratorium applies across is on the
+// map along with the moratoriums, rather than behind a second checkbox.
 //
 // It is deliberately NOT part of `~/lib/overlayLayers.ts`, which every other
 // toggle goes through. That controller exists to manage PMTiles archives —

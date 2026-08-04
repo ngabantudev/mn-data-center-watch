@@ -98,10 +98,18 @@ const news = await fetchLocalNews();
   import maplibregl from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { clientProjects } from "~/data/dataCenters";
-  import { getInitialMapStyleId, getMapStyleUrlById } from "~/data/mapStyles";
+  import {
+    getInitialMapStyleId,
+    getMapStyleUrlById,
+    isMapStyleDark,
+  } from "~/data/mapStyles";
   import { STATUS_HEX } from "~/data/mapStatusMeta";
   import { LEGAL_STATUS_META } from "~/data/legalStatusMeta";
-  import { LAYER_SECTION_OPEN_EVENT, MAP_LAYER_META } from "~/data/mapLayers";
+  import {
+    CITY_BOUNDARIES_LAYER_ID,
+    LAYER_SECTION_OPEN_EVENT,
+    MAP_LAYER_META,
+  } from "~/data/mapLayers";
   import { onReady } from "~/lib/domReady";
   import { buildPreviewHtml } from "~/lib/mapMarkers";
   import { createOverlayLayers } from "~/lib/overlayLayers";
@@ -297,12 +305,20 @@ const news = await fetchLocalNews();
       mapCleanups.pop()?.();
     }
 
+    // Which basemap is loaded right now, kept in step with `mapstylechange`
+    // below — the one thing on the map whose colours are tuned against the
+    // *basemap's* darkness rather than the site's chrome theme (see
+    // `isMapStyleDark`). Per-map, like `criteria`: a fresh `initMap()` run
+    // opens on a fresh read of the stored choice rather than carrying over
+    // whatever the previous map instance had.
+    let currentStyleId = getInitialMapStyleId();
+
     const map = new maplibregl.Map({
       container: "map",
       // Opens on the user's saved basemap, or the one paired with their
       // saved site theme if they never picked one — so a light-theme
       // visitor never gets a dark basemap on first paint.
-      style: getMapStyleUrlById(getInitialMapStyleId()),
+      style: getMapStyleUrlById(currentStyleId),
       center: MINNESOTA_CENTER,
       zoom: DEFAULT_ZOOM,
       scrollZoom: true,
@@ -522,6 +538,11 @@ const news = await fetchLocalNews();
     const overlays = createOverlayLayers(map, {
       layersAbove: [...MORATORIUM_LAYER_IDS, ...PROJECT_LAYER_IDS],
       companions: [MORATORIUM_TINT],
+      // A getter, not `isMapStyleDark(currentStyleId)` evaluated here: this
+      // object is built once, but `currentStyleId` is reassigned by
+      // `handleStyleChange` on every later basemap swap, and the fill needs
+      // that later value, not the one at construction time.
+      isDarkMap: () => isMapStyleDark(currentStyleId),
     });
 
     const applyMapFilters = () => {
@@ -743,8 +764,13 @@ const news = await fetchLocalNews();
     );
 
     const handleStyleChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ url: string }>).detail;
+      const detail = (event as CustomEvent<{ url: string; id: string }>).detail;
       if (detail?.url) {
+        // Recorded before `addDataLayer()` rebuilds the overlay fills below,
+        // so `isDarkMap` above answers with the basemap that's *about* to be
+        // on screen rather than the one being replaced — this is the one
+        // assignment that makes it correct.
+        currentStyleId = detail.id;
         // Nothing may touch these layers between here and `style.load`:
         // they belong to the style being replaced.
         moratoriums.detachFromStyle();
@@ -781,10 +807,14 @@ const news = await fetchLocalNews();
         if (typeof value === "boolean") overlays.setVisible(layer.id, value);
       }
 
-      // One checkbox, two things on the map: the shaded city boundaries and
-      // the labelled dots that name them.
+      // One checkbox, three things on the map: every city's plain boundary
+      // (so the polygon a moratorium applies across is visible even where no
+      // ordinance has been recorded), the posture tint over the cities that
+      // have acted, and the labelled dots that name them. `CITY_BOUNDARIES_LAYER_ID`
+      // has no toggle of its own — see `manualToggle` in `~/data/mapLayers.ts`.
       const showMoratoriums = detail[MORATORIUM_API_KEY];
       if (typeof showMoratoriums === "boolean") {
+        overlays.setVisible(CITY_BOUNDARIES_LAYER_ID, showMoratoriums);
         moratoriums.setVisible(showMoratoriums);
         overlays.setCompanionVisible(MORATORIUM_TINT.id, showMoratoriums);
       }

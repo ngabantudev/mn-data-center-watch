@@ -308,10 +308,23 @@ const lastUpdated = new Date().toLocaleDateString("en-US", {
     // opened. MapParent reads it to start reading the PMTiles archives — see
     // LAYER_SECTION_OPEN_EVENT. Latched because the reads are memoized anyway
     // and there is no reason to keep re-announcing.
+    //
+    // Matches `.moratorium-layer-toggle` as well as `.environmental-layer-toggle`:
+    // Politics' only row is the "Data Center Moratoriums" checkbox, which
+    // carries the former class rather than the latter (see
+    // FilterMoratorium.astro), but switching it on reads the city-boundaries
+    // PMTiles archive exactly like any other overlay toggle — so opening
+    // Politics alone should warm it too, not just opening Climate.
     let layerSectionAnnounced = false;
     const announceLayerSection = (section: Element) => {
       if (layerSectionAnnounced) return;
-      if (!section.querySelector(".environmental-layer-toggle")) return;
+      if (
+        !section.querySelector(
+          ".environmental-layer-toggle, .moratorium-layer-toggle",
+        )
+      ) {
+        return;
+      }
       layerSectionAnnounced = true;
       document.dispatchEvent(new CustomEvent(LAYER_SECTION_OPEN_EVENT));
     };
