@@ -24,7 +24,7 @@ function buildLegalBadgeHtml(project: Project, variant: 'preview' | 'detail'): s
   return `
     <div class="rounded-md border px-1.5 py-1 ${variant === 'preview' ? 'mb-1.5' : 'mb-2'}"
          style="border-color: ${meta.hex}59; background-color: ${meta.hex}1f; color: ${meta.hex}">
-      <span class="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider">
+      <span class="flex items-center ${variant === 'preview' ? 'justify-center' : ''} gap-1 text-[9px] font-bold uppercase tracking-wider">
         <span aria-hidden="true">⚖</span> ${label}
       </span>
       ${note}
@@ -121,9 +121,9 @@ function buildPreviewMetricsHtml(project: Project): string {
     (kind, label, value) => {
       if (kind === 'id') {
         return `
-          <div class="col-span-2 flex justify-between items-center gap-2">
+          <div class="col-span-2 flex justify-center items-center gap-2">
             <span class="text-neutral-400 font-medium shrink-0">${label}</span>
-            <span class="font-bold text-neutral-800 text-right truncate">${value}</span>
+            <span class="font-bold text-neutral-800 truncate">${value}</span>
           </div>
         `;
       }
@@ -182,15 +182,15 @@ export function buildPreviewHtml(project: Project): string {
   // a slider, but the headline translation is what makes someone click.
   const impact = impactForProject(project);
   const householdsHtml = `
-    <div class="mb-1.5 flex items-baseline justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-1">
+    <div class="mb-1.5 flex items-baseline justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-1">
       <span class="text-[9px] font-bold uppercase tracking-wider text-amber-700">Est. Power Usage</span>
       <span class="text-[10px] font-bold text-amber-900">≈ ${nf.format(impact.households)} MN homes</span>
     </div>
   `;
 
   return `
-    <div class="p-0.5 text-neutral-900 font-sans w-64 select-text">
-      <div class="flex items-center gap-2 mb-1">
+    <div class="p-0.5 text-neutral-900 font-sans w-64 select-text text-center">
+      <div class="flex items-center justify-center gap-2 mb-1">
         <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${color}"></span>
         <span class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">${statusText}</span>
       </div>
