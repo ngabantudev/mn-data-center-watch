@@ -431,6 +431,14 @@ export const clientProjects: Project[] = [
     trackerSource: {
       title: "cleanview.co: MSP1 Data Center (Centra)",
       url: "https://cleanview.co/data-centers/minnesota/1884/msp1-data-center"
+    },
+    // Study-area match, not a name match: the AUAR is titled after the site's
+    // former occupant (Thomson Reuters), not Centra -- it's the ~179-acre
+    // former Thomson Reuters campus at Dodd Rd/Yankee Doodle Rd in Eagan,
+    // which includes 610 Opperman Dr, the address of this facility.
+    eqbRecord: {
+      title: "MN EQB: Thomson Reuters Redevelopment Project AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/259709?siId=259709-PROJ0000000001"
     }
   },
   // ==========================================
@@ -632,6 +640,16 @@ export const clientProjects: Project[] = [
       title: "Inver Grove Heights Moratorium Decrees",
       url: "https://www.ighmn.gov/"
     },
+    // Known gap, not an oversight: the EQB's own weekly Monitor bulletin (Vol.
+    // 50, No. 27, July 7, 2026 -- https://content.govdelivery.com/accounts/
+    // MNEQB/bulletins/41e893b) lists "Inver Grove Heights Data Center" by name
+    // (Dakota County, Process: Petition, Step: "Responsible governmental unit
+    // assigned"), confirming the EAW petition is formally in the state's
+    // review pipeline. But unlike its neighboring bulletin entries, this one
+    // carries no eqb-search/project-detail link, and none has surfaced in any
+    // later bulletin or search as of this writing -- so the project-detail
+    // permalink this field expects still can't be cited. Re-check once the RGU
+    // assignment moves to the next step rather than guessing an ID now.
     economicAsymmetry: {
       constructionJobsEstimate: 150,
       permanentOperationalJobsEstimate: 12,
@@ -678,6 +696,10 @@ export const clientProjects: Project[] = [
     trackerSource: {
       title: "poweredbywho.com: Tract Farmington Technology Park",
       url: "https://poweredbywho.com/projects/tract-farmington-technology-park-44fde02f"
+    },
+    eqbRecord: {
+      title: "MN EQB: Farmington Technology Park AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/259881?siId=259881-PROJ0000000001"
     }
   },
   {
@@ -698,6 +720,10 @@ export const clientProjects: Project[] = [
     trackerSource: {
       title: "poweredbywho.com: Connect Data Centers Hampton",
       url: "https://poweredbywho.com/projects/connect-data-centers-hampton-68de7c48"
+    },
+    eqbRecord: {
+      title: "MN EQB: Hampton Industrial AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/261051?siId=261051-PROJ0000000001"
     }
   },
   {
@@ -718,6 +744,10 @@ export const clientProjects: Project[] = [
     trackerSource: {
       title: "poweredbywho.com: Olam Lakeville Data Center",
       url: "https://poweredbywho.com/projects/olam-lakeville-data-center-mcea-lawsuit-a850c93b"
+    },
+    eqbRecord: {
+      title: "MN EQB: Olam Lakeville Industrial AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/261688?siId=261688-PROJ0000000001"
     }
   },
   {
@@ -794,7 +824,7 @@ export const clientProjects: Project[] = [
     estimatedCost: "Not publicly disclosed",
     powerCapacityMW: "Not publicly disclosed",
     waterFootprint: "Not publicly disclosed",
-    publicRecord: {
+    eqbRecord: {
       title: "MN EQB: North Mankato Industrial AUAR",
       url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/261366?siId=261366-PROJ0000000001"
     }

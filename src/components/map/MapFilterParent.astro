@@ -214,6 +214,7 @@ const lastUpdated = new Date().toLocaleDateString("en-US", {
     );
     const sizeAllBtn = document.getElementById("mf-size-all");
     const sizeNoneBtn = document.getElementById("mf-size-none");
+    const size100PlusBtn = document.getElementById("mf-size-100plus");
 
     const projectLinks = Array.from(
       document.querySelectorAll<HTMLButtonElement>(".mf-project-link"),
@@ -442,6 +443,20 @@ const lastUpdated = new Date().toLocaleDateString("en-US", {
 
     wireCheckboxGroup(statusCheckboxes, selectAllBtn, clearAllBtn);
     wireCheckboxGroup(sizeCheckboxes, sizeAllBtn, sizeNoneBtn);
+
+    // Not an All/None shortcut, so it doesn't fit wireCheckboxGroup's
+    // set-every-box-the-same shape: this leaves Medium and Large checked and
+    // unchecks only Small, i.e. "hide everything under 100 MW" without
+    // touching the Large-only ("hyperscale" in this dataset's own vocabulary,
+    // see sizeTierMeta.ts) threshold at 300 MW.
+    const onSize100Plus = () => {
+      sizeCheckboxes.forEach((cb) => (cb.checked = cb.value !== "small"));
+      dispatchFilterChange();
+    };
+    size100PlusBtn?.addEventListener("click", onSize100Plus);
+    filterCleanups.push(() =>
+      size100PlusBtn?.removeEventListener("click", onSize100Plus),
+    );
 
     const onLegalHoldChange = () => dispatchFilterChange();
     legalHoldToggle?.addEventListener("change", onLegalHoldChange);
