@@ -62,11 +62,12 @@ export const STAGE_INK = "text-[#0a0a0a]";
  *     Measured, in that order: band / dark / text. Do not carry these onto the
  *     light theme's off-white panel body — every one lands under 2.5:1 there.
  *
- *  2. NO COLLISION with the map. #ef4444 already means "Rejected / Withdrawn"
- *     and #10b981 means "Operational" in STATUS_META, and the map legend can be
- *     open at the same time as this banner. Reusing them would make one red mean
- *     both "rejected" and "proposed" on a single screen, so these are separate
- *     tints — deliberately not the obvious red-500/green-500.
+ *  2. NO COLLISION with the map. #10b981 means "Operational" in STATUS_META
+ *     (rejected/withdrawn sites are shown in neutral gray, not red, so they read
+ *     as inactive rather than alarming), and the map legend can be open at the
+ *     same time as this banner. Reusing #10b981 for "passed" would make green
+ *     mean two different things on one screen, so these are separate tints —
+ *     deliberately not the obvious red-500/green-500.
  *
  * Color is never the only signal: the label ships next to it everywhere, which
  * is what keeps the red/green pair legible to a red-green colorblind reader.
@@ -98,9 +99,9 @@ export const BILL_STAGE_META: BillStageMeta[] = [
   {
     stage: "introduced",
     label: "Proposed",
-    // 4.95 band / 6.40 dark / 7.16 text. Not #ef4444 (map "Rejected") — which
-    // matters especially here, because "proposed" is the start of the process
-    // and must not be mistaken for a bill that was killed.
+    // 4.95 band / 6.40 dark / 7.16 text. Deliberately not the red-500 that would
+    // evoke the map's old "Rejected" red — "proposed" is the start of the
+    // process and must not be mistaken for a bill that was killed.
     hex: "#f87171",
     color: "bg-[#f87171]",
     description: "Introduced, no action yet beyond gaining authors",

@@ -48,7 +48,7 @@ export const STATUS_META: StatusMeta[] = [
   },
   {
     status: 'rejected',
-    hex: '#ef4444',
+    hex: '#9ca3af',
     filterLabel: 'Rejected / Withdrawn',
     popupLabel: 'Rejected / Withdrawn',
     description: 'Voted down or cancelled',

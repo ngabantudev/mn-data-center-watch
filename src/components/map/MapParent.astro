@@ -711,6 +711,8 @@ const news = await fetchLocalNews();
               "case",
               ["boolean", ["feature-state", "hover"], false],
               1,
+              ["==", ["get", "status"], "rejected"],
+              0.4,
               0.85,
             ],
           },
