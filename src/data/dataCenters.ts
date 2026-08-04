@@ -265,7 +265,7 @@ export const clientProjects: Project[] = [
     }
   },
   // ==========================================
-  // PLANNED / ONGOING / PIPELINE (9 TOTAL)
+  // PLANNED / ONGOING / PIPELINE (10 TOTAL)
   // ==========================================
   {
     name: "Monticello Tech Park",
@@ -374,31 +374,6 @@ export const clientProjects: Project[] = [
     }
   },
   {
-    name: "Elk River Data Center (IronGate)",
-    developer: "IronGate",
-    // Sourced: the planning-commission record has the site taking service from
-    // the city's municipal utility under a custom industrial rate — which is
-    // why the rate decision and the permit decision sit with the same council.
-    servingUtilityId: "elk-river-municipal",
-    description: "Proposed 60,000 sq. ft., 33 MW mid-scale facility generating local energy traction.",
-    coordinates: [45.3288, -93.5704],
-    url: "https://elkriverdatacenter.com/research-analysis/meetings/2026-06-23-planning-commission/", // Fact-Checked
-    businessImpact: "🟢 <strong>Public Hearings Active</strong> | Integrates into municipal energy infrastructure framework under custom industrial rates.",
-    status: "planned",
-    estimatedCost: "$120 Million",
-    powerCapacityMW: "33 MW",
-    waterFootprint: "Closed-loop system designs deployed to mitigate municipal system stress.",
-    publicRecord: {
-      title: "Elk River City Council Public Hearing Agenda",
-      url: "https://elkrivermn.portal.civicclerk.com/event/534/overview" // Fact-Checked
-    },
-    economicAsymmetry: {
-      constructionJobsEstimate: 100,
-      permanentOperationalJobsEstimate: 20,
-      metricRatioText: "High CapEx / Low Labor: Regional server node housing major structural arrays while employing a skeletal maintenance staff of 20."
-    }
-  },
-  {
     name: "Unisys Eagan Data Center",
     developer: "Unisys (facility since sold; new owner not confirmed)",
     description: "Enterprise data corridor footprint servicing legacy cloud infrastructure and high-volume redundancy architectures.",
@@ -494,8 +469,32 @@ export const clientProjects: Project[] = [
       metricRatioText: "Localized Node: Minimal staffing required to service localized cloud caching and data replication sets."
     }
   },
+  {
+    name: "Legacy Investing Data Center (Star Tribune Heritage Plant)",
+    developer: "Legacy Investing",
+    description: "Legacy Investing (Arlington, VA) has signed a purchase agreement for the Star Tribune's shuttered 500,000+ sq. ft. North Loop printing plant, a 13-acre site at 800 N First St. Plans call for a 20 MW data center with possible mixed-use housing/retail components; sale expected to close Q4 2026.",
+    coordinates: [44.99086, -93.27684],
+    url: "https://www.startribune.com/data-center-developer-signs-deal-to-buy-minnesota-star-tribunes-shuttered-north-loop-printing-plant/601872895",
+    businessImpact: "🟡 <strong>Purchase Agreement Signed</strong> | Sale of the former Star Tribune printing plant expected to close Q4 2026. Minneapolis's data-center development moratorium (in effect through November 2026) exempts facilities under 350,000 sq. ft.; this site is well above that threshold.",
+    status: "planned",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "20 MW",
+    waterFootprint: "Not publicly disclosed",
+  },
+  {
+    name: "US Internet Data Center (Robbinsdale)",
+    developer: "US Internet",
+    description: "US Internet, a Minnetonka-based ISP, acquired the shuttered Robbinsdale Clinic site at 3819 W. Broadway — Minnesota's oldest abortion clinic, closed in February 2026 — and plans to demolish the building for a 4,000 sq. ft. data center. A separate, distinct facility from US Internet's existing Minnetonka data center.",
+    coordinates: [45.02485, -93.3328],
+    url: "https://www.datacenterdynamics.com/en/news/minnesota-abortion-clinic-site-set-to-be-turned-into-data-center-pro-life-memorial-held/",
+    businessImpact: "🟡 <strong>Site Acquired, Demolition Pending</strong> | Former clinic building slated for demolition; no MW capacity or cost figures publicly disclosed yet.",
+    status: "planned",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
+  },
   // ==========================================
-  // REJECTED / WITHDRAWN SITES (HISTORICAL)
+  // REJECTED / WITHDRAWN SITES (5 TOTAL, HISTORICAL)
   // ==========================================
   {
     name: "Amazon Web Services Becker Campus (Scraped)",
@@ -570,5 +569,24 @@ export const clientProjects: Project[] = [
       title: "MN EQB: Rockport LLC Redevelopment AUAR",
       url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/96611?siId=96611-PROJ0000000004"
     },
+  },
+  {
+    name: "Elk River Data Center (IronGate / Swervo)",
+    developer: "Elk River Capital LLC / Swervo Development",
+    // Sourced: the same municipal-utility custom-rate arrangement documented
+    // while this was still an active proposal; kept for the historical record.
+    servingUtilityId: "elk-river-municipal",
+    description: "Proposed 33 MW data center inside a 60,000 sq. ft. former injection-molding warehouse. The Elk River City Council unanimously rejected the zoning amendment the project needed on July 6, 2026; the developer withdrew its application shortly after, and the council directed staff to draft a one-year moratorium on future data center proposals.",
+    coordinates: [45.3288, -93.5704],
+    url: "https://www.hometownsource.com/elk_river_star_news/elk_river_star_news/elk-river-data-center-developer-withdraws-application/article_f09155aa-2661-4fee-80c6-fc379cc6af73.html",
+    businessImpact: "❌ <strong>Denied, Then Withdrawn</strong> | City Council rejected the required zoning amendment; the developer withdrew the application days later. The city is now drafting a one-year moratorium on future data center proposals.",
+    status: "rejected",
+    estimatedCost: "$120 Million",
+    powerCapacityMW: "33 MW",
+    waterFootprint: "Withdrawn before final utility footprint was established.",
+    publicRecord: {
+      title: "Elk River City Council Public Hearing Agenda",
+      url: "https://elkrivermn.portal.civicclerk.com/event/534/overview"
+    }
   },
 ];
