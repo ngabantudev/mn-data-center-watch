@@ -74,12 +74,28 @@ export interface Project {
    * replacement for one.
    */
   trackerSource?: PublicRecord;
+  /**
+   * Direct citation to this project's Minnesota Environmental Quality Board
+   * review record (AUAR / EAW / EIS) — the state's system of record for
+   * environmental-review status, distinct from `publicRecord` (which is
+   * typically the developer's or city's own announcement/filing).
+   *
+   * Set ONLY when a specific EQB project-detail record has been matched to
+   * this project by name, address, or study-area boundary — never guessed
+   * from municipality alone. The EQB search tool (webapp.pca.state.mn.us/
+   * eqb-search/projects) has no documented public API or stable search-page
+   * deep links; the `url` here is the project's own detail-page permalink
+   * (`.../project-detail/{aiId}?siId={siId}`), confirmed to resolve before
+   * being added. Absent means no EQB record has been matched yet, not that
+   * one doesn't exist.
+   */
+  eqbRecord?: PublicRecord;
   economicAsymmetry?: EconomicAsymmetry; // Structured high-cap/low-labor accountability data
 }
 
 export const clientProjects: Project[] = [
   // ==========================================
-  // ACTIVE / OPERATIONAL SITES (14 TOTAL)
+  // ACTIVE / OPERATIONAL SITES (17 TOTAL)
   // ==========================================
   {
     name: "Downtown Minneapolis Data Center (MSP4)",
@@ -384,6 +400,13 @@ export const clientProjects: Project[] = [
       title: "Meta Global Infrastructure Announcements",
       url: "https://datacenters.atmeta.com/"
     },
+    // Covers Meta's adjacent 2024 expansion-parcel acquisition, not the
+    // original built campus -- news coverage of that purchase links this
+    // exact EQB record.
+    eqbRecord: {
+      title: "MN EQB: Rosemount Industrial AUAR Update",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/255536?siId=255536-PROJ0000000002"
+    },
     economicAsymmetry: {
       constructionJobsEstimate: 1000,
       permanentOperationalJobsEstimate: 100,
@@ -411,7 +434,7 @@ export const clientProjects: Project[] = [
     }
   },
   // ==========================================
-  // PLANNED / ONGOING / PIPELINE (13 TOTAL)
+  // PLANNED / ONGOING / PIPELINE (14 TOTAL)
   // ==========================================
   {
     name: "Monticello Tech Park",
@@ -429,6 +452,10 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "City of Monticello Comprehensive Plan Rezoning Map",
       url: "https://monticellomn.gov/"
+    },
+    eqbRecord: {
+      title: "MN EQB: Monticello Industrial AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/264408?siId=264408-PROJ0000000001"
     },
     economicAsymmetry: {
       constructionJobsEstimate: 1600,
@@ -451,6 +478,12 @@ export const clientProjects: Project[] = [
       title: "Monticello Economic Development Authority Filings",
       url: "https://monticellomn.gov/"
     },
+    // Same study area as "Monticello Tech Park" above -- one AUAR covers
+    // the whole Monticello Industrial district's parcels.
+    eqbRecord: {
+      title: "MN EQB: Monticello Industrial AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/264408?siId=264408-PROJ0000000001"
+    },
     economicAsymmetry: {
       constructionJobsEstimate: 500,
       permanentOperationalJobsEstimate: 40,
@@ -471,6 +504,10 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "Cannon Falls Community Planning Portal",
       url: "https://www.cannonfallstechnologypark.com/"
+    },
+    eqbRecord: {
+      title: "MN EQB: Cannon Falls Industrial AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/262244?siId=262244-PROJ0000000001"
     },
     economicAsymmetry: {
       constructionJobsEstimate: 1500,
@@ -495,35 +532,14 @@ export const clientProjects: Project[] = [
       title: "City of Hermantown Project Announcements",
       url: "https://hermantownmn.com/"
     },
+    eqbRecord: {
+      title: "MN EQB: Updated Hermantown Industrial AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/263202?siId=263202-PROJ0000000003"
+    },
     economicAsymmetry: {
       constructionJobsEstimate: 900,
       permanentOperationalJobsEstimate: 50,
       metricRatioText: "High CapEx / Low Labor: Multibillion-dollar compute center relying almost exclusively on remote automation software."
-    }
-  },
-  {
-    name: "Elk River Data Center (IronGate)",
-    developer: "IronGate",
-    // Sourced: the planning-commission record has the site taking service from
-    // the city's municipal utility under a custom industrial rate — which is
-    // why the rate decision and the permit decision sit with the same council.
-    servingUtilityId: "elk-river-municipal",
-    description: "Proposed 60,000 sq. ft., 33 MW mid-scale facility generating local energy traction.",
-    coordinates: [45.3288, -93.5704],
-    url: "https://elkriverdatacenter.com/research-analysis/meetings/2026-06-23-planning-commission/", // Fact-Checked
-    businessImpact: "🟢 <strong>Public Hearings Active</strong> | Integrates into municipal energy infrastructure framework under custom industrial rates.",
-    status: "planned",
-    estimatedCost: "$120 Million",
-    powerCapacityMW: "33 MW",
-    waterFootprint: "Closed-loop system designs deployed to mitigate municipal system stress.",
-    publicRecord: {
-      title: "Elk River City Council Public Hearing Agenda",
-      url: "https://elkrivermn.portal.civicclerk.com/event/534/overview" // Fact-Checked
-    },
-    economicAsymmetry: {
-      constructionJobsEstimate: 100,
-      permanentOperationalJobsEstimate: 20,
-      metricRatioText: "High CapEx / Low Labor: Regional server node housing major structural arrays while employing a skeletal maintenance staff of 20."
     }
   },
   {
@@ -562,6 +578,10 @@ export const clientProjects: Project[] = [
       title: "Project Skyway Community Portal",
       url: "https://pineislandskyway.com/"
     },
+    eqbRecord: {
+      title: "MN EQB: Project Skyway",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/262379?siId=262379-PROJ0000000001"
+    },
     economicAsymmetry: {
       constructionJobsEstimate: 800,
       permanentOperationalJobsEstimate: 100,
@@ -584,6 +604,10 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "City of Faribault Archer Datacenters Review Hub",
       url: "https://www.faribaultmn.gov/815/Archer-Datacenters"
+    },
+    eqbRecord: {
+      title: "MN EQB: Archer Datacenters Faribault Campus",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/263487?siId=263487-PROJ0000000001"
     },
     economicAsymmetry: {
       constructionJobsEstimate: 400,
@@ -696,8 +720,32 @@ export const clientProjects: Project[] = [
       url: "https://poweredbywho.com/projects/olam-lakeville-data-center-mcea-lawsuit-a850c93b"
     }
   },
+  {
+    name: "Legacy Investing Data Center (Star Tribune Heritage Plant)",
+    developer: "Legacy Investing",
+    description: "Legacy Investing (Arlington, VA) has signed a purchase agreement for the Star Tribune's shuttered 500,000+ sq. ft. North Loop printing plant, a 13-acre site at 800 N First St. Plans call for a 20 MW data center with possible mixed-use housing/retail components; sale expected to close Q4 2026.",
+    coordinates: [44.99086, -93.27684],
+    url: "https://www.startribune.com/data-center-developer-signs-deal-to-buy-minnesota-star-tribunes-shuttered-north-loop-printing-plant/601872895",
+    businessImpact: "🟡 <strong>Purchase Agreement Signed</strong> | Sale of the former Star Tribune printing plant expected to close Q4 2026. Minneapolis's data-center development moratorium (in effect through November 2026) exempts facilities under 350,000 sq. ft.; this site is well above that threshold.",
+    status: "planned",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "20 MW",
+    waterFootprint: "Not publicly disclosed",
+  },
+  {
+    name: "US Internet Data Center (Robbinsdale)",
+    developer: "US Internet",
+    description: "US Internet, a Minnetonka-based ISP, acquired the shuttered Robbinsdale Clinic site at 3819 W. Broadway — Minnesota's oldest abortion clinic, closed in February 2026 — and plans to demolish the building for a 4,000 sq. ft. data center. A separate, distinct facility from US Internet's existing Minnetonka data center.",
+    coordinates: [45.02485, -93.3328],
+    url: "https://www.datacenterdynamics.com/en/news/minnesota-abortion-clinic-site-set-to-be-turned-into-data-center-pro-life-memorial-held/",
+    businessImpact: "🟡 <strong>Site Acquired, Demolition Pending</strong> | Former clinic building slated for demolition; no MW capacity or cost figures publicly disclosed yet.",
+    status: "planned",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
+  },
   // ==========================================
-  // REJECTED / WITHDRAWN SITES (HISTORICAL)
+  // REJECTED / WITHDRAWN SITES (6 TOTAL, HISTORICAL)
   // ==========================================
   {
     name: "Amazon Web Services Becker Campus (Scraped)",
@@ -729,6 +777,10 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "Nobles County Powered Data Park Overview",
       url: "https://geronimopower.com/"
+    },
+    eqbRecord: {
+      title: "MN EQB: Nobles County Data Center AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/266340?siId=266340-PROJ0000000002"
     }
   },
   {
@@ -762,6 +814,31 @@ export const clientProjects: Project[] = [
       title: "Apple Valley City Council Official Land Use Considerations",
       url: "https://www.applevalleymn.gov/CivicAlerts.asp?AID=4164&ARC=6303",
     },
+    // Address match (15255 Johnny Cake Ridge Rd) to the Rockport LLC
+    // sand-and-gravel site; the AUAR itself doesn't name Oppidan directly.
+    eqbRecord: {
+      title: "MN EQB: Rockport LLC Redevelopment AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/96611?siId=96611-PROJ0000000004"
+    },
+  },
+  {
+    name: "Elk River Data Center (IronGate / Swervo)",
+    developer: "Elk River Capital LLC / Swervo Development",
+    // Sourced: the same municipal-utility custom-rate arrangement documented
+    // while this was still an active proposal; kept for the historical record.
+    servingUtilityId: "elk-river-municipal",
+    description: "Proposed 33 MW data center inside a 60,000 sq. ft. former injection-molding warehouse. The Elk River City Council unanimously rejected the zoning amendment the project needed on July 6, 2026; the developer withdrew its application shortly after, and the council directed staff to draft a one-year moratorium on future data center proposals.",
+    coordinates: [45.3288, -93.5704],
+    url: "https://www.hometownsource.com/elk_river_star_news/elk_river_star_news/elk-river-data-center-developer-withdraws-application/article_f09155aa-2661-4fee-80c6-fc379cc6af73.html",
+    businessImpact: "❌ <strong>Denied, Then Withdrawn</strong> | City Council rejected the required zoning amendment; the developer withdrew the application days later. The city is now drafting a one-year moratorium on future data center proposals.",
+    status: "rejected",
+    estimatedCost: "$120 Million",
+    powerCapacityMW: "33 MW",
+    waterFootprint: "Withdrawn before final utility footprint was established.",
+    publicRecord: {
+      title: "Elk River City Council Public Hearing Agenda",
+      url: "https://elkrivermn.portal.civicclerk.com/event/534/overview"
+    }
   },
   {
     name: "Google Becker Data Center (2022, historical)",

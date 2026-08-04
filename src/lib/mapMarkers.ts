@@ -246,6 +246,15 @@ export function buildDetailHtml(project: Project): string {
     `,
   ) : '';
 
+  const eqbRecordHtml = project.eqbRecord ? section(
+    'MN Environmental Quality Board Review',
+    `
+      <a href="${project.eqbRecord.url}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-accent hover:text-accent-hover hover:underline inline-flex items-center gap-1">
+        🏛️ ${project.eqbRecord.title} &rarr;
+      </a>
+    `,
+  ) : '';
+
   // Ordered for a resident, not for a filing cabinet. What a neighbour opens
   // this for is, in order: is it being built, what does it do to my utility,
   // what is it, and only then the developer's paperwork. The status and any
@@ -282,6 +291,8 @@ export function buildDetailHtml(project: Project): string {
       ${publicRecordHtml}
 
       ${trackerSourceHtml}
+
+      ${eqbRecordHtml}
 
       <div class="mt-3">
         <!-- The one primary CTA in the panel, so it gets --positive (the MN
