@@ -66,7 +66,7 @@ export interface Project {
 
 export const clientProjects: Project[] = [
   // ==========================================
-  // ACTIVE / OPERATIONAL SITES (12 TOTAL)
+  // ACTIVE / OPERATIONAL SITES (8 TOTAL)
   // ==========================================
   {
     name: "Downtown Minneapolis Data Center (MSP4)",
@@ -101,138 +101,99 @@ export const clientProjects: Project[] = [
     }
   },
   {
-    name: "Shakopee Enterprise Data Center",
-    description: "Hyperscale computing facility supporting commercial financial transaction backups.",
+    name: "Centersquare MSP1 Shakopee Campus",
+    developer: "Centersquare (formerly Compass Datacenters / Savvis / Evoque-Cyxtera)",
+    description: "A colocation campus at 4450 Dean Lakes Boulevard, built by Compass Datacenters for Savvis (later CenturyLink) and opened in spring 2014; now operated under the Centersquare brand following Brookfield's 2024 merger of Evoque and Cyxtera.",
     coordinates: [44.7812, -93.5230],
-    url: "https://www.shakopeemn.gov/",
-    businessImpact: "🟢 <strong>Operational</strong> | High-efficiency mechanical chiller operations.",
+    url: "https://www.startribune.com/data-center-to-locate-in-shakopee/225977621",
+    businessImpact: "🟢 <strong>Operational</strong> | 100,000 sq. ft. initial building; master plan called for two additional buildings at full buildout.",
     status: "active",
-    estimatedCost: "$310 Million",
-    powerCapacityMW: "85 MW",
-    waterFootprint: "35 Million Gallons/Year (Estimated)",
+    estimatedCost: "$26 Million (2013 initial build); ~$90 Million additional planned for full 3-building buildout",
+    powerCapacityMW: "4.8 MW (initial IT load)",
+    waterFootprint: "Not publicly disclosed",
     publicRecord: {
-      title: "Shakopee Planning Commission Authorization",
-      url: "https://www.shakopeemn.gov/"
+      title: "Star Tribune: \"Data center to locate in Shakopee\"",
+      url: "https://www.startribune.com/data-center-to-locate-in-shakopee/225977621"
     }
   },
   {
-    name: "Bloomington Industrial Data Hub",
-    description: "Legacy operational framework supporting regional telecommunication nodes.",
-    coordinates: [44.8408, -93.2983],
-    url: "https://www.bloomingtonmn.gov/",
-    businessImpact: "🟢 <strong>Operational</strong> | Continuous runtime monitoring active.",
+    name: "Verizon Bloomington Data Center",
+    developer: "Verizon",
+    description: "An existing Verizon data center at 10801 Bush Lake Road. The Bloomington City Council approved a 17,000 sq. ft. expansion of the facility (53,000 sq. ft. original building) on Jan. 25, 2021.",
+    coordinates: [44.807, -93.375],
+    url: "https://www.hometownsource.com/sun_current/community/bloomington/bloomington-city-council-approves-verizon-expansion-plan-adds-1-condition/article_3521cd1c-6662-11eb-85db-a3fc82537063.html",
+    businessImpact: "🟢 <strong>Operational</strong> | Existing carrier facility, expanded 2021 following City Council approval (4-2 vote).",
     status: "active",
-    estimatedCost: "$85 Million",
-    powerCapacityMW: "20 MW",
-    waterFootprint: "Closed-loop system",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
     publicRecord: {
-      title: "Bloomington Commercial Site Approvals",
-      url: "https://www.bloomingtonmn.gov/"
+      title: "Bloomington City Council: Verizon expansion approval (Jan. 25, 2021)",
+      url: "https://www.hometownsource.com/sun_current/community/bloomington/bloomington-city-council-approves-verizon-expansion-plan-adds-1-condition/article_3521cd1c-6662-11eb-85db-a3fc82537063.html"
     }
   },
   {
     name: "Brooklyn Park Data Center (MSP3)",
-    description: "Co-location operational space utilized for multi-county civil information hosting.",
+    developer: "DataBank",
+    description: "DataBank's MSP3 campus at 8111 Oxbow Creek Drive North, opened November 2021 as phase one of a 14-acre site; a 2023 expansion added colocation capacity.",
     coordinates: [45.143925989932136, -93.38717940354411],
-    url: "https://www.hennepin.us/",
-    businessImpact: "🟢 <strong>Operational</strong> | Core infrastructure fiber pathways validated.",
+    url: "https://www.databank.com/resources/press-releases/databank-announces-expansion-of-msp3-data-center-near-minneapolis/",
+    businessImpact: "🟢 <strong>Operational</strong> | 2023 expansion added 4.5 MW / 15,000 sq. ft. raised-floor capacity.",
     status: "active",
-    estimatedCost: "$140 Million",
-    powerCapacityMW: "35 MW",
-    waterFootprint: "Direct expansion air cooling",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "1.5 MW initial IT load; ~9 MW planned at full 3-hall buildout",
+    waterFootprint: "Not publicly disclosed",
     publicRecord: {
-      title: "Hennepin County Procurement Registry",
-      url: "https://www.hennepin.us/"
+      title: "DataBank: MSP3 Expansion Press Release",
+      url: "https://www.databank.com/resources/press-releases/databank-announces-expansion-of-msp3-data-center-near-minneapolis/"
     }
   },
   {
-    name: "Woodbury Regional Cloud Hub",
-    description: "Operational enterprise node providing localized computing arrays for eastern suburbs.",
-    coordinates: [44.9238, -92.9514],
-    url: "https://www.woodburymn.gov/",
-    businessImpact: "🟢 <strong>Operational</strong> | Grid load balanced across regional grid ties.",
+    name: "Ark Data Centers Duluth (Essentia Health)",
+    developer: "Ark Data Centers (formerly Involta)",
+    description: "A 26,000+ sq. ft. facility at 3401 Technology Drive, built as a greenfield site specifically to serve Essentia Health, a Duluth-headquartered regional medical system. Uses waterside economization for roughly 180 days/year of free cooling.",
+    coordinates: [46.8275, -92.1303],
+    url: "https://www.arkdna.com/resources/case-studies/essentia-health/",
+    businessImpact: "🟢 <strong>Operational</strong> | Built to serve Essentia Health's regional medical-system infrastructure.",
     status: "active",
-    estimatedCost: "$165 Million",
-    powerCapacityMW: "30 MW",
-    waterFootprint: "Municipal water connection utilities",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "1 MW",
+    waterFootprint: "Waterside economization; ~180 days/year free cooling",
     publicRecord: {
-      title: "City of Woodbury Development Applications",
-      url: "https://www.woodburymn.gov/"
+      title: "Ark Data Centers: Duluth facility specifications",
+      url: "https://www.arkdna.com/data-centers/minnesota/"
     }
   },
   {
-    name: "Duluth Edge Infrastructure Node",
-    description: "Operational Northern Minnesota climate-cooled server framework backing regional medical systems.",
-    coordinates: [46.7867, -92.1005],
-    url: "https://www.stlouiscountymn.gov/",
-    businessImpact: "🟢 <strong>Operational</strong> | Ambient cold-air optimization cooling designs.",
-    status: "active",
-    estimatedCost: "$95 Million",
-    powerCapacityMW: "15 MW",
-    waterFootprint: "Free-air cooling (Extremely Low)",
-    publicRecord: {
-      title: "St. Louis County Land Use Portal",
-      url: "https://www.stlouiscountymn.gov/"
-    }
-  },
-  {
-    name: "St. Cloud Core Facility",
-    description: "Regional active enterprise node linking central Minnesota university data backbones.",
+    name: "Vaultas St. Cloud Data Center",
+    developer: "Vaultas",
+    description: "An existing colocation facility at 3701 18th St S. In March 2025 it received a $100,000 Grid Catalyst clean-energy grant to partner with Rochester-based LiquidCool Solutions on immersion cooling, targeting a 30-40% energy-use reduction.",
     coordinates: [45.5579, -94.1632],
-    url: "https://www.ci.stcloud.mn.us/",
-    businessImpact: "🟢 <strong>Operational</strong> | Direct regional backbone fiber integration.",
+    url: "https://www.stcloudlive.com/business/st-cloud-data-center-receives-100-000-for-new-partnership",
+    businessImpact: "🟢 <strong>Operational</strong> | 2025 clean-energy grant funding an immersion-cooling retrofit.",
     status: "active",
-    estimatedCost: "$110 Million",
-    powerCapacityMW: "25 MW",
-    waterFootprint: "Municipal system allocation",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
     publicRecord: {
-      title: "Central MN Infrastructure Planning Report",
-      url: "https://www.ci.stcloud.mn.us/"
+      title: "St. Cloud Live: \"St. Cloud data center receives $100,000 for new partnership\"",
+      url: "https://www.stcloudlive.com/business/st-cloud-data-center-receives-100-000-for-new-partnership"
     }
   },
   {
-    name: "Rochester Medical Data Vault",
-    description: "High-security operational node handling institutional diagnostic cloud processing.",
+    name: "Mayo Clinic / Epic Systems Data Center (Rochester)",
+    developer: "Built by Mayo Clinic; owned and operated by Epic Systems since 2015",
+    description: "A 62,000-77,000 sq. ft. facility at 4710 West Circle Drive, built by Mayo Clinic in 2012 to serve its Rochester, Jacksonville, and Scottsdale campuses. Sold to Epic Systems in a Dec. 2015 sale-leaseback; Epic now owns and operates it, hosting Mayo's Epic EHR data.",
     coordinates: [44.0234, -92.4629],
-    url: "https://www.olmstedcounty.gov/",
-    businessImpact: "🟢 <strong>Operational</strong> | Zero-downtime redundant battery topologies active.",
+    url: "https://www.postbulletin.com/business/epic-buys-mayo-data-center",
+    businessImpact: "🟢 <strong>Operational</strong> | Built for $33.7M (2012); sold to Epic Systems for $46M (2015); further substation/mechanical upgrades in 2017 and 2020.",
     status: "active",
-    estimatedCost: "$210 Million",
-    powerCapacityMW: "50 MW",
-    waterFootprint: "Chilled water loop with safety containment",
+    estimatedCost: "$33.7 Million (2012 build); $46 Million (2015 sale-leaseback to Epic)",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
     publicRecord: {
-      title: "Olmsted County Public Health Environmental Review",
-      url: "https://www.olmstedcounty.gov/"
-    }
-  },
-  {
-    name: "Plymouth Technology Vault",
-    description: "Active corporate disaster-recovery framework server array handling secure commerce files.",
-    coordinates: [45.0105, -93.4552],
-    url: "https://www.plymouthmn.gov/",
-    businessImpact: "🟢 <strong>Operational</strong> | Hardened outer shell structural verification.",
-    status: "active",
-    estimatedCost: "$135 Million",
-    powerCapacityMW: "28 MW",
-    waterFootprint: "Standard closed industrial chillers",
-    publicRecord: {
-      title: "Plymouth Engineering Division Standard Codes",
-      url: "https://www.plymouthmn.gov/"
-    }
-  },
-  {
-    name: "Mankato Regional Hosting Site",
-    description: "Operational rural edge computing system optimized for local agricultural logistics networks.",
-    coordinates: [44.1636, -93.9994],
-    url: "https://www.blueearthcountymn.gov/",
-    businessImpact: "🟢 <strong>Operational</strong> | Clean energy purchase agreements finalized.",
-    status: "active",
-    estimatedCost: "$75 Million",
-    powerCapacityMW: "18 MW",
-    waterFootprint: "Air economizer configuration",
-    publicRecord: {
-      title: "Blue Earth County Board of Commissioners Minutes",
-      url: "https://www.blueearthcountymn.gov/"
+      title: "Post Bulletin: \"Epic buys Mayo data center\"",
+      url: "https://www.postbulletin.com/business/epic-buys-mayo-data-center"
     }
   },
 
@@ -281,7 +242,7 @@ export const clientProjects: Project[] = [
     }
   },
   // ==========================================
-  // PLANNED / ONGOING / PIPELINE (15 TOTAL)
+  // PLANNED / ONGOING / PIPELINE (9 TOTAL)
   // ==========================================
   {
     name: "Monticello Tech Park",
@@ -484,97 +445,6 @@ export const clientProjects: Project[] = [
       metricRatioText: "Localized Node: Minimal staffing required to service localized cloud caching and data replication sets."
     }
   },
-  {
-    name: "Chanhassen Proposed Cloud Core",
-    description: "Pipeline enterprise application undergoing municipal zoning reviews for data-density approvals.",
-    coordinates: [44.8618, -93.5322],
-    url: "https://www.ci.chanhassen.mn.us/",
-    businessImpact: "🔵 <strong>Planned Stage</strong> | Local land review filings open.",
-    status: "planned",
-    estimatedCost: "$145 Million",
-    powerCapacityMW: "32 MW",
-    waterFootprint: "Standard regional treatment system connections",
-    publicRecord: {
-      title: "Chanhassen Community Development Board Ledger",
-      url: "https://www.ci.chanhassen.mn.us/"
-    }
-  },
-  {
-    name: "Coon Rapids Data Ridge Project",
-    description: "Proposed grid modification project tracking substation expansion for future compute spaces.",
-    coordinates: [45.1732, -93.2877],
-    url: "https://www.coonrapidsmn.gov/",
-    businessImpact: "🔵 <strong>Planned Stage</strong> | Feasibility power parameters ongoing.",
-    status: "planned",
-    estimatedCost: "$70 Million",
-    powerCapacityMW: "50 MW",
-    waterFootprint: "None at current transmission stage",
-    publicRecord: {
-      title: "Anoka County Utility Transmission Proposals",
-      url: "https://www.coonrapidsmn.gov/"
-    }
-  },
-  {
-    name: "Otsego Infrastructure Expansion",
-    description: "Proposed secondary hyper-scale data tract pending environmental worksheet submittals.",
-    coordinates: [45.2750, -93.5788],
-    url: "https://www.co.wright.mn.us/",
-    businessImpact: "🔵 <strong>Planned Stage</strong> | Watershed impact models tracking.",
-    status: "planned",
-    estimatedCost: "$380 Million",
-    powerCapacityMW: "90 MW",
-    waterFootprint: "Watershed board review framework tracking",
-    publicRecord: {
-      title: "Wright County Watershed Management District Review",
-      url: "https://www.co.wright.mn.us/"
-    }
-  },
-  {
-    name: "Maple Grove Technology Hub",
-    description: "Pipeline multi-tenant server facility layout seeking final variance authorizations.",
-    coordinates: [45.1012, -93.4425],
-    url: "https://www.maplegrovemn.gov/",
-    businessImpact: "🔵 <strong>Planned Stage</strong> | Review timeline ongoing via town boards.",
-    status: "planned",
-    estimatedCost: "$190 Million",
-    powerCapacityMW: "45 MW",
-    waterFootprint: "Chilled fluid loop optimization",
-    publicRecord: {
-      title: "Maple Grove Planning and Zoning Commission Minutes",
-      url: "https://www.maplegrovemn.gov/"
-    }
-  },
-  {
-    name: "Burnsville Grid Compute Proposal",
-    description: "Proposed development infrastructure plot targeting industrial zone line adaptations near the river.",
-    coordinates: [44.7674, -93.2776],
-    url: "https://www.burnsvillemn.gov/",
-    businessImpact: "🔵 <strong>Planned Stage</strong> | Pre-application discussions underway.",
-    status: "planned",
-    estimatedCost: "$220 Million",
-    powerCapacityMW: "75 MW",
-    waterFootprint: "Minnesota River protected setbacks analysis required",
-    publicRecord: {
-      title: "Burnsville Environmental Quality Board Logs",
-      url: "https://www.burnsvillemn.gov/"
-    }
-  },
-  {
-    name: "Oakdale Fiber Intercept Station",
-    description: "Proposed low-footprint caching server array mapping out high power configurations.",
-    coordinates: [44.9815, -92.9641],
-    url: "https://www.co.washington.mn.us/",
-    businessImpact: "🔵 <strong>Planned Stage</strong> | Structural variance tracking.",
-    status: "planned",
-    estimatedCost: "$55 Million",
-    powerCapacityMW: "12 MW",
-    waterFootprint: "Minimal dry air topology configuration",
-    publicRecord: {
-      title: "Washington County Recorder Property Variances",
-      url: "https://www.co.washington.mn.us/"
-    }
-  },
-
   // ==========================================
   // REJECTED / WITHDRAWN SITES (HISTORICAL)
   // ==========================================
@@ -612,18 +482,18 @@ export const clientProjects: Project[] = [
   },
   {
     name: "North Mankato Tech Facility (Oppidan)",
-    developer: "Oppidan Investment Company",
-    description: "Early exploratory venture dropped entirely by Oppidan Investment following early environmental pushback actions.",
+    developer: "Oppidan Investment Company, under holding entity \"Project Deacon, LLC\"",
+    description: "A proposed data center studied under the North Mankato Industrial AUAR (679 acres, Belgrade Township, city of North Mankato as Responsible Governmental Unit). Oppidan withdrew before filing a formal application, citing Minnesota's backup-generator permitting process; no cost or capacity figures were ever publicly disclosed. A separate MCEA lawsuit alleging the AUAR understated the project's scope was voluntarily dismissed in May 2026.",
     coordinates: [44.1812, -94.0415],
-    url: "https://www.northmankato.com/",
-    businessImpact: "❌ <strong>Officially Withdrawn</strong> | Lawsuit voluntarily dismissed once developer scrubbed applications.",
+    url: "https://www.mankatofreepress.com/news/local_news/data-center-plans-stalled-in-north-mankato-after-developer-backs-out/article_d0617045-9eed-4633-a055-aed5b0405879.html",
+    businessImpact: "❌ <strong>Officially Withdrawn</strong> | Developer withdrew before filing a formal application, citing generator-permitting delays.",
     status: "rejected",
-    estimatedCost: "$600 Million",
-    powerCapacityMW: "110 MW",
-    waterFootprint: "Voluntarily abandoned under citizen environmental scrutiny",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
     publicRecord: {
-      title: "North Mankato Voluntary Project Termination Records",
-      url: "https://www.northmankato.com/"
+      title: "MN EQB: North Mankato Industrial AUAR",
+      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/261366?siId=261366-PROJ0000000001"
     }
   },
   {
