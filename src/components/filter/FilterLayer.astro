@@ -47,8 +47,7 @@ interface LayerSwatch {
 }
 
 /**
- * What a layer with no entry below gets: the neutral ink the city-boundaries
- * row uses, and a generic icon.
+ * What a layer with no entry below gets: neutral ink and a generic icon.
  *
  * There has to be one. mapLayers.ts exists so that adding an overlay is a
  * single edit to a single registry — and this map, keyed by that registry's
@@ -57,6 +56,13 @@ interface LayerSwatch {
  * dereferenced `undefined.icon` and took the whole build down, which is a
  * hard failure for a purely cosmetic omission. Now the row renders in neutral
  * and the layer works; add the hue when you know what it should be.
+ *
+ * (`city-boundaries` used to be the example of a layer that fell back to
+ * this — its identity on the map is a border, not a fill, so a hue here
+ * would point at the wrong thing. It has no row at all now that it's a
+ * `manualToggle` folded into "Data Center Moratoriums" — see
+ * FilterMoratorium.astro — but the reasoning still applies to the next
+ * border-only layer that lands here without a swatch of its own.)
  */
 const FALLBACK_SWATCH: LayerSwatch = {
   icon: Landmark,
@@ -77,16 +83,6 @@ const SWATCHES: Record<string, LayerSwatch> = {
       "text-blue-700 group-hover:text-blue-800 dark:text-blue-500 dark:group-hover:text-blue-400",
     accentClass: "accent-blue-700 dark:accent-blue-400",
   },
-  // The one entry that isn't a hue. This layer's identity on the map is a
-  // black border per city, not a fill, and a purple swatch beside it would be
-  // pointing at the 5%-opacity tint nobody sees. Black itself is unusable in
-  // the dark theme, so each theme takes the darkest ink its panel can carry —
-  // which is what "an outline" looks like on that surface.
-  "city-boundaries": {
-    icon: Landmark,
-    colorClass: "text-ink group-hover:text-ink dark:text-ink-2 dark:group-hover:text-ink",
-    accentClass: "accent-neutral-800 dark:accent-neutral-300",
-  },
   "coop-territories": {
     icon: Zap,
     colorClass:
@@ -97,45 +93,51 @@ const SWATCHES: Record<string, LayerSwatch> = {
 ---
 
 <AccordionSection title={MAP_LAYER_GROUP_TITLE[group]}>
-  <div
-    class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair"
-  >
-    {
-      layers.map((layer) => {
-        const swatch = SWATCHES[layer.id] ?? FALLBACK_SWATCH;
-        const IconComponent = swatch.icon;
-        return (
-          <label
-            class="flex items-start gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover has-disabled:cursor-not-allowed has-disabled:opacity-55 has-disabled:hover:bg-transparent"
-          >
-            <input
-              type="checkbox"
-              id={layer.toggleId}
-              data-api-key={layer.apiKey}
-              data-layer-id={layer.id}
-              class={`environmental-layer-toggle mt-0.5 w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 ${swatch.accentClass} cursor-pointer disabled:cursor-not-allowed`}
-            />
-            <span class={`mt-0.5 shrink-0 transition-colors ${swatch.colorClass}`}>
-              <IconComponent size={16} stroke-width={2} />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors">
-                {layer.label}
-              </span>
-              <span class="block text-[10px] leading-snug text-ink-4 mt-0.5">
-                {layer.description}
-              </span>
-              {/* Filled in only if the map reports the archive missing. */}
-              <span
-                class="hidden mt-1 text-[10px] font-semibold leading-snug text-ink-3"
-                data-layer-status
-              />
-            </span>
-          </label>
-        );
-      })
-    }
-  </div>
+  {
+    /* Politics currently holds only `city-boundaries`, and that layer is
+       `manualToggle` — folded into the moratorium row below rather than
+       given a row here — so `layers` is empty for that group. An empty
+       `flex flex-col gap-1 ... py-3` still renders as a blank padded strip,
+       which would sit above the moratorium row for no reason; skip the whole
+       block when there's nothing in it. */
+    layers.length > 0 && (
+      <div class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-t border-b border-hair">
+        {
+          layers.map((layer) => {
+            const swatch = SWATCHES[layer.id] ?? FALLBACK_SWATCH;
+            const IconComponent = swatch.icon;
+            return (
+              <label class="flex items-start gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover has-disabled:cursor-not-allowed has-disabled:opacity-55 has-disabled:hover:bg-transparent">
+                <input
+                  type="checkbox"
+                  id={layer.toggleId}
+                  data-api-key={layer.apiKey}
+                  data-layer-id={layer.id}
+                  class={`environmental-layer-toggle mt-0.5 w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 ${swatch.accentClass} cursor-pointer disabled:cursor-not-allowed`}
+                />
+                <span class={`mt-0.5 shrink-0 transition-colors ${swatch.colorClass}`}>
+                  <IconComponent size={16} stroke-width={2} />
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block text-xs font-semibold text-ink-2 group-hover:text-ink transition-colors">
+                    {layer.label}
+                  </span>
+                  <span class="block text-[10px] leading-snug text-ink-4 mt-0.5">
+                    {layer.description}
+                  </span>
+                  {/* Filled in only if the map reports the archive missing. */}
+                  <span
+                    class="hidden mt-1 text-[10px] font-semibold leading-snug text-ink-3"
+                    data-layer-status
+                  />
+                </span>
+              </label>
+            );
+          })
+        }
+      </div>
+    )
+  }
 
   <!-- Anything else that belongs in this section but isn't a tile overlay —
        today, the Politics section's moratorium layer, which is compiled from a

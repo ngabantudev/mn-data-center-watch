@@ -1,11 +1,24 @@
 ---
 // src/components/filter/FilterMoratorium.astro
 //
-// The Politics section's moratorium toggle, and the legend that makes its five
+// The Politics section's only toggle, and the legend that makes its five
 // dots readable. Rendered inside FilterLayer's slot so it shares that
-// accordion; it is not in MAP_LAYER_META because it isn't a tile archive — see
-// ~/lib/moratoriumLayer.ts for why that distinction is kept rather than papered
-// over.
+// accordion; it is not in MAP_LAYER_META because the moratorium registry
+// itself isn't a tile archive — see ~/lib/moratoriumLayer.ts for why that
+// distinction is kept rather than papered over.
+//
+// One checkbox switches on THREE things, all keyed off `MORATORIUM_API_KEY` in
+// MapParent.astro's `handleFilterChange`: every city's plain boundary (from
+// `CITY_BOUNDARIES_LAYER_ID`, a `manualToggle` entry in mapLayers.ts with no
+// row of its own), the posture tint over the cities that have acted, and the
+// labelled dots that name them. City Boundaries used to be a second toggle a
+// visitor had to find and check on top of this one to see what a moratorium
+// even applies across; a boundary with nothing colouring it is not a
+// moratorium finding, so the two are one control now.
+//
+// That merge is also why this row, not FilterLayer.astro's, is the one that
+// listens for LAYER_UNAVAILABLE_EVENT below — it now drives a PMTiles archive
+// (the city-boundaries one) same as any `.environmental-layer-toggle` does.
 //
 // The legend carries counts, and the counts are the argument. "No pause,
 // project advancing — 2" is the line a reader acts on, and it is derived here
@@ -13,6 +26,7 @@
 // registry. There is no second definition of "exposed" anywhere.
 import { Gavel } from "lucide-astro";
 import { countBy } from "~/lib/collections";
+import { CITY_BOUNDARIES_LAYER_ID } from "~/data/mapLayers";
 import {
   JURISDICTIONS,
   MORATORIUM_COVERAGE_NOTE,
@@ -34,13 +48,14 @@ const total = JURISDICTIONS.length;
   class="flex flex-col gap-1 px-3.5 md:px-4 py-3 bg-panel-3 border-b border-hair"
 >
   <label
-    class="flex items-start gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover"
+    class="flex items-start gap-3 cursor-pointer group rounded-lg px-2 py-2 transition-colors hover:bg-hover has-disabled:cursor-not-allowed has-disabled:opacity-55 has-disabled:hover:bg-transparent"
   >
     <input
       type="checkbox"
       id="mf-toggle-moratoriums"
       data-api-key={MORATORIUM_API_KEY}
-      class="moratorium-layer-toggle mt-0.5 w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 accent-emerald-700 dark:accent-emerald-400 cursor-pointer"
+      data-layer-id={CITY_BOUNDARIES_LAYER_ID}
+      class="moratorium-layer-toggle mt-0.5 w-3.5 h-3.5 rounded border-hair-strong bg-panel-2 accent-emerald-700 dark:accent-emerald-400 cursor-pointer disabled:cursor-not-allowed"
     />
     <span class="mt-0.5 shrink-0 text-ink-2 group-hover:text-ink transition-colors">
       <Gavel size={16} stroke-width={2} />
@@ -52,9 +67,15 @@ const total = JURISDICTIONS.length;
         Data Center Moratoriums
       </span>
       <span class="block text-[10px] leading-snug text-ink-4 mt-0.5">
-        Which councils have paused permits, and until when. Shades each city's
-        boundary — hover one for its ordinance.
+        Every city's boundary — the jurisdiction a permit decision covers —
+        shaded where a council has paused permits, and until when. Hover a
+        shaded city for its ordinance.
       </span>
+      {/* Filled in only if the map reports the city-boundaries archive missing. */}
+      <span
+        class="hidden mt-1 text-[10px] font-semibold leading-snug text-ink-3"
+        data-layer-status
+      />
     </span>
   </label>
 
@@ -104,14 +125,20 @@ const total = JURISDICTIONS.length;
 
 <script>
   import { onReady } from "~/lib/domReady";
+  import {
+    LAYER_UNAVAILABLE_EVENT,
+    type LayerUnavailableDetail,
+    type LayerUnavailableReason,
+  } from "~/data/mapLayers";
 
   // Its own listener rather than a sixth `.environmental-layer-toggle`: that
-  // class also carries the unavailable-archive handling in FilterLayer.astro,
-  // which is meaningless for a layer compiled into the bundle. Both dispatch
-  // the same `mapfilterchange` patch, so MapParent sees no difference.
-  // Dropped and re-bound per run, for the reason FilterLayer.astro states: the
-  // checkbox outlives an Astro navigation, so a second `onReady` pass would
-  // leave it dispatching `mapfilterchange` twice per click.
+  // class also carries FilterLayer.astro's per-row unavailable handling,
+  // which would resolve this checkbox by `data-layer-id="city-boundaries"`
+  // and disable it under a "City Boundaries" row that no longer exists. Both
+  // dispatch the same `mapfilterchange` patch, so MapParent sees no
+  // difference. Dropped and re-bound per run, for the reason FilterLayer.astro
+  // states: the checkbox outlives an Astro navigation, so a second `onReady`
+  // pass would leave it dispatching `mapfilterchange` twice per click.
   let moratoriumCleanups: (() => void)[] = [];
 
   function setupMoratoriumToggle() {
@@ -142,6 +169,39 @@ const total = JURISDICTIONS.length;
       toggle.removeEventListener("change", onChange),
     );
   }
+
+  // This toggle now switches on the city-boundaries PMTiles fill directly
+  // (see MapParent.astro's `handleFilterChange`), so an archive that can't be
+  // read has to disable this row the same way FilterLayer.astro's per-row
+  // handler does for every other overlay — otherwise the box stays checked
+  // over a map with nothing on it. Registered at module scope, like
+  // FilterLayer.astro's copy: it's on `document`, which survives a
+  // navigation, so it resolves the toggle by id at fire time instead of being
+  // re-bound.
+  const UNAVAILABLE_TEXT: Record<LayerUnavailableReason, string> = {
+    missing: "Dataset not published yet.",
+    unreadable: "Couldn't load this dataset — try reloading.",
+  };
+
+  document.addEventListener(LAYER_UNAVAILABLE_EVENT, (event) => {
+    const { id, reason } = (event as CustomEvent<LayerUnavailableDetail>).detail;
+    const toggle = document.getElementById(
+      "mf-toggle-moratoriums",
+    ) as HTMLInputElement | null;
+    if (!toggle || toggle.dataset.layerId !== id) return;
+
+    toggle.checked = false;
+    toggle.disabled = true;
+    document.getElementById("mf-moratorium-legend")?.classList.add("hidden");
+
+    const status = toggle
+      .closest("label")
+      ?.querySelector<HTMLElement>("[data-layer-status]");
+    if (status) {
+      status.textContent = UNAVAILABLE_TEXT[reason];
+      status.classList.remove("hidden");
+    }
+  });
 
   onReady(setupMoratoriumToggle);
 </script>

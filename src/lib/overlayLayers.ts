@@ -49,7 +49,9 @@ import {
   LAYER_UNAVAILABLE_EVENT,
   MAP_LAYER_BY_ID,
   MAP_LAYER_META,
+  fillColorFor,
   layerIdFor,
+  outlineColorFor,
   outlineLayerIdFor,
   sourceIdFor,
   tileUrlFor,
@@ -276,6 +278,15 @@ export interface OverlayLayersOptions {
   layersAbove: string[];
   /** Extra fills riding on a registry layer's source. See `CompanionLayerSpec`. */
   companions?: CompanionLayerSpec[];
+  /**
+   * Whether the *currently active basemap* is dark, read fresh every time a
+   * fill is (re)built. A getter rather than a snapshot because it has to
+   * answer differently across a basemap swap without this controller being
+   * rebuilt — MapParent updates the value it closes over and this just reads
+   * it back. Defaults to "never dark" so a caller that hasn't wired a basemap
+   * picker gets the light-theme colours it always got.
+   */
+  isDarkMap?: () => boolean;
 }
 
 export interface OverlayLayers {
@@ -307,7 +318,7 @@ export interface OverlayLayers {
 
 export function createOverlayLayers(
   map: maplibregl.Map,
-  { layersAbove, companions = [] }: OverlayLayersOptions,
+  { layersAbove, companions = [], isDarkMap = () => false }: OverlayLayersOptions,
 ): OverlayLayers {
   tileProtocol();
 
@@ -413,6 +424,11 @@ export function createOverlayLayers(
   ): void => {
     const sourceId = ensureSource(layer);
     const before = beforeFill(layer, index);
+    // Read once per build so the fill and its outline agree on which basemap
+    // they're being drawn against — both are rebuilt together on every
+    // basemap swap (see `isDarkMap` on `OverlayLayersOptions`), so this never
+    // goes stale between the two `addLayer` calls below.
+    const dark = isDarkMap();
 
     map.addLayer(
       {
@@ -422,12 +438,12 @@ export function createOverlayLayers(
         'source-layer': archive.sourceLayer,
         layout: { visibility: 'visible' },
         paint: {
-          'fill-color': layer.hex,
+          'fill-color': fillColorFor(layer, dark),
           'fill-opacity': layer.fillOpacity,
           // A layer drawing real borders gets them from the line layer below;
           // stacking a tile-resolution hairline under a 0.8px stroke of the
           // same colour buys nothing and darkens it unevenly by zoom.
-          ...(layer.outline ? {} : { 'fill-outline-color': layer.outlineHex }),
+          ...(layer.outline ? {} : { 'fill-outline-color': outlineColorFor(layer, dark) }),
         },
       },
       before,
@@ -445,7 +461,7 @@ export function createOverlayLayers(
         'source-layer': archive.sourceLayer,
         layout: { visibility: 'visible', 'line-join': 'round' },
         paint: {
-          'line-color': layer.outlineHex,
+          'line-color': outlineColorFor(layer, dark),
           'line-opacity': layer.outline.opacity,
           // Statewide, ~850 city outlines at a fixed width collapse into a
           // smear; zoomed to one council's jurisdiction, the same width is

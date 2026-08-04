@@ -71,12 +71,33 @@ export interface MapLayerMeta {
   fillOpacity: number;
   outlineHex: string;
   /**
+   * Fill/outline used instead of `hex`/`outlineHex` while the active basemap
+   * is dark (see `isMapStyleDark` in `~/data/mapStyles.ts`). Optional because
+   * most of these fills are translucent saturated hues that read fine on any
+   * background — only a colour tuned to sit *under* a light basemap (a
+   * near-black outline, say) needs a second value. Falls back to the light
+   * pair when unset; see `fillColorFor` / `outlineColorFor`.
+   */
+  darkHex?: string;
+  darkOutlineHex?: string;
+  /**
    * Draw each polygon's border on its own line layer in `outlineHex`. Without
    * it the layer falls back to `fill-outline-color`, which is the right call
    * for a dataset read as regions (protected land, a recharge area) and the
    * wrong one for a dataset read as *borders*. See `LayerOutline`.
    */
   outline?: LayerOutline;
+  /**
+   * Set on a layer that has no sidebar row of its own because another control
+   * switches it on — today, City Boundaries, folded into the "Data Center
+   * Moratoriums" toggle (`~/components/filter/FilterMoratorium.astro`) so one
+   * click shows the boundary a moratorium applies across along with the
+   * moratoriums themselves, rather than asking a visitor to find and enable
+   * two separate rows to get one picture. The registry entry stays — the
+   * archive, its fill/outline colours, and its companion (the moratorium
+   * tint) still need it — only the row in `FilterLayer.astro` disappears.
+   */
+  manualToggle?: boolean;
   /**
    * Credit line for this dataset, shown in the map's attribution control
    * while the layer is switched on. Optional only so a layer can be wired
@@ -161,19 +182,34 @@ export const MAP_LAYER_META: MapLayerMeta[] = [
     // fix that; it needs the archive re-run through tippecanoe at a higher
     // maxzoom (z10–z12) and re-uploaded, which is also the cheapest single
     // improvement available to this layer.
+    //
+    // NO ROW OF ITS OWN (`manualToggle`): every city's boundary is what a
+    // moratorium's shaded polygon is a *subset* of, so the two are switched
+    // together by "Data Center Moratoriums" — see `manualToggle` above and
+    // `FilterMoratorium.astro`.
     id: CITY_BOUNDARIES_LAYER_ID,
     group: 'politics',
     toggleId: 'mf-toggle-cities',
     apiKey: 'showCityBoundaries',
     label: 'City Boundaries',
     description: 'Which council votes on the permit.',
+    manualToggle: true,
     fileName: 'convertedCity_Boundaries_in_Minnesota.pmtiles',
     hex: '#52c9e8',
     // Light enough to read 906 overlapping-at-a-glance polygons through, heavy
     // enough that the inside of a border is visibly part of the layer — which
-    // is also what makes it discoverable that hovering a city names it.
+    // is also what makes it discoverable that hovering a city names it. Reads
+    // fine unchanged on a dark basemap — it's already a light colour going
+    // translucent over a background, not a dark one going invisible.
     fillOpacity: 0.18,
     outlineHex: '#002d5d',
+    // The flag's Night Sky Blue is near-black, which is exactly what a dark
+    // basemap is made of — the same failure the sidebar swatch avoids by
+    // switching off pure ink in `FilterLayer.astro`. Sky-300, close enough to
+    // the fill's own hue to still read as one layer, stands out against every
+    // dark basemap this site ships (`fiord`, `dark`) the way the navy does
+    // against the light ones.
+    darkOutlineHex: '#7dd3fc',
     outline: { width: 0.8, opacity: 0.9 },
     attribution:
       'City boundaries: <a href="https://gisdata.mn.gov/" target="_blank" rel="noopener">Minnesota Geospatial Commons</a>',
@@ -265,9 +301,22 @@ export const layerIdFor = (id: string): string => `${id}-layer`;
 /** MapLibre layer id for a layer's per-polygon border, when it declares one. */
 export const outlineLayerIdFor = (id: string): string => `${id}-outline`;
 
-/** The overlays in one sidebar section, in registry order. */
+/** A layer's fill colour for the given basemap darkness. See `darkHex`. */
+export const fillColorFor = (layer: MapLayerMeta, dark: boolean): string =>
+  (dark ? layer.darkHex : undefined) ?? layer.hex;
+
+/** A layer's outline colour for the given basemap darkness. See `darkOutlineHex`. */
+export const outlineColorFor = (layer: MapLayerMeta, dark: boolean): string =>
+  (dark ? layer.darkOutlineHex : undefined) ?? layer.outlineHex;
+
+/**
+ * The overlays in one sidebar section that get their own row, in registry
+ * order. Excludes `manualToggle` layers — folded into another control, so a
+ * row here would be a second way to switch on something already reachable,
+ * unchecked and silently doing nothing until its companion toggle is found.
+ */
 export const layersInGroup = (group: MapLayerGroup): MapLayerMeta[] =>
-  MAP_LAYER_META.filter((layer) => layer.group === group);
+  MAP_LAYER_META.filter((layer) => layer.group === group && !layer.manualToggle);
 
 /**
  * The registry keyed by id, for the two callers that hold an id and want the

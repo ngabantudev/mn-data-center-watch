@@ -6,14 +6,30 @@ export interface MapStyleOption {
   id: string;
   label: string;
   url: string;
+  /**
+   * Whether this basemap's own background reads as dark. Not the same
+   * question as the site's chrome theme — a visitor can pick any basemap from
+   * the "Map Theme" list independently of the Light/Dark chrome toggle, so a
+   * layer whose colours are tuned against the basemap (see `darkHex` /
+   * `darkOutlineHex` in `~/data/mapLayers.ts`) has to key off this, not off
+   * `~/lib/siteTheme.ts`.
+   */
+  dark: boolean;
 }
 
 export const MAP_STYLE_OPTIONS: MapStyleOption[] = [
-  { id: 'fiord', label: 'Fiord (Muted)', url: 'https://tiles.openfreemap.org/styles/fiord' },
-  { id: 'liberty', label: 'Liberty (Google Maps)', url: 'https://tiles.openfreemap.org/styles/liberty' },
-  { id: 'positron', label: 'Light Minimal', url: 'https://tiles.openfreemap.org/styles/positron' },
-  { id: 'dark', label: 'Dark Mode', url: 'https://tiles.openfreemap.org/styles/dark' },
+  // Its background is #45516E — muted, but dark enough that a near-black
+  // outline tuned for the light basemaps disappears against it too.
+  { id: 'fiord', label: 'Fiord (Muted)', url: 'https://tiles.openfreemap.org/styles/fiord', dark: true },
+  { id: 'liberty', label: 'Liberty (Google Maps)', url: 'https://tiles.openfreemap.org/styles/liberty', dark: false },
+  { id: 'positron', label: 'Light Minimal', url: 'https://tiles.openfreemap.org/styles/positron', dark: false },
+  { id: 'dark', label: 'Dark Mode', url: 'https://tiles.openfreemap.org/styles/dark', dark: true },
 ];
+
+/** Whether a basemap id's own background is dark. Unknown ids read as light. */
+export function isMapStyleDark(id: string): boolean {
+  return MAP_STYLE_OPTIONS.find((option) => option.id === id)?.dark ?? false;
+}
 
 /**
  * Basemap paired with each site theme. Switching the site theme always
