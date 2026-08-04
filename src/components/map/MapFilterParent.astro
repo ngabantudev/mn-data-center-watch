@@ -38,6 +38,18 @@ const largestProjects = [...clientProjects].sort(
 );
 
 const totalCount = clientProjects.length;
+
+// This page prerenders at build time (see the astro build log's "prerendering
+// static routes" step), and `deploy.yml` rebuilds and redeploys on every push
+// to main -- so a plain `new Date()` evaluated here bakes in the actual last
+// build/deploy time with no manual bookkeeping. It will be wrong only in the
+// sense that a code-only deploy (no data change) still bumps it; that's the
+// tradeoff for "automatic" over "hand-maintained and therefore stale."
+const lastUpdated = new Date().toLocaleDateString("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 ---
 
 <!--
@@ -132,6 +144,10 @@ const totalCount = clientProjects.length;
     </FilterLayer>
 
     <FilterProject largestProjects={largestProjects} />
+  </div>
+
+  <div class="shrink-0 px-3.5 py-2 border-t border-hair text-center">
+    <span class="text-[10px] text-ink-4">Last updated: {lastUpdated}</span>
   </div>
 
   <!-- Desktop pull-tab toggle -->
