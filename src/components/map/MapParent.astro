@@ -917,7 +917,13 @@ const news = await fetchLocalNews();
           activePopup = new maplibregl.Popup({
             closeButton: false,
             offset: 15,
-            maxWidth: "280px",
+            // buildPreviewHtml's card is `w-full`, so it exactly fills
+            // whatever this leaves after the popup's own 16px padding each
+            // side (see .maplibregl-popup-content in global.css) — this used
+            // to be 280px against a fixed w-64 (256px) card, 8px too narrow,
+            // which shoved the card against the left padding and left it
+            // visibly off-center under the tip instead of symmetric.
+            maxWidth: "288px",
           })
             .setLngLat(feature.geometry.coordinates as [number, number])
             .setHTML(buildPreviewHtml(project))

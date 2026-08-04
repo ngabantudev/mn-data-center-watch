@@ -189,7 +189,7 @@ export function buildPreviewHtml(project: Project): string {
   `;
 
   return `
-    <div class="p-0.5 text-neutral-900 font-sans w-64 select-text">
+    <div class="p-0.5 text-neutral-900 font-sans w-full select-text">
       <div class="flex items-center gap-2 mb-1">
         <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${color}"></span>
         <span class="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">${statusText}</span>
