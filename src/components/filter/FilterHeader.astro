@@ -34,14 +34,23 @@ const validProjects = clientProjects.filter((p) => p.status !== "rejected");
 // so the header was quietly reporting a total no other surface agreed with.
 const totalMW = validProjects.reduce((sum, p) => sum + parseMW(p.powerCapacityMW), 0);
 
+// `estimatedCost` is freetext, and several records legitimately carry more
+// than one dollar figure -- an initial build cost alongside a later
+// buildout/sale/upgrade figure (e.g. "$26 Million (2013 initial build); ~$90
+// Million additional planned..."). Stripping every non-digit character and
+// concatenating what's left -- the previous approach -- doesn't stop at the
+// first number; it also swallows any year or count sitting nearby ("(2013",
+// "3-building"), so that one string alone parsed as $262 *trillion*. Anchor
+// the match to a single "<number> million|billion" pair and take the first
+// one, which is always the headline figure by convention in this dataset.
 const totalCapExBillion = validProjects.reduce((sum, p) => {
   const cost = p.estimatedCost?.toLowerCase();
   if (!cost) return sum;
-  const val = parseFloat(cost.replace(/[^\d.]/g, ""));
+  const match = cost.match(/([\d.]+)\+?\s*(million|billion)/);
+  if (!match) return sum;
+  const val = parseFloat(match[1]);
   if (isNaN(val)) return sum;
-  if (cost.includes("billion")) return sum + val;
-  if (cost.includes("million")) return sum + val / 1000;
-  return sum;
+  return sum + (match[2] === "billion" ? val : val / 1000);
 }, 0);
 
 const activeCount = countBy(clientProjects, (p) => p.status).active ?? 0;

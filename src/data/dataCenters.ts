@@ -106,9 +106,9 @@ export const clientProjects: Project[] = [
     description: "A colocation campus at 4450 Dean Lakes Boulevard, built by Compass Datacenters for Savvis (later CenturyLink) and opened in spring 2014; now operated under the Centersquare brand following Brookfield's 2024 merger of Evoque and Cyxtera.",
     coordinates: [44.7812, -93.5230],
     url: "https://www.startribune.com/data-center-to-locate-in-shakopee/225977621",
-    businessImpact: "🟢 <strong>Operational</strong> | 100,000 sq. ft. initial building; master plan called for two additional buildings at full buildout.",
+    businessImpact: "🟢 <strong>Operational</strong> | 100,000 sq. ft. initial building; master plan called for two additional buildings, ~$90 Million more, at full buildout.",
     status: "active",
-    estimatedCost: "$26 Million (2013 initial build); ~$90 Million additional planned for full 3-building buildout",
+    estimatedCost: "$26 Million (2013 initial build)",
     powerCapacityMW: "4.8 MW (initial IT load)",
     waterFootprint: "Not publicly disclosed",
     publicRecord: {
@@ -188,7 +188,7 @@ export const clientProjects: Project[] = [
     url: "https://www.postbulletin.com/business/epic-buys-mayo-data-center",
     businessImpact: "🟢 <strong>Operational</strong> | Built for $33.7M (2012); sold to Epic Systems for $46M (2015); further substation/mechanical upgrades in 2017 and 2020.",
     status: "active",
-    estimatedCost: "$33.7 Million (2012 build); $46 Million (2015 sale-leaseback to Epic)",
+    estimatedCost: "$33.7 Million (2012 build)",
     powerCapacityMW: "Not publicly disclosed",
     waterFootprint: "Not publicly disclosed",
     publicRecord: {
