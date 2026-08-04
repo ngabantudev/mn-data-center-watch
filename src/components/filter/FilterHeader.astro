@@ -107,9 +107,22 @@ const STATS: Array<{
     <span class="block text-sm font-semibold tracking-[0.25em] text-accent uppercase leading-none mb-2">
       Data Center Watch
     </span>
+    <!--
+      This sidebar is a fixed 288px (`md:w-72` on the panel in
+      MapFilterParent.astro) at every width this header ever renders at — it's
+      `hidden` below `md` and there's no wider breakpoint override above it, so
+      there is no viewport to fluidly scale against here. text-2xl is sized
+      against that fixed 256px content box (288px − px-4 both sides) for the
+      longer of the two crossfading strings, "Mni Sóta Makoce": at font-black
+      weight with tracking-tight it measures ~223px, leaving headroom for
+      non-Apple system-font substitution before it'd wrap. text-4xl measured
+      ~336px there — comfortably wider than the box, which is what was pushing
+      it onto a second line. `whitespace-nowrap` is the backstop if a
+      substituted font ever runs wider than that headroom.
+    -->
     <h1
       id="mf-header-place-name"
-      class="text-4xl font-black tracking-tight text-ink uppercase leading-none transition-opacity duration-700 ease-in-out motion-reduce:transition-none"
+      class="text-2xl font-black tracking-tight text-ink uppercase leading-none whitespace-nowrap transition-opacity duration-700 ease-in-out motion-reduce:transition-none"
       title={`${DAKOTA_PLACE_NAME} (Dakota): "land where the waters reflect the clouds," the source of the name "Minnesota"`}
     >
       {ENGLISH_PLACE_NAME}
