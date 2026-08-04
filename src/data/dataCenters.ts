@@ -61,22 +61,6 @@ export interface Project {
   powerCapacityMW?: string;
   waterFootprint?: string;
   publicRecord?: PublicRecord;
-  /**
-   * Direct citation to this project's Minnesota Environmental Quality Board
-   * review record (AUAR / EAW / EIS) — the state's system of record for
-   * environmental-review status, distinct from `publicRecord` (which is
-   * typically the developer's or city's own announcement/filing).
-   *
-   * Set ONLY when a specific EQB project-detail record has been matched to
-   * this project by name, address, or study-area boundary — never guessed
-   * from municipality alone. The EQB search tool (webapp.pca.state.mn.us/
-   * eqb-search/projects) has no documented public API or stable search-page
-   * deep links; the `url` here is the project's own detail-page permalink
-   * (`.../project-detail/{aiId}?siId={siId}`), confirmed to resolve before
-   * being added. Absent means no EQB record has been matched yet, not that
-   * one doesn't exist.
-   */
-  eqbRecord?: PublicRecord;
   economicAsymmetry?: EconomicAsymmetry; // Structured high-cap/low-labor accountability data
 }
 
@@ -251,13 +235,6 @@ export const clientProjects: Project[] = [
       title: "Meta Global Infrastructure Announcements",
       url: "https://datacenters.atmeta.com/"
     },
-    // Covers Meta's adjacent 2024 expansion-parcel acquisition, not the
-    // original built campus -- news coverage of that purchase links this
-    // exact EQB record.
-    eqbRecord: {
-      title: "MN EQB: Rosemount Industrial AUAR Update",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/255536?siId=255536-PROJ0000000002"
-    },
     economicAsymmetry: {
       constructionJobsEstimate: 1000,
       permanentOperationalJobsEstimate: 100,
@@ -284,10 +261,6 @@ export const clientProjects: Project[] = [
       title: "City of Monticello Comprehensive Plan Rezoning Map",
       url: "https://monticellomn.gov/"
     },
-    eqbRecord: {
-      title: "MN EQB: Monticello Industrial AUAR",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/264408?siId=264408-PROJ0000000001"
-    },
     economicAsymmetry: {
       constructionJobsEstimate: 1600,
       permanentOperationalJobsEstimate: 150,
@@ -309,12 +282,6 @@ export const clientProjects: Project[] = [
       title: "Monticello Economic Development Authority Filings",
       url: "https://monticellomn.gov/"
     },
-    // Same study area as "Monticello Tech Park" above -- one AUAR covers
-    // the whole Monticello Industrial district's parcels.
-    eqbRecord: {
-      title: "MN EQB: Monticello Industrial AUAR",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/264408?siId=264408-PROJ0000000001"
-    },
     economicAsymmetry: {
       constructionJobsEstimate: 500,
       permanentOperationalJobsEstimate: 40,
@@ -335,10 +302,6 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "Cannon Falls Community Planning Portal",
       url: "https://www.cannonfallstechnologypark.com/"
-    },
-    eqbRecord: {
-      title: "MN EQB: Cannon Falls Industrial AUAR",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/262244?siId=262244-PROJ0000000001"
     },
     economicAsymmetry: {
       constructionJobsEstimate: 1500,
@@ -362,10 +325,6 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "City of Hermantown Project Announcements",
       url: "https://hermantownmn.com/"
-    },
-    eqbRecord: {
-      title: "MN EQB: Updated Hermantown Industrial AUAR",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/263202?siId=263202-PROJ0000000003"
     },
     economicAsymmetry: {
       constructionJobsEstimate: 900,
@@ -434,10 +393,6 @@ export const clientProjects: Project[] = [
       title: "Project Skyway Community Portal",
       url: "https://pineislandskyway.com/"
     },
-    eqbRecord: {
-      title: "MN EQB: Project Skyway",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/262379?siId=262379-PROJ0000000001"
-    },
     economicAsymmetry: {
       constructionJobsEstimate: 800,
       permanentOperationalJobsEstimate: 100,
@@ -460,10 +415,6 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "City of Faribault Archer Datacenters Review Hub",
       url: "https://www.faribaultmn.gov/815/Archer-Datacenters"
-    },
-    eqbRecord: {
-      title: "MN EQB: Archer Datacenters Faribault Campus",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/263487?siId=263487-PROJ0000000001"
     },
     economicAsymmetry: {
       constructionJobsEstimate: 400,
@@ -527,10 +478,6 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "Nobles County Powered Data Park Overview",
       url: "https://geronimopower.com/"
-    },
-    eqbRecord: {
-      title: "MN EQB: Nobles County Data Center AUAR",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/266340?siId=266340-PROJ0000000002"
     }
   },
   {
@@ -563,12 +510,6 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "Apple Valley City Council Official Land Use Considerations",
       url: "https://www.applevalleymn.gov/CivicAlerts.asp?AID=4164&ARC=6303",
-    },
-    // Address match (15255 Johnny Cake Ridge Rd) to the Rockport LLC
-    // sand-and-gravel site; the AUAR itself doesn't name Oppidan directly.
-    eqbRecord: {
-      title: "MN EQB: Rockport LLC Redevelopment AUAR",
-      url: "https://webapp.pca.state.mn.us/eqb-search/project-detail/96611?siId=96611-PROJ0000000004"
     },
   },
 ];
