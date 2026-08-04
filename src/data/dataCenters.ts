@@ -62,6 +62,19 @@ export interface Project {
   waterFootprint?: string;
   publicRecord?: PublicRecord;
   /**
+   * Citation to a specific facility page on an independent data-center
+   * tracking site (cleanview.co or poweredbywho.com) that cross-referenced
+   * and corroborates this record — used both to source facilities where no
+   * news article or company page covers the specific figure (e.g. current
+   * MW capacity) and to add facilities discovered via these trackers.
+   *
+   * Both sites publish a stable per-facility permalink; link that page
+   * directly, never the state search/homepage. Treat as supplementary to
+   * `publicRecord`/`url` where a stronger primary source exists, not a
+   * replacement for one.
+   */
+  trackerSource?: PublicRecord;
+  /**
    * Direct citation to this project's Minnesota Environmental Quality Board
    * review record (AUAR / EAW / EIS) — the state's system of record for
    * environmental-review status, distinct from `publicRecord` (which is
@@ -82,7 +95,7 @@ export interface Project {
 
 export const clientProjects: Project[] = [
   // ==========================================
-  // ACTIVE / OPERATIONAL SITES (8 TOTAL)
+  // ACTIVE / OPERATIONAL SITES (17 TOTAL)
   // ==========================================
   {
     name: "Downtown Minneapolis Data Center (MSP4)",
@@ -93,11 +106,15 @@ export const clientProjects: Project[] = [
     businessImpact: "🟢 <strong>Operational</strong> | Core regional meet-me routing framework anchoring Upper Midwest telecom infrastructure. Fully multi-tenant.",
     status: "active",
     estimatedCost: "Multi-Tenant Aggregate Investment",
-    powerCapacityMW: "~10-15 MW Aggregate Envelope",
+    powerCapacityMW: "2 MW (per cleanview.co; supersedes an earlier unsourced ~10-15 MW estimate)",
     waterFootprint: "N+1 Chilled water arrays supported by localized redundant onsite well backups.",
     publicRecord: {
       title: "MICE Peering and Interconnection Infrastructure Portal",
       url: "https://www.micemn.net/"
+    },
+    trackerSource: {
+      title: "cleanview.co: Downtown Minneapolis Data Center MSP4",
+      url: "https://cleanview.co/data-centers/minnesota/1304/downtown-minneapolis-data-cente-msp4"
     }
   },
   {
@@ -109,11 +126,15 @@ export const clientProjects: Project[] = [
     businessImpact: "🟢 <strong>Operational</strong> | Uptime Institute Tier III certified footprint supporting 20+ on-site carriers and direct cloud routing nodes.",
     status: "active",
     estimatedCost: "90,000 Sq. Ft. Facility Investment",
-    powerCapacityMW: "20 MW (5 MW Critical IT Load)",
+    powerCapacityMW: "8 MW (per cleanview.co; supersedes an earlier unsourced 20 MW estimate)",
     waterFootprint: "Multi-stage air and water economizers providing environmental free-cooling 9 months of the year.",
     publicRecord: {
       title: "DataBank MSP2 Eagan Hub Portal",
       url: "https://www.databank.com/data-centers/minneapolis/eagan/"
+    },
+    trackerSource: {
+      title: "cleanview.co: East Twin Cities Data Center MSP2",
+      url: "https://cleanview.co/data-centers/minnesota/1217/east-twin-cities-data-cente-msp2"
     }
   },
   {
@@ -125,11 +146,15 @@ export const clientProjects: Project[] = [
     businessImpact: "🟢 <strong>Operational</strong> | 100,000 sq. ft. initial building; master plan called for two additional buildings, ~$90 Million more, at full buildout.",
     status: "active",
     estimatedCost: "$26 Million (2013 initial build)",
-    powerCapacityMW: "4.8 MW (initial IT load)",
+    powerCapacityMW: "10 MW current (per cleanview.co/poweredbywho.com); 4.8 MW at 2014 opening",
     waterFootprint: "Not publicly disclosed",
     publicRecord: {
       title: "Star Tribune: \"Data center to locate in Shakopee\"",
       url: "https://www.startribune.com/data-center-to-locate-in-shakopee/225977621"
+    },
+    trackerSource: {
+      title: "cleanview.co: Centersquare MSP1",
+      url: "https://cleanview.co/data-centers/minnesota/1162/centersquare-msp1"
     }
   },
   {
@@ -157,11 +182,15 @@ export const clientProjects: Project[] = [
     businessImpact: "🟢 <strong>Operational</strong> | 2023 expansion added 4.5 MW / 15,000 sq. ft. raised-floor capacity.",
     status: "active",
     estimatedCost: "Not publicly disclosed",
-    powerCapacityMW: "1.5 MW initial IT load; ~9 MW planned at full 3-hall buildout",
+    powerCapacityMW: "14 MW current (per cleanview.co); 1.5 MW initial IT load at 2021 opening",
     waterFootprint: "Not publicly disclosed",
     publicRecord: {
       title: "DataBank: MSP3 Expansion Press Release",
       url: "https://www.databank.com/resources/press-releases/databank-announces-expansion-of-msp3-data-center-near-minneapolis/"
+    },
+    trackerSource: {
+      title: "cleanview.co: Brooklyn Park Data Center MSP3",
+      url: "https://cleanview.co/data-centers/minnesota/1175/brooklyn-park-data-center-msp3"
     }
   },
   {
@@ -210,6 +239,126 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "Post Bulletin: \"Epic buys Mayo data center\"",
       url: "https://www.postbulletin.com/business/epic-buys-mayo-data-center"
+    }
+  },
+  {
+    name: "DataBank MSP1 (Edina)",
+    developer: "DataBank",
+    description: "DataBank's West Twin Cities facility at 7700 France Avenue South, in Edina's Technology Business District — the fourth DataBank-branded MSP site in the Twin Cities alongside MSP2 (Eagan), MSP3 (Brooklyn Park), and MSP4 (Downtown Minneapolis).",
+    coordinates: [44.8897, -93.3499],
+    url: "https://www.databank.com/data-centers/minneapolis/edina/",
+    businessImpact: "🟢 <strong>Operational</strong> | 26,240 sq. ft. raised-floor colocation space; HIPAA/PCI DSS/SOC 1/SOC 2 certified.",
+    status: "active",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "1.35 MW",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "DataBank: MSP1 Edina Facility Page",
+      url: "https://www.databank.com/data-centers/minneapolis/edina/"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: DataBank MSP1 Edina",
+      url: "https://poweredbywho.com/projects/databank-msp1-edina-82056a90"
+    }
+  },
+  {
+    name: "EdgeConneX MSP01 (Eden Prairie)",
+    developer: "EdgeConneX",
+    description: "A purpose-built edge colocation facility at 6875 Shady Oak Road, designed for low-latency local-market content and application delivery.",
+    coordinates: [44.8547, -93.4708],
+    url: "https://www.edgeconnex.com/locations/americas/minneapolis-mn/",
+    businessImpact: "🟢 <strong>Operational</strong> | 32,738 sq. ft. (14,935 sq. ft. raised floor); HIPAA/ISO 27001/PCI DSS/SOC 2 certified.",
+    status: "active",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "1.35 MW N+1, scalable to 2.85 MW",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "EdgeConneX: Minneapolis (MSP01) Facility Page",
+      url: "https://www.edgeconnex.com/locations/americas/minneapolis-mn/"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: EdgeConneX Eden Prairie (MSP01)",
+      url: "https://poweredbywho.com/projects/edgeconnex-eden-prairie-msp01-d7a3478f"
+    }
+  },
+  {
+    name: "Flexential Chaska Data Center",
+    developer: "Flexential",
+    description: "A colocation facility at 3500 Lyman Boulevard with 70,000 sq. ft. of raised-floor space, part of the Chaska data-center cluster alongside Stream and LightEdge facilities on the adjacent West Creek Lane campus.",
+    coordinates: [44.7894, -93.6019],
+    url: "https://www.flexential.com/data-centers/mn/minneapolis/chaska-data-center",
+    businessImpact: "🟢 <strong>Operational</strong> | 160,838 sq. ft. total (70,000 sq. ft. raised floor); power density over 1,500 watts/sq. ft.",
+    status: "active",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "9 MW",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "Flexential: Chaska Data Center Facility Page",
+      url: "https://www.flexential.com/data-centers/mn/minneapolis/chaska-data-center"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: Flexential Chaska Data Center",
+      url: "https://poweredbywho.com/projects/flexential-chaska-data-center-a8bdc9f6"
+    }
+  },
+  {
+    name: "Stream Data Centers Minneapolis II (Chaska)",
+    developer: "Stream Data Centers",
+    description: "A build-to-suit facility at 1706 West Creek Lane, built for a major commercial bank and now fully leased. Sits on the same Chaska campus as Stream's original \"Minneapolis I\" building (1708 West Creek Lane), which Stream sold to LightEdge in January 2024 — see the separate LightEdge Minneapolis I entry.",
+    coordinates: [44.7894, -93.6019],
+    url: "https://www.streamdatacenters.com/locations/minneapolis/",
+    businessImpact: "🟢 <strong>Operational</strong> | 56,000 sq. ft.; fully leased since completion in December 2017.",
+    status: "active",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "2.4 MW critical load, expandable by an additional 2.4 MW",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "Stream Data Centers: Minneapolis Location Page",
+      url: "https://www.streamdatacenters.com/locations/minneapolis/"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: Stream Data Centers Minneapolis II",
+      url: "https://poweredbywho.com/projects/stream-data-centers-minneapolis-ii-2c5dcf34"
+    }
+  },
+  {
+    name: "LightEdge Minneapolis I (Chaska)",
+    developer: "LightEdge (purchased from Stream Data Centers, January 2024)",
+    description: "A turnkey colocation facility at 1708 West Creek Lane, originally built by Stream Data Centers in 2014 as \"Minneapolis I\" (75,800 sq. ft., 7.2 MW at full capacity) and sold to LightEdge in January 2024.",
+    coordinates: [44.7894, -93.6019],
+    url: "https://lightedge.com/data-centers/minneapolis-data-center/",
+    businessImpact: "🟢 <strong>Operational</strong> | Originally built 2014; under LightEdge ownership since Jan. 2024.",
+    status: "active",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "3.6 MW currently deployed (75,800 sq. ft. shell built for 7.2 MW at full capacity)",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "LightEdge: Minneapolis Data Center Facility Page",
+      url: "https://lightedge.com/data-centers/minneapolis-data-center/"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: LightEdge Chaska Data Center",
+      url: "https://poweredbywho.com/projects/lightedge-chaska-data-center-8002c1f8"
+    }
+  },
+  {
+    name: "US Internet Data Center (Minnetonka)",
+    developer: "US Internet (acquired by Metronet, Sept. 2025)",
+    description: "A 20,000 sq. ft. colocation facility at 12450 Wayzata Boulevard, operated since 1995 by US Internet, a Minnesota-based fiber and hosting provider acquired by Metronet in September 2025. cleanview.co's record for this facility is labeled \"Planned,\" which appears to be a data-quality error — every other available source describes it as a long-operating facility, not a proposal.",
+    coordinates: [44.975, -93.464],
+    url: "https://www.datacenters.com/us-internet-usi-us-internet-minnetonka-facility",
+    businessImpact: "🟢 <strong>Operational</strong> | Colocation, dedicated servers, and disaster-recovery services since 1995.",
+    status: "active",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "datacenters.com: US Internet Minnetonka Facility Listing",
+      url: "https://www.datacenters.com/us-internet-usi-us-internet-minnetonka-facility"
+    },
+    trackerSource: {
+      title: "cleanview.co: US Internet Minneapolis Data Center",
+      url: "https://cleanview.co/data-centers/minnesota/2122/us-internet-minneapolis-data-center"
     }
   },
 
@@ -264,8 +413,28 @@ export const clientProjects: Project[] = [
       metricRatioText: "High CapEx / Low Labor: Massive $800M+ compute asset managed by roughly 100 permanent local staff."
     }
   },
+  {
+    name: "Centra MSP1 (Eagan)",
+    developer: "Centra",
+    description: "A 150,000 sq. ft. carrier-neutral interconnection facility at 610 Opperman Drive, adaptively reusing part of the former Thomson Reuters headquarters campus (sold by Thomson Reuters to Ryan Companies for $41 million as part of a 180-acre mixed-use redevelopment).",
+    coordinates: [44.812, -93.15],
+    url: "https://www.datacenterdynamics.com/en/news/centra-breaks-ground-on-data-center-redevelopment-in-minneapolis-minnesota/",
+    businessImpact: "🟠 <strong>Under Construction</strong> | Broke ground on the former Thomson Reuters site; targeting a late-summer 2026 opening. Green power sourced through Dakota Electric's renewable programs.",
+    status: "construction",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "12 MW",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "Data Center Dynamics: \"Centra breaks ground on data center redevelopment in Minneapolis, Minnesota\"",
+      url: "https://www.datacenterdynamics.com/en/news/centra-breaks-ground-on-data-center-redevelopment-in-minneapolis-minnesota/"
+    },
+    trackerSource: {
+      title: "cleanview.co: MSP1 Data Center (Centra)",
+      url: "https://cleanview.co/data-centers/minnesota/1884/msp1-data-center"
+    }
+  },
   // ==========================================
-  // PLANNED / ONGOING / PIPELINE (10 TOTAL)
+  // PLANNED / ONGOING / PIPELINE (14 TOTAL)
   // ==========================================
   {
     name: "Monticello Tech Park",
@@ -470,6 +639,88 @@ export const clientProjects: Project[] = [
     }
   },
   {
+    name: "Microsoft Becker Campus",
+    developer: "Microsoft",
+    description: "Microsoft purchased roughly 300 acres in Becker, Sherburne County -- the same Sherco-power-plant-adjacent land Xcel Energy had held for a since-withdrawn Google project (see the historical Google Becker Data Center entry). No formal application has been submitted to the city.",
+    coordinates: [45.3936, -93.8769],
+    url: "https://www.startribune.com/microsoft-building-data-center-in-becker-xcel-stress-on-grids/600344079",
+    businessImpact: "🔵 <strong>Announced</strong> | Land acquired; no formal plans or permit application submitted to the city yet.",
+    status: "planned",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "325 MW",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "Star Tribune: \"Xcel sells Becker land to Microsoft for data center, as it predicts major rise in energy demands\"",
+      url: "https://www.startribune.com/microsoft-building-data-center-in-becker-xcel-stress-on-grids/600344079"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: Microsoft Becker Campus",
+      url: "https://poweredbywho.com/projects/microsoft-becker-campus-ca6a740c"
+    }
+  },
+  {
+    name: "Farmington Technology Park (Tract)",
+    developer: "Tract",
+    description: "A proposed $5 billion, 343-acre campus (including the former Fountain Valley Golf Club property) planned for up to 12 data center buildings totaling more than 2.5 million sq. ft. The Farmington City Council approved the final plat and planned unit development on Nov. 18, 2024, but residents filed suit days later and won an injunction pausing the city's negotiations with Tract.",
+    coordinates: [44.6402, -93.1466],
+    url: "https://www.farmingtonmn.gov/473/Data-Center-Farmington-Technology-Park",
+    businessImpact: "🔴 <strong>Court Action Pause</strong> | Council approval (Nov. 18, 2024) followed by a resident-filed injunction (Nov. 29, 2024) pausing city-developer negotiations.",
+    status: "paused",
+    legalStatus: "court_paused",
+    legalNote: "Resident lawsuit and injunction (filed Nov. 29, 2024) paused negotiations between the city and Tract following council's Nov. 18, 2024 approval.",
+    estimatedCost: "$5.0 Billion",
+    powerCapacityMW: "708 MW",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "City of Farmington: Data Center (Farmington Technology Park)",
+      url: "https://www.farmingtonmn.gov/473/Data-Center-Farmington-Technology-Park"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: Tract Farmington Technology Park",
+      url: "https://poweredbywho.com/projects/tract-farmington-technology-park-44fde02f"
+    }
+  },
+  {
+    name: "Connect Data Centers Hampton (Oppidan)",
+    developer: "Oppidan Investment Company, under subsidiary \"Connect Data Centers\"",
+    description: "A proposed data center campus in the small city of Hampton, Dakota County. Oppidan halted work here (alongside its separate North Mankato proposal -- see that entry) citing Minnesota's backup-generator permitting timeline.",
+    coordinates: [44.6083, -93.0094],
+    url: "https://www.startribune.com/developer-halts-two-minnesota-data-centers-over-permits-for-backup-generators/601507579",
+    businessImpact: "🔴 <strong>Development Paused</strong> | Halted over backup-generator permitting delays, alongside the North Mankato proposal.",
+    status: "paused",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "Star Tribune: \"Developer halts two Minnesota data centers over permits for backup generators\"",
+      url: "https://www.startribune.com/developer-halts-two-minnesota-data-centers-over-permits-for-backup-generators/601507579"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: Connect Data Centers Hampton",
+      url: "https://poweredbywho.com/projects/connect-data-centers-hampton-68de7c48"
+    }
+  },
+  {
+    name: "Olam Lakeville",
+    developer: "Olam Holdings 1, LLC",
+    description: "A 152-acre site in Lakeville, Dakota County, studied under an AUAR for roughly 1.36 million sq. ft. of light-industrial/office development. MCEA sued the city and Olam on Aug. 5, 2025, alleging the AUAR failed to adequately study a data center use for the site; a Dakota County District Court judge granted summary judgment for the city and Olam on May 26, 2026, finding the environmental review adequate.",
+    coordinates: [44.65, -93.24],
+    url: "https://www.hometownsource.com/sun_thisweek/community/lakeville/court-rules-in-favor-of-city-of-lakeville-in-auar-lawsuit/article_d658dca3-b44c-4175-ae15-d81bbdd88aab.html",
+    businessImpact: "🟡 <strong>Environmental Review Litigation Resolved</strong> | Court upheld the city's AUAR as adequate (May 26, 2026), rejecting MCEA's claim that a data center use was hidden from review.",
+    status: "planned",
+    estimatedCost: "Not publicly disclosed",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "hometownsource.com: \"Court rules in favor of city of Lakeville in AUAR lawsuit\"",
+      url: "https://www.hometownsource.com/sun_thisweek/community/lakeville/court-rules-in-favor-of-city-of-lakeville-in-auar-lawsuit/article_d658dca3-b44c-4175-ae15-d81bbdd88aab.html"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: Olam Lakeville Data Center",
+      url: "https://poweredbywho.com/projects/olam-lakeville-data-center-mcea-lawsuit-a850c93b"
+    }
+  },
+  {
     name: "Legacy Investing Data Center (Star Tribune Heritage Plant)",
     developer: "Legacy Investing",
     description: "Legacy Investing (Arlington, VA) has signed a purchase agreement for the Star Tribune's shuttered 500,000+ sq. ft. North Loop printing plant, a 13-acre site at 800 N First St. Plans call for a 20 MW data center with possible mixed-use housing/retail components; sale expected to close Q4 2026.",
@@ -494,7 +745,7 @@ export const clientProjects: Project[] = [
     waterFootprint: "Not publicly disclosed",
   },
   // ==========================================
-  // REJECTED / WITHDRAWN SITES (5 TOTAL, HISTORICAL)
+  // REJECTED / WITHDRAWN SITES (6 TOTAL, HISTORICAL)
   // ==========================================
   {
     name: "Amazon Web Services Becker Campus (Scraped)",
@@ -587,6 +838,26 @@ export const clientProjects: Project[] = [
     publicRecord: {
       title: "Elk River City Council Public Hearing Agenda",
       url: "https://elkrivermn.portal.civicclerk.com/event/534/overview"
+    }
+  },
+  {
+    name: "Google Becker Data Center (2022, historical)",
+    developer: "Google",
+    description: "An earlier, separate Google data center proposal near the Sherco power plant in Becker -- unrelated to Google's current Hermantown campus. Google had been in talks with Xcel Energy to develop the $600 million site since 2017, then withdrew in December 2022. Xcel later sold the land to Microsoft (see the Microsoft Becker Campus entry).",
+    coordinates: [45.39, -93.88],
+    url: "https://www.datacenterknowledge.com/hyperscalers/google-pauses-600m-data-center-development-in-mn",
+    businessImpact: "❌ <strong>Withdrawn (Dec. 2022)</strong> | Google cited slowing Google Cloud Platform demand; called it a pause rather than a permanent cancellation, but never returned to the site before Xcel sold the land to Microsoft.",
+    status: "rejected",
+    estimatedCost: "$600 Million",
+    powerCapacityMW: "Not publicly disclosed",
+    waterFootprint: "Not publicly disclosed",
+    publicRecord: {
+      title: "Data Center Knowledge: \"Google Pauses $600M Data Center Development in MN\"",
+      url: "https://www.datacenterknowledge.com/hyperscalers/google-pauses-600m-data-center-development-in-mn"
+    },
+    trackerSource: {
+      title: "poweredbywho.com: Google Becker Data Center",
+      url: "https://poweredbywho.com/projects/google-becker-data-center-93213231"
     }
   },
 ];

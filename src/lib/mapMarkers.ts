@@ -237,6 +237,15 @@ export function buildDetailHtml(project: Project): string {
     `,
   ) : '';
 
+  const trackerSourceHtml = project.trackerSource ? section(
+    'Industry Tracker Cross-Reference',
+    `
+      <a href="${project.trackerSource.url}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-accent hover:text-accent-hover hover:underline inline-flex items-center gap-1">
+        🔎 ${project.trackerSource.title} &rarr;
+      </a>
+    `,
+  ) : '';
+
   const eqbRecordHtml = project.eqbRecord ? section(
     'MN Environmental Quality Board Review',
     `
@@ -280,6 +289,8 @@ export function buildDetailHtml(project: Project): string {
       ${asymmetryHtml}
 
       ${publicRecordHtml}
+
+      ${trackerSourceHtml}
 
       ${eqbRecordHtml}
 
